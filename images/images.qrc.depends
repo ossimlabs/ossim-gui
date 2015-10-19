@@ -1,0 +1,26 @@
+<RCC>
+    <qresource prefix="/">
+        <file>splash/ImageLinkerSplash.png</file>
+        <file>splash/iviewsplash.png</file>
+        <file>splash/Splash.png</file>
+        <file>themes/default/mActionZoomFullExtent.png</file>
+        <file>themes/default/mActionZoomIn.png</file>
+        <file>themes/default/mIconNoPyramid.png</file>
+        <file>themes/default/mIconPyramid.png</file>
+        <file>themes/default/mActionZoomActual.png</file>
+        <file>themes/default/mActionZoomOut.png</file>
+        <file>themes/default/mActionAddImage.png</file>
+        <file>themes/default/mActionAddLayer.png</file>
+        <file>themes/default/mActionAddRasterLayer.png</file>
+        <file>themes/default/mActionAddWmsLayer.png</file>
+        <file>themes/default/mIconProjectionDisabled.png</file>
+        <file>themes/default/mIconProjectionEnabled.png</file>
+        <file>themes/default/mIconProjectionProblem.png</file>
+        <file>themes/default/mIconWmsLayer.png</file>
+        <file>themes/default/mActionAddOgrLayer.png</file>
+        <file>splash/GeoCellSplash.png</file>
+        <file>logos/RadiantBlue2.png</file>
+        <file>logos/RadiantBlue.png</file>
+        <file>logos/OSSIM.png</file>
+    </qresource>
+</RCC>

@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ossimGuiMainWindow</class>
+ <widget class="QMainWindow" name="ossimGuiMainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1255</width>
+    <height>876</height>
+   </rect>
+  </property>
+  <property name="acceptDrops">
+   <bool>true</bool>
+  </property>
+  <property name="windowTitle">
+   <string>OSSIM Main WIndow</string>
+  </property>
+  <widget class="QWidget" name="m_centralWidget">
+   <property name="acceptDrops">
+    <bool>false</bool>
+   </property>
+   <layout class="QHBoxLayout" name="horizontalLayout">
+    <property name="margin">
+     <number>0</number>
+    </property>
+    <item>
+     <widget class="QSplitter" name="m_splitter">
+      <property name="orientation">
+       <enum>Qt::Horizontal</enum>
+      </property>
+      <widget class="ossimGui::DataManagerWidget" name="m_dataManagerWidget">
+       <property name="selectionMode">
+        <enum>QAbstractItemView::ExtendedSelection</enum>
+       </property>
+       <column>
+        <property name="text">
+         <string>Data Manager</string>
+        </property>
+       </column>
+      </widget>
+      <widget class="QMdiArea" name="m_mdiArea">
+       <property name="acceptDrops">
+        <bool>false</bool>
+       </property>
+       <property name="frameShape">
+        <enum>QFrame::StyledPanel</enum>
+       </property>
+       <property name="frameShadow">
+        <enum>QFrame::Plain</enum>
+       </property>
+       <property name="lineWidth">
+        <number>1</number>
+       </property>
+       <property name="verticalScrollBarPolicy">
+        <enum>Qt::ScrollBarAsNeeded</enum>
+       </property>
+       <property name="horizontalScrollBarPolicy">
+        <enum>Qt::ScrollBarAsNeeded</enum>
+       </property>
+       <property name="viewMode">
+        <enum>QMdiArea::SubWindowView</enum>
+       </property>
+       <property name="tabShape">
+        <enum>QTabWidget::Rounded</enum>
+       </property>
+      </widget>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="m_menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>1255</width>
+     <height>22</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QStatusBar" name="m_statusbar"/>
+  <action name="actionSubwindow_View">
+   <property name="text">
+    <string>Subwindow View</string>
+   </property>
+  </action>
+  <action name="m_actionWindowTabbedView">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Tabbed View</string>
+   </property>
+  </action>
+  <action name="m_actionCloseProject">
+   <property name="text">
+    <string>Close Project</string>
+   </property>
+  </action>
+  <action name="m_actionNewProject">
+   <property name="text">
+    <string>New Project</string>
+   </property>
+  </action>
+  <action name="m_actionSaveSessionAs">
+   <property name="text">
+    <string>Save Project As</string>
+   </property>
+  </action>
+  <action name="m_actionSaveSession">
+   <property name="text">
+    <string>Save Project</string>
+   </property>
+  </action>
+  <action name="m_actionDatumConverter">
+   <property name="text">
+    <string>Datum Converter</string>
+   </property>
+  </action>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>ossimGui::DataManagerWidget</class>
+   <extends>QTreeWidget</extends>
+   <header>ossimGui/DataManagerWidget.h</header>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>
