@@ -38,7 +38,7 @@ void ossimGui::Image::setImage(ossimRefPtr<ossimImageData> data, bool includeOff
          {
             for(offset = 0; offset < maxPixels;++offset,++resultBuffer)
             {
-               *resultBuffer = ((ossim_uint32)'0xff')<<24 |
+               *resultBuffer = ((ossim_uint32)0xff)<<24 |
                ((ossim_uint32)*buf[0])<<16 |
                ((ossim_uint32)*buf[1])<<8 |
                ((ossim_uint32)*buf[2]);
