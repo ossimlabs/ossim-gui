@@ -30,7 +30,7 @@
 #include <sstream>
 
 
-ossimGui::PositionInformationDialog::PositionInformationDialog(QWidget* parent, Qt::WFlags f)
+ossimGui::PositionInformationDialog::PositionInformationDialog(QWidget* parent, Qt::WindowFlags f)
    :
    QDialog( parent, f ),
    m_textEdit( new QTextEdit() ),

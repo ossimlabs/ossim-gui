@@ -303,7 +303,7 @@ namespace ossimGui
                QVariant v = propertyItem->data(Qt::EditRole);
                if(v.isValid())
                {
-                  property->setValue(v.toString().toAscii().data());
+                  property->setValue(v.toString().toStdString());
 #if 0 /* warning C4065: switch statement contains 'default' but no 'case' labels (drb) */
                   switch(v.type())
                   {

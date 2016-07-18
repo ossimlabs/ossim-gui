@@ -19,23 +19,23 @@
 #include <ossim/imaging/ossimImageGeometry.h>
 #include <ossim/imaging/ossimImageSourceFactoryRegistry.h>
 #include <ossim/imaging/ossimOverviewBuilderFactoryRegistry.h>
-#include <QtGui/QMainWindow>
-#include <QtGui/QDragEnterEvent>
-#include <QtGui/QMessageBox>
-#include <QtGui/QItemDelegate>
-#include <QtGui/QHeaderView>
-#include <QtGui/QInputDialog>
-#include <QtGui/QScrollBar>
-#include <QtGui/QMenu>
-#include <QtGui/QAction>
-#include <QtGui/QFileDialog>
-#include <QtGui/QToolBar>
-#include <QtGui/QItemDelegate>
-#include <QtGui/QComboBox>
-#include <QtGui/QTableWidget>
-#include <QtGui/QMessageBox>
-#include <QtCore/QUrl>
-#include <QtGui/QStandardItemModel>
+#include <QMainWindow>
+#include <QDragEnterEvent>
+#include <QMessageBox>
+#include <QItemDelegate>
+#include <QHeaderView>
+#include <QInputDialog>
+#include <QScrollBar>
+#include <QMenu>
+#include <QAction>
+#include <QFileDialog>
+#include <QToolBar>
+#include <QItemDelegate>
+#include <QComboBox>
+#include <QTableWidget>
+#include <QMessageBox>
+#include <QUrl>
+#include <QStandardItemModel>
 #include <ossimGui/Common.h>
 #include <ossimGui/Event.h>
 #include <ossimGui/OpenImageDialog.h>
@@ -727,7 +727,7 @@ void ossimGui::DataManagerImageWriterItem::execute()
          ossimRefPtr<ossimJobQueue> q = dataManagerWidget()->jobQueue();
          if(q.valid())
          {
-            ossimString defaultName = propInterface?propInterface->getPropertyValueAsString("filename"):ossimString(text(0).toAscii().data());
+            ossimString defaultName = propInterface?propInterface->getPropertyValueAsString("filename"):ossimString(text(0).toStdString());
             ossimRefPtr<ossimJob> job = new ImageWriterJob(visitor.kwl());
             job->setName("Output " + defaultName);
             visitor.reset();
@@ -2050,7 +2050,7 @@ void ossimGui::DataManagerWidget::buildOverviewsForSelected(const QString& type)
             {
                ossimRefPtr<ImageStagerJob> stagerJob = new ImageStagerJob(isource.get(), ImageStagerJob::STAGE_OVERVIEWS);
                stagerJob->setCallback(new ImageStagerJobCallback(this, (*item)));
-               stagerJob->setOverviewType(type.toAscii().data());
+               stagerJob->setOverviewType(type.toStdString());
                m_jobQueue->add(stagerJob.get());
                stagerJob = 0; isource = 0;
             }
@@ -2352,7 +2352,7 @@ void ossimGui::DataManagerWidget::combineImagesWithType(const QString& combinerT
    }
    if(!nodeList.empty())
    {
-      ossimRefPtr<DataManager::Node> newNode = dataManager()->createDefaultCombinerChain(combinerType.toAscii().data(), nodeList);
+      ossimRefPtr<DataManager::Node> newNode = dataManager()->createDefaultCombinerChain(combinerType.toStdString(), nodeList);
       if(newNode.valid())
       {
          DataManagerEvent* event = new DataManagerEvent();
@@ -2632,7 +2632,7 @@ void ossimGui::DataManagerWidget::openLocalImage()
          {
             QUrl url = QUrl::fromLocalFile(fileNames.at(i));
             OpenImageUrlJob* job = new OpenImageUrlJob(url);
-            job->setName(ossimString("open ") + url.toString().toAscii().data());
+            job->setName(ossimString("open ") + url.toString().toStdString());
             ImageOpenJobCallback* callback = new ImageOpenJobCallback(this, m_dataManager);
             job->setCallback(callback);
             m_jobQueue->add(job);
@@ -2779,7 +2779,7 @@ void ossimGui::DataManagerWidget::createWriterFromFactory()
 void ossimGui::DataManagerWidget::createWriterFromType(const QString& type)
 {
    m_activeItemsMutex.lock();
-   ossimRefPtr<ossimObject> obj = ossimObjectFactoryRegistry::instance()->createObject(ossimString(type.toAscii().data()));
+   ossimRefPtr<ossimObject> obj = ossimObjectFactoryRegistry::instance()->createObject(ossimString(type.toStdString()));
    if(obj.valid())
    {
       ossimRefPtr<DataManager::Node> node = m_dataManager->addSource(obj.get(), false);
@@ -2917,7 +2917,7 @@ void ossimGui::DataManagerWidget::addFilterToFront()
          QString filterType = QInputDialog::getItem(this, "Image Filter Selection", "Image Filter:", m_filterList, 0, false, &ok);
          if(ok &&(filterType != ""))
          {
-            ossimRefPtr<ossimObject> obj = ossimObjectFactoryRegistry::instance()->createObject(ossimString(filterType.toAscii().data()));
+            ossimRefPtr<ossimObject> obj = ossimObjectFactoryRegistry::instance()->createObject(ossimString(filterType.toStdString()));
             if(obj.valid())
             {
                folder->addFilterToFront(obj.get());
@@ -2946,7 +2946,7 @@ void ossimGui::DataManagerWidget::addFilterToEnd()
          QString filterType = QInputDialog::getItem(this, "Image Filter Selection", "Image Filter:", m_filterList, 0, false, &ok);
          if(ok &&(filterType != ""))
          {
-            ossimRefPtr<ossimObject> obj = ossimObjectFactoryRegistry::instance()->createObject(ossimString(filterType.toAscii().data()));
+            ossimRefPtr<ossimObject> obj = ossimObjectFactoryRegistry::instance()->createObject(ossimString(filterType.toStdString()));
             if(obj.valid())
             {
                folder->addFilterToEnd(obj.get());
@@ -2978,7 +2978,7 @@ void ossimGui::DataManagerWidget::insertFilterBefore()
             QString filterType = QInputDialog::getItem(this, "Image Filter Selection", "Image Filter:", m_filterList, 0, false, &ok);
             if(ok &&(filterType != ""))
             {
-               ossimRefPtr<ossimObject> obj = ossimObjectFactoryRegistry::instance()->createObject(ossimString(filterType.toAscii().data()));
+               ossimRefPtr<ossimObject> obj = ossimObjectFactoryRegistry::instance()->createObject(ossimString(filterType.toStdString()));
                if(obj.valid())
                {
                   folder->insertFilterBefore(obj.get(), item->object());
@@ -3011,7 +3011,7 @@ void ossimGui::DataManagerWidget::insertFilterAfter()
             QString filterType = QInputDialog::getItem(this, "Image Filter Selection", "Image Filter:", m_filterList, 0, false, &ok);
             if(ok &&(filterType != ""))
             {
-               ossimRefPtr<ossimObject> obj = ossimObjectFactoryRegistry::instance()->createObject(ossimString(filterType.toAscii().data()));
+               ossimRefPtr<ossimObject> obj = ossimObjectFactoryRegistry::instance()->createObject(ossimString(filterType.toStdString()));
                if(obj.valid())
                {
                   folder->insertFilterAfter(obj.get(), item->object());
@@ -3106,12 +3106,7 @@ void ossimGui::DataManagerWidget::unselectAll()
    }
 }
 
-const ossimFilename& ossimGui::DataManagerWidget::getLastOpenedDirectory() const
-{
-   return m_lastOpenedDirectory;
-}
-
-void ossimGui::DataManagerWidget::itemChanged( QTreeWidgetItem * item, int column )
+void	ossimGui::DataManagerWidget::itemChanged( QTreeWidgetItem * item, int column )
 {
    if(column == 0)
    {

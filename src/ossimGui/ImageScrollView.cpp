@@ -10,9 +10,9 @@
 #include <ossim/imaging/ossimImageData.h>
 #include <ossim/imaging/ossimImageHandler.h>
 #include <ossim/imaging/ossimImageSource.h>
-#include <QtCore/QTime>
+#include <QTime>
 #include <QtOpenGL/QGLWidget>
-#include <QtGui/QGraphicsRectItem>
+#include <QGraphicsRectItem>
 
 namespace ossimGui
 {
@@ -643,7 +643,7 @@ void ImageScrollView::drawBackground(QPainter* painter,
    }
 }
    
-void ImageScrollView::drawForeground(QPainter* painter, const QRectF& inputRect)
+void ImageScrollView::drawForeground(QPainter* painter, const QRectF& /* rect */  )
 {
    if(!m_trackPoint.hasNans()&&m_showTrackingCursorFlag&&m_trackingFlag)
    {
@@ -678,12 +678,7 @@ void ImageScrollView::drawForeground(QPainter* painter, const QRectF& inputRect)
       }
       painter->setClipping(hasClipping);
    }
-
    m_oldTrackPoint = m_trackPoint;
-
-   emit paintYourGraphics(painter, inputRect);
-
-   // Fix painter color.
 }
 
 void ImageScrollView::paintMultiLayer(QPainter& painter, const QRectF& /* rect */)
@@ -833,7 +828,6 @@ void ImageScrollView::mousePressEvent ( QMouseEvent * e )
    m_lastClickedPoint.x = p.x();
    m_lastClickedPoint.y = p.y();
 
-   emit mousePress(e);
    emit mousePress(e, m_lastClickedPoint);
    
    // Transform to true image coordinates
@@ -917,7 +911,7 @@ void ImageScrollView::mouseMoveEvent ( QMouseEvent * e )
          }
       }
    }
-   emit mouseMove(e);
+
 }
 
 
@@ -944,8 +938,6 @@ void ImageScrollView::mouseReleaseEvent ( QMouseEvent * e )
         emit mouseBox(this, imageStart, imageStop);
       }
    }
-
-   emit mouseRelease(e);
 }
 
 void ossimGui::ImageScrollView::wheelEvent ( QWheelEvent * e )
@@ -1104,12 +1096,6 @@ void ossimGui::ImageScrollView::zoomAnnotation()
          m_metricOverlay->setView(ivtg);
       }
    }
-}
-
-// Called by ImageViewManipulator::setViewToChains()
-void ossimGui::ImageScrollView::emitViewChanged()
-{
-   emit viewChanged();
 }
    
 }

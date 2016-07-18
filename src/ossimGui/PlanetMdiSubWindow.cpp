@@ -749,7 +749,7 @@ namespace ossimGui
    
    PlanetMdiSubWindow::~PlanetMdiSubWindow()
    {
-      // std::cout << "PlanetMdiSubWindow::~PlanetMdiSubWindow()" << std::endl;
+      std::cout << "PlanetMdiSubWindow::~PlanetMdiSubWindow()" << std::endl;
       m_planetViewer->viewer()->setSceneData(0);
       if(m_inputListener)
       {

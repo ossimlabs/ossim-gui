@@ -1,8 +1,9 @@
 #ifndef ossimGuiBrightnessContrastEditor_HEADER
 #define ossimGuiBrightnessContrastEditor_HEADER
-#include <ossimGui/ui_BrightnessContrastEditor.h>
+#include <ui_BrightnessContrastEditor.h>
 #include <ossimGui/Export.h>
-#include <QtGui/QDialog>
+// #include <QtGui/QDialog>
+#include <QDialog>
 #include <ossim/base/ossimConnectableObject.h>
 #include <ossim/base/ossimRefPtr.h>
 namespace ossimGui

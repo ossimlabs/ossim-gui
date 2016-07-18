@@ -2,8 +2,8 @@
 #define ossimGuiUtil_HEADER
 
 #include <ossimGui/Export.h>
-#include <QtGui/QWidget>
-#include <QtCore/QStringList>
+#include <QWidget>
+#include <QStringList>
 #include <ossim/base/ossimString.h>
 
 namespace ossimGui 

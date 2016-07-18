@@ -25,7 +25,7 @@
 
 ossimGui::OpenImageDialog::OpenImageDialog(ossimImageHandler* ih,
                                            QWidget* parent,
-                                           Qt::WFlags f) 
+                                           Qt::WindowFlags f) 
    :
    QDialog( parent, f ),
    m_entryButtonGroup(0),
@@ -166,9 +166,12 @@ void ossimGui::OpenImageDialog::allStateChanged( int state )
             QCheckBox* cb = dynamic_cast<QCheckBox*>( button );
             if ( cb )
             {
+               cout << "b..." << endl;
                cb->setCheckState( (Qt::CheckState)state );
             }
          }
       }
    }
 }
+
+

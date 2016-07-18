@@ -2,8 +2,8 @@
 #define ossimGuiAutoMeasurementDialog_HEADER
 #include <ossimGui/DataManager.h>
 #include <ossimGui/Export.h>
-#include <ossimGui/ui_AutoMeasurementDialog.h>
-#include <QtGui/QDialog>
+#include <ui_AutoMeasurementDialog.h>
+#include <QDialog>
 #include <ossim/base/ossimConnectableObject.h>
 #include <ossim/base/ossimProcessListener.h>
 #include <ossim/base/ossimTieMeasurementGeneratorInterface.h>

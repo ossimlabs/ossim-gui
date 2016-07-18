@@ -21,7 +21,7 @@
 
 static ossimTrace traceDebug("ProgressDialog:debug");
 
-ossimGui::ProgressDialog::ProgressDialog(QWidget* parent, Qt::WFlags f) 
+ossimGui::ProgressDialog::ProgressDialog(QWidget* parent, Qt::WindowFlags f) 
    :
    QDialog( parent, f ),
    m_widget(0)

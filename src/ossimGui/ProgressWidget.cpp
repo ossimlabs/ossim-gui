@@ -1,8 +1,8 @@
 #include <ossimGui/ProgressWidget.h>
 #include <ossimGui/Event.h>
 #include <ossim/base/ossimListenerManager.h>
-#include <QtCore/QEvent>
-#include <QtGui/QApplication>
+#include <QEvent>
+#include <QApplication>
 
 namespace ossimGui
 {
@@ -16,10 +16,8 @@ namespace ossimGui
    
    ProgressWidget::~ProgressWidget()
    {
-      // cout << "ProgressWidget::~ProgressWidget entered..." << endl;
       if(m_listener)
       {
-         removeListener();
          delete m_listener;
          m_listener = 0;
       }
@@ -51,28 +49,30 @@ namespace ossimGui
    }
    bool ProgressWidget::event(QEvent * e )
    {
-      bool result = false;
-      
-      if ( e->type() == (QEvent::Type)PROGRESS_EVENT_ID )
+      switch(e->type())
       {
-         ProgressEvent* evt = dynamic_cast<ProgressEvent*>(e);
-         if(evt)
+         case PROGRESS_EVENT_ID:
          {
-            setValue(static_cast<int>(evt->percentComplete()));
-            e->accept();
-            result = true;
+            ProgressEvent* evt = dynamic_cast<ProgressEvent*>(e);
+            if(evt)
+            {
+               setValue(static_cast<int>(evt->percentComplete()));
+               e->accept();
+               return true;
+            }
+            break;
+         }
+         default:
+         {
+            break;
          }
       }
-      if ( !result )
-      {
-         result = QProgressBar::event(e);
-      }
-      return result;
+      return QProgressBar::event(e);
    }
-   
    void ProgressWidget::Listener::processProgressEvent(ossimProcessProgressEvent& event)
    {
       QApplication::postEvent(m_widget, new ProgressEvent(event.getPercentComplete()));
       QApplication::processEvents();
    }
+
 }

@@ -1,10 +1,10 @@
 #ifndef ossimGuiImageWidget_HEADER
 #define ossimGuiImageWidget_HEADER
-#include <QtGui/QScrollArea>
-#include <QtGui/QResizeEvent>
-#include <QtGui/QScrollBar>
-#include <QtGui/QLabel>
-#include <QtGui/QBitmap>
+#include <QScrollArea>
+#include <QResizeEvent>
+#include <QScrollBar>
+#include <QLabel>
+#include <QBitmap>
 #include <ossim/imaging/ossimImageSource.h>
 #include <ossim/imaging/ossimImageData.h>
 #include <ossim/imaging/ossimScalarRemapper.h>

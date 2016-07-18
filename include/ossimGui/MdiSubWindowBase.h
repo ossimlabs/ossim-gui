@@ -3,7 +3,7 @@
 #include <ossimGui/Export.h>
 #include <ossimGui/View.h>
 #include <ossimGui/ConnectableDisplayObject.h>
-#include <QtGui/QMdiSubWindow>
+#include <QMdiSubWindow>
 #include <ossim/base/ossimGpt.h>
 #include <ossim/base/ossimRefPtr.h>
 #include <ossim/base/ossimConnectableObject.h>

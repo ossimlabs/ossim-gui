@@ -2,12 +2,12 @@
 #include <ossim/imaging/ossimImageHandlerRegistry.h>
 void ossimGui::OpenImageUrlJob::start()
 {
-   ossimFilename file = m_url.toString().toAscii().data();
+   ossimFilename file = m_url.toString().toStdString();
    
    //test if uri is local file
    if(m_url.scheme().toLower() == "file")
    {
-      file = m_url.toLocalFile().toAscii().data();
+      file = m_url.toLocalFile().toStdString();
       if(!file.exists()) return;
    }
    ossimRefPtr<ossimImageHandler> ih = ossimImageHandlerRegistry::instance()->open(file);

@@ -1,7 +1,9 @@
 #ifndef ossimGuiAdjustableParameterEditor_HEADER
 #define ossimGuiAdjustableParameterEditor_HEADER
-#include <ossimGui/ui_AdjustableParameterEditor.h>
-#include <QtGui/QDialog>
+#include <ui_AdjustableParameterEditor.h>
+// #include <QtGui/QDialog>
+#include <QDialog>
+#include <QSlider>
 #include <ossimGui/Export.h>
 #include <ossim/base/ossimConnectableObject.h>
 #include <ossim/base/ossimAdjustableParameterInterface.h>

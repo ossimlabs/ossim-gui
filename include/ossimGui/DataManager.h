@@ -10,8 +10,8 @@
 #include <ossimGui/Export.h>
 #include <vector>
 #include <map>
-#include <QtCore/QString>
-#include <QtGui/QMdiArea>
+#include <QString>
+#include <QMdiArea>
 #include <ossim/projection/ossimSensorModelTuple.h>
 
 

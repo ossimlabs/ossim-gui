@@ -1,10 +1,10 @@
 #ifndef ossimGuiBandSelectorEditor_HEADER
 #define ossimGuiBandSelectorEditor_HEADER
 #include <ossimGui/Export.h>
-#include <ossimGui/ui_BandSelectorEditor.h>
+#include <ui_BandSelectorEditor.h>
 #include <ossim/base/ossimKeywordlist.h>
 #include <ossim/base/ossimConnectableObject.h>
-#include <QtGui/QDialog>
+#include <QDialog>
 
 namespace ossimGui {
 

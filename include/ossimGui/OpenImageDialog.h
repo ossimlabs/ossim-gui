@@ -33,7 +33,7 @@ namespace ossimGui
       /** @brief default constructor */
       OpenImageDialog( ossimImageHandler* ih,
                        QWidget* parent=0,
-                       Qt::WFlags f = 0 );
+                       Qt::WindowFlags f = 0 );
 
       /**
        * @brief Adds selected handlers to the list.

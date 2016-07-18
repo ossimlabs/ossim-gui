@@ -1,8 +1,8 @@
 #include <ossimGui/ExportImageDialog.h>
-#include <QtGui/QMainWindow>
-#include <QtGui/QApplication>
-#include <QtGui/QFileDialog>
-#include <QtGui/QMessageBox>
+#include <QMainWindow>
+#include <QApplication>
+#include <QFileDialog>
+#include <QMessageBox>
 #include <ossimGui/CopyChainVisitor.h>
 #include <ossimGui/ImageWriterJob.h>
 #include <ossimGui/Event.h>
@@ -115,7 +115,7 @@ namespace ossimGui
       else 
       {
          ossimFilename oldFilename = m_writer.valid()?m_writer->getFilename():ossimFilename();
-         ossimRefPtr<ossimObject> obj = ossimObjectFactoryRegistry::instance()->createObject(ossimString(m_fileTypes->itemText(idx).toAscii().data()));
+         ossimRefPtr<ossimObject> obj = ossimObjectFactoryRegistry::instance()->createObject(ossimString(m_fileTypes->itemText(idx).toStdString()));
          m_writer = dynamic_cast<ossimImageFileWriter*> (obj.get());
          if(m_writer.valid())
          {
@@ -206,7 +206,7 @@ namespace ossimGui
          ossimFilename file(m_writer->getFilename());
          QString fileName = QFileDialog::getSaveFileName(this, "Export Image", (file.isDir()?file.c_str():file.path().c_str()));
       
-         file = fileName.toAscii().data();
+         file = fileName.toStdString();
          m_writer->setFilename(file);
          populatePropertyView();
       }

@@ -5,7 +5,7 @@
 #include <ossim/base/ossimProcessListener.h>
 #include <ossim/base/ossimRefPtr.h>
 
-#include <QtGui/QProgressBar>
+#include <QProgressBar>
 
 namespace ossimGui 
 {

@@ -5,11 +5,11 @@
 #include <ossimGui/RegPoint.h>
 #include <ossimGui/ImageMdiSubWindow.h>
 #include <ossimGui/ImageScrollView.h>
-#include <QtGui/QMenu>
-#include <QtGui/QMainWindow>
-#include <QtGui/QApplication>
-#include <QtGui/QFileDialog>
-#include <QtGui/QMessageBox>
+#include <QMenu>
+#include <QMainWindow>
+#include <QApplication>
+#include <QFileDialog>
+#include <QMessageBox>
 #include <ossimGui/Event.h>
 #include <ossimGui/Util.h>
 #include <ossim/base/ossimObjectFactoryRegistry.h>
@@ -51,9 +51,9 @@ void ossimGui::MultiImageDialog::initDialog()
    connect(m_pointTable->horizontalHeader(), SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(displayPointTableContextMenuCol(QPoint)));
 
    // Turn off row/col resizing
-   m_pointTable->verticalHeader()->setResizeMode(QHeaderView::Fixed);
-   m_pointTable->horizontalHeader()->setResizeMode(QHeaderView::Fixed);
-   m_imageTable->verticalHeader()->setResizeMode(QHeaderView::Fixed);
+   m_pointTable->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+   m_pointTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+   m_imageTable->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
 
    // Turn off selection
    m_pointTable->setSelectionMode(QAbstractItemView::NoSelection); 
@@ -566,9 +566,9 @@ void ossimGui::MultiImageDialog::displayPointTableContextMenuRow(QPoint pos)
    ossim_uint32 ht = m_pointTable->rowHeight(0);
    ossim_int32 row = pos.y()/ht;
 
-   QAction* toggleActive = 0;
-   QAction* choice2      = 0;
-   QAction* mexec        = 0;
+   QAction* toggleActive;
+   QAction* choice2;
+   QAction* mexec;
 
    if (row < m_pointTable->rowCount())
    {
@@ -601,9 +601,9 @@ void ossimGui::MultiImageDialog::displayPointTableContextMenuCol(QPoint pos)
    ossim_uint32 wid = m_pointTable->columnWidth(0);
    ossim_int32 col = pos.x()/wid;
 
-   QAction* toggleActive = 0;
-   QAction* choice2      = 0;
-   QAction* mexec        = 0;
+   QAction* toggleActive;
+   QAction* choice2;
+   QAction* mexec;
 
    if (col < m_pointTable->columnCount())
    {
@@ -635,9 +635,9 @@ void ossimGui::MultiImageDialog::displayImageTableContextMenu(QPoint pos)
    ossim_uint32 ht = m_imageTable->rowHeight(0);
    ossim_int32 row = pos.y()/ht;
 
-   QAction* toggleControl = 0;
-   QAction* viewAdjPar    = 0;
-   QAction* mexec         = 0;
+   QAction* toggleControl;
+   QAction* viewAdjPar;
+   QAction* mexec;
 
    if (row < m_imageTable->rowCount())
    {

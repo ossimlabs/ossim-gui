@@ -1,12 +1,12 @@
 #ifndef ossimGuiDataManagerPropertyView_HEADER
 #define ossimGuiDataManagerPropertyView_HEADER
 
-#include <QtGui/QTreeView>
-#include <QtGui/QMouseEvent>
-#include <QtGui/QStandardItemModel>
-#include <QtGui/QComboBox>
-#include <QtGui/QCheckBox>
-#include <QtGui/QItemDelegate>
+#include <QTreeView>
+#include <QMouseEvent>
+#include <QStandardItemModel>
+#include <QComboBox>
+#include <QCheckBox>
+#include <QItemDelegate>
 #include <ossimGui/DataManager.h>
 #include <ossim/base/ossimPropertyInterface.h>
 #include <ossim/base/ossimRefreshEvent.h>

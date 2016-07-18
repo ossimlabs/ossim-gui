@@ -76,11 +76,11 @@ bool ossimGui::DataManager::Node::saveState(ossimKeywordlist& kwl, const ossimSt
 {
    kwl.add(prefix,
            "name",
-           m_name.toAscii().data(),
+           m_name.toStdString().c_str(),
            true);
    kwl.add(prefix,
            "description",
-           m_description.toAscii().data(),
+           m_description.toStdString().c_str(),
            true);
    if(m_object.valid())
    {
@@ -542,16 +542,16 @@ void ossimGui::DataManager::print()
    ossim_uint32 idx = 0;
    for(idx =0; idx < m_sourceList.size();++idx)
    {
-      std::cout << "Name: " << m_sourceList[idx]->name().toAscii().data() << std::endl;
+      std::cout << "Name: " << m_sourceList[idx]->name().toStdString() << std::endl;
    }
    
    for(idx=0;idx < m_chainList.size();++idx)
    {
-      std::cout << "Name: " << m_chainList[idx]->name().toAscii().data() << std::endl;
+      std::cout << "Name: " << m_chainList[idx]->name().toStdString() << std::endl;
    }
    for(idx=0;idx < m_displayList.size();++idx)
    {
-      std::cout << "Name: " << m_displayList[idx]->name().toAscii().data() << std::endl;
+      std::cout << "Name: " << m_displayList[idx]->name().toStdString() << std::endl;
    }
    
 }
@@ -1214,8 +1214,7 @@ bool ossimGui::DataManager::registerImages(NodeListType& nodes)
       gSigmas[0] = 50;
       gSigmas[1] = 50;
       gSigmas[2] = 50;
-
-      ossimRefPtr<ossimPointObservation> pt = new ossimPointObservation(gp, id, gSigmas);
+      ossimPointObservation *pt = new ossimPointObservation(gp, id, gSigmas);
 
       // Iterate over nodes to get image measurements
       NodeListType::iterator iter = nodes.begin();
@@ -1292,30 +1291,25 @@ bool ossimGui::DataManager::registerImages(NodeListType& nodes)
             ossimTypeNameVisitor visitor("ossimImageHandler");
             connectable->accept(visitor);
             ossimRefPtr<ossimImageHandler> input = dynamic_cast<ossimImageHandler*> (visitor.getObjects()[0].get());
-            
-            if(input.valid())
+            ossimFilename filename = input->getFilename().expand();
+
+            for (ossim_uint32 i=0; i<obsSet.numImages(); ++i)
             {
-               ossimFilename filename = input->getFilename().expand();
-
-               for (ossim_uint32 i=0; i<obsSet.numImages(); ++i)
+               if (filename == obsSet.imageFile(i))
                {
-                  if (filename == obsSet.imageFile(i))
+                  // If control image, lock all parameters (TODO not needed if image removed?)
+                  if (regOverlayForNode(*iter)->isControlImage())
                   {
-                     // If control image, lock all parameters (TODO not needed if image removed?)
-                     if (regOverlayForNode(*iter)->isControlImage())
+                     ossimAdjustableParameterInterface* iface = m_imgGeoms[k]->getAdjustableParameterInterface();
+                     if (iface != NULL)
                      {
-                        ossimAdjustableParameterInterface* iface = m_imgGeoms[k]->getAdjustableParameterInterface();
-                        if (iface != NULL)
-                        {
-                           iface->lockAllParametersCurrentAdjustment();
-                        }
+                        iface->lockAllParametersCurrentAdjustment();
                      }
-
-                     obsSet.setImageGeom(i, m_imgGeoms[k].get());
                   }
+
+                  obsSet.setImageGeom(i, m_imgGeoms[k].get());
                }
             }
-
          }
          ++iter;
          ++k;
@@ -1332,6 +1326,7 @@ bool ossimGui::DataManager::registerImages(NodeListType& nodes)
       {
          NEWMAT::Matrix coords(1,2);
          obsSet.observ(no)->getMeasurement(meas, coords);
+         ossim_uint32 imIdx = obsSet.imIndex(idx);
          ++idx;
          // std::cout<<"\n  Meas: "<<imIdx+1<<"  "<<coords(1,1)<<","<<coords(1,2);
       }

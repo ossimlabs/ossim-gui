@@ -1,7 +1,7 @@
 #ifndef ossimQtHistogramWidget_HEADER
-#define ossimQtHistogramWidget_HEADER
+#define ossimQtHistogramWidget_HEADER 1
 
-#include <QtGui/QGraphicsView>
+#include <QGraphicsView>
 #include <ossim/base/ossimConstants.h>
 #include <ossim/base/ossimMultiBandHistogram.h>
 #include <ossim/base/ossimMultiResLevelHistogram.h>
