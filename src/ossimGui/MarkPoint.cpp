@@ -1,8 +1,8 @@
 #include <ossimGui/MarkPoint.h>
-#include <QtGui/QPainter>
-#include <QtGui/QPen>
-#include <QtGui/QtGui>
-#include <QtGui/QToolTip>
+#include <QPainter>
+#include <QPen>
+#include <QtGui>
+#include <QToolTip>
 #include <iostream>
 
 

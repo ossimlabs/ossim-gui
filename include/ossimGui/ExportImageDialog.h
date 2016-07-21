@@ -1,8 +1,8 @@
 #ifndef ossimGuiExportImageDialog_HEADER
 #define ossimGuiExportImageDialog_HEADER
 #include <ossimGui/Export.h>
-#include <ossimGui/ui_ExportImageDialog.h>
-#include <QtGui/QDialog>
+#include <ui_ExportImageDialog.h>
+#include <QDialog>
 #include <ossim/base/ossimConnectableObject.h>
 #include <ossim/imaging/ossimImageFileWriter.h>
 #include <ossim/base/ossimProcessListener.h>

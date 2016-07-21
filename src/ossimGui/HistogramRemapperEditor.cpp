@@ -5,8 +5,8 @@
 #include <ossim/base/ossimKeywordlist.h>
 #include <ossim/base/ossimHistogramSource.h>
 #include <ossim/base/ossimRefreshEvent.h>
-#include <QtGui/QFileDialog>
-#include <QtGui/QMessageBox>
+#include <QFileDialog>
+#include <QMessageBox>
 
 class ossimHistogramVisitor : public ossimVisitor
 {
@@ -264,7 +264,7 @@ void ossimGui::HistogramRemapperEditor::openHistogramButton(bool)
       QStringList files = fd->selectedFiles();
       if(!files.empty())
       {
-         ossimFilename f = (*(files.begin())).toAscii().data();
+         ossimFilename f = (*(files.begin())).toStdString();
          setHistogram(f);
          
       }

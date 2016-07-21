@@ -1,6 +1,6 @@
 #include <ossimGui/DisplayTimerJobQueue.h>
 #include <iostream>
-#include <QtGui/QApplication>
+#include <QApplication>
 ossimGui::DisplayTimerJobQueue::DisplayTimerJobQueue()
 :m_displayTimer(new DisplayTimer(this))
 

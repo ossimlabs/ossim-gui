@@ -1,8 +1,8 @@
 #include <ossimGui/RoiSelection.h>
-#include <QtGui/QPainter>
-#include <QtGui/QPen>
-#include <QtGui/QtGui>
-#include <QtGui/QToolTip>
+#include <QPainter>
+#include <QPen>
+#include <QtGui>
+#include <QToolTip>
 #include <iostream>
 
 
@@ -104,14 +104,14 @@ ossimIrect ossimGui::RoiSelection::getRectImg() const
 }
 
 
-void ossimGui::RoiSelection::hoverEnterEvent( QGraphicsSceneHoverEvent* /* event */ )
+void ossimGui::RoiSelection::hoverEnterEvent(QGraphicsSceneHoverEvent* event)
 {
    m_savedPen = m_pen;
    m_pen.setColor(Qt::cyan);
    update();
 }
 
-void ossimGui::RoiSelection::hoverLeaveEvent( QGraphicsSceneHoverEvent* /* event */ )
+void ossimGui::RoiSelection::hoverLeaveEvent(QGraphicsSceneHoverEvent* event)
 {
    m_pen = m_savedPen;
    update();
@@ -123,8 +123,8 @@ QRectF ossimGui::RoiSelection::boundingRect() const
 }
 
 void ossimGui::RoiSelection::paint(QPainter* painter,
-                                   const QStyleOptionGraphicsItem* /* option */,
-                                   QWidget* /* widget */)
+                                const QStyleOptionGraphicsItem* option,
+                                QWidget* widget)
 {
    painter->setPen(m_pen);
    painter->drawRect(m_rect);

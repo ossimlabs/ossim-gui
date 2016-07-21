@@ -4,8 +4,8 @@
 #include <ossim/base/ossimVisitor.h>
 #include <ossim/imaging/ossimImageGeometry.h>
 #include <ossim/imaging/ossimImageHandler.h>
-#include <QtGui/QTableWidgetItem>
-#include <QtGui/QFileDialog>
+#include <QTableWidgetItem>
+#include <QFileDialog>
 static const int NAME_INDEX       = 0;
 static const int SIGMA_INDEX      = 1;
 static const int PARAMETER_INDEX  = 2;
@@ -262,7 +262,7 @@ void ossimGui::AdjustableParameterEditor::saveAdjustment()
       QString file = QFileDialog::getSaveFileName((QWidget*)this, tr("Save Geometry"), tr(m_filename.c_str()), tr("*.geom"));
       if(file != "")
       {
-         m_filename = file.toAscii().data();
+         m_filename = file.toStdString();
          ossimKeywordlist kwl;
          m_interface->getBaseObject()->saveState(kwl);
          
@@ -338,7 +338,7 @@ void ossimGui::AdjustableParameterEditor::valueChanged(int row, int col)
    else if(col == SIGMA_INDEX)
    {
       m_interface->setDirtyFlag(true);
-      ossimString sigma = m_adjustableParameterTable->item(row,col)->text().toAscii().data();
+      ossimString sigma = m_adjustableParameterTable->item(row,col)->text().toStdString();
       m_interface->setParameterSigma(row, sigma.toDouble(), true);
       fireRefreshEvent();
       transferToTable();
@@ -346,7 +346,7 @@ void ossimGui::AdjustableParameterEditor::valueChanged(int row, int col)
    else if(col == PARAMETER_INDEX)
    {
       m_interface->setDirtyFlag(true);
-      ossimString param = m_adjustableParameterTable->item(row,col)->text().toAscii().data();
+      ossimString param = m_adjustableParameterTable->item(row,col)->text().toStdString();
       m_interface->setAdjustableParameter(row, param.toDouble(), true);
       fireRefreshEvent();
       transferToTable();
@@ -358,7 +358,7 @@ void ossimGui::AdjustableParameterEditor::valueChanged(int row, int col)
       double sigma    = m_interface->getParameterSigma(row);
       double minValue = center - sigma;
       double maxValue = center + sigma;
-      double value    = ossimString(m_adjustableParameterTable->item(row,col)->text().toAscii().data()).toDouble();
+      double value    = ossimString(m_adjustableParameterTable->item(row,col)->text().toStdString()).toDouble();
       double x = 0.0;
       
       if(sigma != 0.0)
@@ -400,6 +400,6 @@ void ossimGui::AdjustableParameterEditor::adjustmentDescriptionChanged(const QSt
    if(m_interface)
    {
       m_interface->setDirtyFlag(true);
-      m_interface->setAdjustmentDescription(value.toAscii().data());
+      m_interface->setAdjustmentDescription(value.toStdString());
    }   
 }

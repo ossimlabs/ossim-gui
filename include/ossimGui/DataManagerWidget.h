@@ -1,16 +1,16 @@
 #ifndef ossimGuiDataManagerWidget_HEADER
-#define ossimGuiDataManagerWidget_HEADER 1
+#define ossimGuiDataManagerWidget_HEADER
 #include <ossimGui/DataManager.h>
-#include <QtGui/QTreeView>
-#include <QtGui/QItemDelegate>
-#include <QtGui/QTreeWidget>
-#include <QtGui/QTreeWidgetItem>
-#include <QtGui/QStandardItem>
-#include <QtGui/QMenu>
+#include <QTreeView>
+#include <QItemDelegate>
+#include <QTreeWidget>
+#include <QTreeWidgetItem>
+#include <QStandardItem>
+#include <QMenu>
 #include <QtCore/QModelIndex>
-#include <QtGui/QCheckBox>
-#include <QtGui/QComboBox>
-//#include <QtGui/QProgressBar>
+#include <QCheckBox>
+#include <QComboBox>
+//#include <QProgressBar>
 #include <ossimGui/Export.h>
 #include <ossimGui/Event.h>
 #include <ossimGui/DataManagerPropertyView.h>
@@ -20,7 +20,7 @@
 #include <ossim/base/ossimTieMeasurementGeneratorInterface.h>
 #include <ossim/parallel/ossimJob.h>
 #include <ossim/parallel/ossimJobQueue.h>
-#include <QtGui/QApplication>
+#include <QApplication>
 class QMainWindow;
 
 class ossimSensorModelTuple;
@@ -566,9 +566,6 @@ namespace ossimGui{
       QModelIndex indexFromDataManagerItem(DataManagerItem* item, int col=0);
       virtual void unselectAll();
 
-      /** @return the last opened directory. */
-      const ossimFilename& getLastOpenedDirectory() const;
-
    public slots:
       virtual void buildOverviewsForSelected(QAction* action);
       virtual void buildOverviewsForSelected(const QString& type);
@@ -766,9 +763,6 @@ namespace ossimGui{
       ossimRefPtr<DataManager::Node> m_planetaryDisplayNode;
 
       ossimFilename m_lastOpenedDirectory; // For QFileDialog::getOpenFileNames
-      
-   }; // End: class DataManagerWidget 
-   
-} // End: namespace ossimGui{ 
-
-#endif /** #ifndef ossimGuiDataManagerWidget_HEADER */
+   };
+}
+#endif

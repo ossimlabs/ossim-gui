@@ -5,14 +5,14 @@
 #include <ossimGui/ImageScrollView.h>
 #include <ossimGui/Event.h>
 #include <ossimGui/About.h>
-#include <QtGui/QMdiArea>
-#include <QtGui/QMdiSubWindow>
-#include <QtGui/QFileDialog>
-#include <QtGui/QToolBar>
-#include <QtGui/QInputDialog>
-#include <QtGui/QMessageBox>
-#include <QtCore/QMimeData>
-#include <QtCore/QUrl>
+#include <QMdiArea>
+#include <QMdiSubWindow>
+#include <QFileDialog>
+#include <QToolBar>
+#include <QInputDialog>
+#include <QMessageBox>
+#include <QMimeData>
+#include <QUrl>
 
 #include <ossim/ossimVersion.h>
 #include <ossim/imaging/ossimImageHandlerRegistry.h>
@@ -151,7 +151,7 @@ void ossimGui::MainWindow::dropEvent( QDropEvent * event )
          //
          if(m_url.scheme().toLower() == "file")
          {
-            ossimFilename file = m_url.toLocalFile().toAscii().data();
+            ossimFilename file = m_url.toLocalFile().toStdString();
             ossimString ext = file.ext().downcase();
 
             if(ext == "gcl" || ext == "geocell")
@@ -171,7 +171,7 @@ void ossimGui::MainWindow::dropEvent( QDropEvent * event )
          {
             QString input  = iter->toString();
             QString scheme = iter->scheme();
-            ossimFilename projectFile = (*iter).toLocalFile().toAscii().data();
+            ossimFilename projectFile = (*iter).toLocalFile().toStdString();
             ossimString ext = projectFile.ext().downcase();
             if((ext == "gcl" || ext=="geocell")&&projectFile.exists())
             {
@@ -180,7 +180,7 @@ void ossimGui::MainWindow::dropEvent( QDropEvent * event )
             else
             {
                OpenImageUrlJob* job = new OpenImageUrlJob(*iter);
-               job->setName("Open " + ossimString((*iter).toString().toAscii().data()));
+               job->setName("Open " + ossimString((*iter).toString().toStdString()));
                ossimImageOpenJobCallback* callback = new ossimImageOpenJobCallback();
                callback->m_object = this;
                job->setCallback(callback);
@@ -332,7 +332,7 @@ void ossimGui::MainWindow::saveProject(bool /*checked*/)
    QString fileName = QFileDialog::getSaveFileName(this);
    if(fileName != "")
    {
-      ossimFilename file = fileName.toAscii().data();
+      ossimFilename file = fileName.toStdString();
       file.setExtension("gcl");
       ossimKeywordlist kwl;
       m_dataManager->saveState(kwl, "dataManager.");
@@ -345,7 +345,7 @@ void ossimGui::MainWindow::saveProjectAs(bool /*checked*/)
    QString fileName = QFileDialog::getSaveFileName(this);
    if(fileName != "")
    {
-      ossimFilename file = fileName.toAscii().data();
+      ossimFilename file = fileName.toStdString();
       file.setExtension("gcl");
       ossimKeywordlist kwl;
       
@@ -359,7 +359,7 @@ void ossimGui::MainWindow::openProject(bool /*checked*/)
    QString file = QFileDialog::getOpenFileName(this);
    if(file != "")
    {
-      ossimFilename fileName(file.toAscii().data());
+      ossimFilename fileName(file.toStdString());
       if(!m_dataManagerWidget->openDataManager(fileName))
       {
          

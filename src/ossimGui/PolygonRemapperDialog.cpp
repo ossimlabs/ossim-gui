@@ -49,7 +49,7 @@
 #include <sstream>
 #include <vector>
 
-ossimGui::PolygonRemapperDialog::PolygonRemapperDialog(QWidget* parent, Qt::WFlags f) 
+ossimGui::PolygonRemapperDialog::PolygonRemapperDialog(QWidget* parent, Qt::WindowFlags f) 
    :
    QDialog( parent, f ),
    m_textEdit( new QTextEdit() ),

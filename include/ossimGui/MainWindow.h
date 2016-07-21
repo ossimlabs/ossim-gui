@@ -1,9 +1,9 @@
 #ifndef ossimGuiMainWindow_HEADER
 #define ossimGuiMainWindow_HEADER
-#include <ossimGui/ui_MainWindow.h>
-#include <QtGui/QMainWindow>
-#include <QtGui/QDropEvent>
-#include <QtGui/QDragEnterEvent>
+#include <ui_MainWindow.h>
+#include <QMainWindow>
+#include <QDropEvent>
+#include <QDragEnterEvent>
 #include <ossimGui/Export.h>
 #include <ossimGui/DataManager.h>
 #include <ossim/parallel/ossimJobMultiThreadQueue.h>

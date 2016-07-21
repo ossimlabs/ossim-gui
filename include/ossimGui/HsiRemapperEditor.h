@@ -1,8 +1,8 @@
 #ifndef ossimGuiHsiRemapperEditor_HEADER
 #define ossimGuiHsiRemapperEditor_HEADER
 #include <ossimGui/Export.h>
-#include <ossimGui/ui_HsiRemapperEditor.h>
-#include <QtGui/QDialog>
+#include <ui_HsiRemapperEditor.h>
+#include <QDialog>
 #include <ossim/imaging/ossimHsiRemapper.h>
 namespace ossimGui{
    class OSSIMGUI_DLL HsiRemapperEditor: public QDialog, public Ui::HsiRemapperEditor

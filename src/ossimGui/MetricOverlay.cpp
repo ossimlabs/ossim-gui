@@ -4,7 +4,6 @@
 #include <QtGui/QPainter>
 #include <QtGui/QPen>
 #include <QtGui/QtGui>
-#include <QtGui/QGraphicsItem>
 #include <iostream>
 
 
@@ -52,7 +51,7 @@ void ossimGui::MetricOverlay::addPoint(const ossimDpt& scenePt, const ossimDpt& 
 void ossimGui::MetricOverlay::togglePointActive(const ossimString& id)
 {
    ossimGui::MarkPoint* point = getMarkPoint(id);
-   bool currentlyActive = false;
+   bool currentlyActive;
 
    if (point != 0)
    {

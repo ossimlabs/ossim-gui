@@ -1,12 +1,12 @@
 #ifndef ossimGuiRegPoint_HEADER
 #define ossimGuiRegPoint_HEADER
 
-#include <QtGui/QWidget>
-#include <QtGui/QGraphicsItem>
-#include <QtGui/QGraphicsTextItem>
-#include <QtGui/QGraphicsLineItem>
-#include <QtGui/QGraphicsRectItem>
-#include <QtGui/QPen>
+#include <QWidget>
+#include <QGraphicsItem>
+#include <QGraphicsTextItem>
+#include <QGraphicsLineItem>
+#include <QGraphicsRectItem>
+#include <QPen>
 #include <ossimGui/Export.h>
 #include <ossimGui/AnnotationItem.h>
 #include <ossim/base/ossimDpt.h>

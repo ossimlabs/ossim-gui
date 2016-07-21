@@ -1,6 +1,6 @@
 #include <ossimGui/MdiSubWindowBase.h>
-#include <QtGui/QMdiArea>
-#include <QtGui/QMainWindow>
+#include <QMdiArea>
+#include <QMainWindow>
 
 namespace ossimGui {
    MdiSubWindowBase::MdiSubWindowBase( QWidget * parent, Qt::WindowFlags flags)

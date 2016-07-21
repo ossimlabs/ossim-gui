@@ -1,8 +1,8 @@
 // $Id$
 
 #include <iostream>
-#include <QtGui/QApplication>
-#include <QtGui/QSplashScreen>
+#include <QApplication>
+#include <QSplashScreen>
 #include <QtCore/QThread>
 #include <ossimGui/MainWindow.h>
 #include <ossimGui/OssimObjectFactory.h>

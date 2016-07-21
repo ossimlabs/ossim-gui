@@ -544,7 +544,6 @@ namespace ossimGui
       m_scrollView->setShowTrackCursor(true);
       consumeEvent = false;
    }     
-
    ossimImageGeometry* ImageViewManipulator::asGeometry()
    {
       ossimImageViewProjectionTransform* ivpt = getObjectAs<ossimImageViewProjectionTransform>();
@@ -555,7 +554,6 @@ namespace ossimGui
 	      
       return getObjectAs<ossimImageGeometry>();
    }
-
    void ImageViewManipulator::setViewToChains()
    {
       if(m_scrollView&&m_scrollView->connectableObject())
@@ -587,8 +585,6 @@ namespace ossimGui
          ossimDpt saveCenter = m_centerPoint;
          viewVisitor.setView();
          m_centerPoint = saveCenter;
-
-         m_scrollView->emitViewChanged();
       }
    }
 

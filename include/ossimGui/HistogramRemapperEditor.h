@@ -2,7 +2,7 @@
 #define ossimGuiHistogramRemapperEditor_HEADER
 
 #include <ossimGui/Export.h>
-#include <ossimGui/ui_HistogramRemapperEditor.h>
+#include <ui_HistogramRemapperEditor.h>
 #include <ossim/imaging/ossimHistogramRemapper.h>
 #include <ossim/base/ossimMultiResLevelHistogram.h>
 #include <ossim/base/ossimKeywordlist.h>

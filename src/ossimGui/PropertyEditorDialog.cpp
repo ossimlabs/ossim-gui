@@ -17,7 +17,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-ossimGui::PropertyEditorDialog::PropertyEditorDialog(QWidget* parent, Qt::WFlags f) 
+ossimGui::PropertyEditorDialog::PropertyEditorDialog(QWidget* parent,Qt::WindowFlags f)// Qt::WFlags f) 
    :
    QDialog( parent, f ),
    m_propertyView(0)

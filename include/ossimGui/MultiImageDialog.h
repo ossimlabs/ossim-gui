@@ -2,8 +2,8 @@
 #define ossimGuiMultiImageDialog_HEADER
 #include <ossimGui/DataManager.h>
 #include <ossimGui/Export.h>
-#include <ossimGui/ui_MultiImageDialog.h>
-#include <QtGui/QDialog>
+#include <ui_MultiImageDialog.h>
+#include <QDialog>
 #include <ossim/base/ossimConnectableObject.h>
 #include <ossim/base/ossimProcessListener.h>
 
