@@ -2,6 +2,7 @@
 #include <ossimGui/AdjustableParameterEditor.h>
 #include <ossimGui/BandSelectorEditor.h>
 #include <ossimGui/BrightnessContrastEditor.h>
+#include <ossimGui/ChipperDialog.h>
 #include <ossimGui/CopyChainVisitor.h>
 #include <ossimGui/Event.h>
 #include <ossimGui/ExportImageDialog.h>
@@ -147,6 +148,20 @@ void ossimGui::ImageActions::exportImage()
    ExportImageDialog* dialog = new ExportImageDialog(m_widget);
    dialog->setObject(m_widget->connectableObject()->getInput(0));
    dialog->exec();
+}
+
+void ossimGui::ImageActions::saveAs()
+{
+   ChipperDialog* dialog = new ChipperDialog( m_widget );
+   dialog->setAttribute(Qt::WA_DeleteOnClose);
+   // connect(this, SIGNAL(syncView(View&)), dialog, SLOT(syncView(View&)));
+   connect(this, SIGNAL(syncView(View&)), dialog, SLOT(syncView()));
+   
+   if ( dialog->errorStatus() == ossimGui::ChipperDialog::OK )
+   {
+      dialog->show();
+      // dialog->exec();
+   }
 }
 
 void ossimGui::ImageActions::exportKeywordlist()
@@ -426,6 +441,7 @@ void ossimGui::ImageActions::addActions(QMainWindow* mainWindow)
       {
       }
    }
+   
    action = imageMenu->findChild<QAction*>("exportImageAction");
    if(!action)
    {
@@ -435,7 +451,17 @@ void ossimGui::ImageActions::addActions(QMainWindow* mainWindow)
       
    }
    connect(action, SIGNAL(triggered(bool)),this, SLOT(exportImage()));
-   
+
+   action = imageMenu->findChild<QAction*>("saveAsAction");
+   if(!action)
+   {
+      action = imageMenu->addAction("Save as");
+      action->setObjectName("saveAsAction");
+      action->setEnabled(true);
+      
+   }
+   connect(action, SIGNAL(triggered(bool)),this, SLOT(saveAs()));
+  
    action = imageMenu->findChild<QAction*>("exportKeywordListAction");
    if(!action)
    {
@@ -637,7 +663,7 @@ void ossimGui::ImageActions::addActions(QMainWindow* mainWindow)
          fitToWindow = new QToolButton();
          fitToWindow->setText("Fit");
          fitToWindow->setObjectName("fitToWindowButton");
-         fitToWindow->setIcon(QIcon(":/themes/default/mActionZoomFullExtent.png"));         
+         fitToWindow->setIcon(QIcon(":/themes/default/mActionZoomFullExtent.png"));
          toolbar->addWidget(fitToWindow);
       }
       else 
@@ -807,6 +833,11 @@ void ossimGui::ImageActions::removeActions(QMainWindow* mainWindow)
          disconnect(action, 0, this, 0);
       }
       action = imageMenu->findChild<QAction*>("exportImageAction");
+      if(action)
+      {
+         disconnect(action, 0, this, 0);
+      }
+      action = imageMenu->findChild<QAction*>("saveAsAction");
       if(action)
       {
          disconnect(action, 0, this, 0);
@@ -984,13 +1015,11 @@ void ossimGui::ImageMdiSubWindow::syncView(View& viewInfo)
       while(currentWindow != wList.end())
       {
          ossimGui::MdiSubWindowBase* w = dynamic_cast<ossimGui::MdiSubWindowBase*>(*currentWindow);
-         
-         
-         if(w&&(w!=this))
+         if( w && (w!=this) )
          {
             w->sync(viewInfo);
          }
-         else if(w == this)
+         else if( w == this )
          {
             // if we are the ones syncing then lets do some informational readouts
             // such as RGB values,  GEO coordinates, ... etc
@@ -1014,8 +1043,10 @@ void ossimGui::ImageMdiSubWindow::syncView(View& viewInfo)
                   // pcsCode = mapProj->getPcsCode();
                   if(!mapProj->isGeographic())
                   {
-                     mapProj->lineSampleToEastingNorthing(viewSpaceRect.ll(), minProjectionPlanePt);
-                     mapProj->lineSampleToEastingNorthing(viewSpaceRect.ur(), maxProjectionPlanePt);
+                     mapProj->lineSampleToEastingNorthing(
+                        viewSpaceRect.ll(), minProjectionPlanePt);
+                     mapProj->lineSampleToEastingNorthing(
+                        viewSpaceRect.ur(), maxProjectionPlanePt);
                   }
                   else
                   {
@@ -1033,7 +1064,7 @@ void ossimGui::ImageMdiSubWindow::syncView(View& viewInfo)
                   geom->localToWorld(viewSpaceRect.ur(), corners[1]);
                   geom->localToWorld(viewSpaceRect.lr(), corners[2]);
                   geom->localToWorld(viewSpaceRect.ll(), corners[3]);
-                  minProjectionPlanePt.x = (ossim::min(ossim::min(ossim::min(corners[0].lond(), corners[1].lond()), corners[2].lond()), corners[3].lond()));
+                  minProjectionPlanePt.x = (ossim::min(ossim::min(ossim::min(corners[0].lond(),corners[1].lond()), corners[2].lond()), corners[3].lond()));
                   maxProjectionPlanePt.x = (ossim::max(ossim::max(ossim::max(corners[0].lond(), corners[1].lond()), corners[2].lond()), corners[3].lond()));
                   minProjectionPlanePt.y = (ossim::min(ossim::min(ossim::min(corners[0].latd(), corners[1].latd()), corners[2].latd()), corners[3].latd()));
                   maxProjectionPlanePt.y = (ossim::max(ossim::max(ossim::max(corners[0].latd(), corners[1].latd()), corners[2].latd()), corners[3].latd()));
@@ -1069,7 +1100,6 @@ void ossimGui::ImageMdiSubWindow::syncView(View& viewInfo)
                   }
                }
 #endif
-              // std::cout << out.str() << std::endl;
             }
          }
          ++currentWindow;
@@ -1088,7 +1118,7 @@ ossimGui::ImageScrollView* ossimGui::ImageMdiSubWindow::scrollWidget()
 }
 
 void ossimGui::ImageMdiSubWindow::sync(View& view)
-{ 
+{
    ossimGpt oldCenter;
    
    oldCenter.makeNan();
