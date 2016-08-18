@@ -696,105 +696,101 @@ void ossimGui::ChipperDialog::runIgenPushButtonClicked()
                         {
                            return;
                         }
-                        
-                        // Connect writer to the cutter.
-                        m_writer->connectMyInputTo(0, writerInput.get());
-                        
-                        // Set the output file.
-                        m_writer->setOutputName(m_outputFile);
-                        
-                        // Initialize.
-                        m_writer->initialize();
-                        
-                        // Make a progress dialog.
-                        ossimGui::ProgressDialog* pd = new ossimGui::ProgressDialog(this);
-                        pd->progressWidget()->setObject( m_writer.get() );
-                        
-                        // pd->setMinimumDuration(250); Update 4 times a second.
-                        
-                        //---
-                        // Connect the progress dialog's signal "canceled()" up to our slot
-                        // "saveCanceled()" so that we can tell the writer to abort.
-                        //---
-                        // connect( pd, SIGNAL(canceled()), this, SLOT(abortClicked()) );
-                        
-                        // ossimProcessListener* pl = dynamic_cast<ossimProcessListener>(pd);
-                        // if (pl)
-                        // {
-                        // Make the progress dialog a listener to the writer.
-                        // m_writer->addListener(pl);
-                        // }
-                        
-                        // Set up the progress dialog...
-                        QString qs = "Processing file ";
-                        qs += m_outputFile.c_str();
-                        // pd->progressWidget()->setLabelText(qs);
-                        pd->show();
-                        
-                        // Process the tile...
-                        bool exceptionCaught = false;
-                        try
+
+                        if ( m_writer.valid() == false )
                         {
-                           m_writer->execute();
+                           createWriter( getWriterString() );
                         }
-                        catch(std::exception& e)
+
+                        if ( m_writer.valid() )
                         {
-                           pd->close();
-                           QString caption = "Exception caught!\n";
-                           QString text = e.what();
-                           QMessageBox::information( this,
-                                                     caption,
-                                                     text,
-                                                     QMessageBox::Ok );
-                           exceptionCaught = true;
-                        }
-                        catch (...)
-                        {
-                           pd->close();
-                           QString caption = "Unknown exception caught!\n";
-                           QString text = "";
-                           QMessageBox::information( this,
-                                                     caption,
-                                                     text,
-                                                     QMessageBox::Ok );
-                           exceptionCaught = true;
-                        }
+                           // Connect writer to the cutter.
+                           m_writer->connectMyInputTo(0, writerInput.get());
+                           
+                           // Set the output file.
+                           m_writer->setOutputName(m_outputFile);
                         
-                        // Close and disconnect for next run.
-                        m_writer->close();
-                        m_writer->disconnectAllInputs();
-                        m_writer = 0;
-                        cutter = 0;
-                        writerInput = 0;
-                        
-                        if (exceptionCaught)
-                        {
-                           removeFile(); 
-                        }
-                        // else if (pd->wasCanceled())
-                        // {
-                        //    pd->close();
-                        //    removeFile();
-                        // }
-                        
-                        // if (pl)
-                        // {
-                        // m_writer->removeListener(pl);
-                        // }
-                        
-                        // Cleanup...
-                        delete pd;
-                        pd = 0;
-                        if(m_outputFile.exists())
-                        {
-                           if (traceDebug())
+                           // Initialize.
+                           m_writer->initialize();
+                           
+                           // Make a progress dialog.
+                           ossimGui::ProgressDialog* pd = new ossimGui::ProgressDialog(this);
+                           pd->progressWidget()->setObject( m_writer.get() );
+
+                           // QString qs = "Processing file ";
+                           // qs += m_outputFile.c_str();
+                           // pd->progressWidget()->setLabelText(qs);
+
+                           pd->show();
+                           
+                           // Process the tile...
+                           bool exceptionCaught = false;
+                           try
                            {
-                              ossimNotify(ossimNotifyLevel_DEBUG)
-                                 << "Add to datamanager autoload..." << endl;
+                              m_writer->execute();
                            }
-                           // ossimQtAddImageFileEvent event(m_outputFile);
-                           // ossimQtApplicationUtility::sendEventToRoot(this,
-                           //                                            &event); 
+                           catch(std::exception& e)
+                           {
+                              QString caption = "Exception caught!\n";
+                              QString text = e.what();
+                              QMessageBox::information( this,
+                                                        caption,
+                                                        text,
+                                                        QMessageBox::Ok );
+                              exceptionCaught = true;
+                           }
+                           catch (...)
+                           {
+                              QString caption = "Unknown exception caught!\n";
+                              QString text = "";
+                              QMessageBox::information( this,
+                                                        caption,
+                                                        text,
+                                                        QMessageBox::Ok );
+                              exceptionCaught = true;
+                           }
+                           
+                           // Close and disconnect for next run.
+                           pd->close();
+                           delete pd;
+                           pd = 0;
+                           m_writer->close();
+                           m_writer->disconnectAllInputs();
+                           cutter = 0;
+                           writerInput = 0;
+                           
+                           if (exceptionCaught)
+                           {
+                              removeFile(); 
+                           }
+                           // else if (pd->wasCanceled())
+                           // {
+                           //    pd->close();
+                           //    removeFile();
+                           // }
+                           
+                           // if (pl)
+                           // {
+                           // m_writer->removeListener(pl);
+                           // }
+                           
+                           
+                           if(m_outputFile.exists())
+                           {
+                              if (traceDebug())
+                              {
+                                 ossimNotify(ossimNotifyLevel_DEBUG)
+                                    << "Add to datamanager autoload..." << endl;
+                              }
+                              // ossimQtAddImageFileEvent event(m_outputFile);
+                              // ossimQtApplicationUtility::sendEventToRoot(this,
+                              //                                            &event); 
+                           }
+                        }
+                        else
+                        {
+                           // Should never happen...
+                           ossimNotify(ossimNotifyLevel_WARN) << "Writer null!" << endl;
                         }
                      }
                   }
