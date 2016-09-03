@@ -1,5 +1,33 @@
 #include <ossimGui/PlanetMdiSubWindow.h>
-#include <iostream>
+#include <ossimGui/ImageWidget.h>
+#include <ossimGui/Event.h>
+#include <ossimGui/BandSelectorEditor.h>
+#include <ossimGui/BrightnessContrastEditor.h>
+#include <ossimGui/HsiRemapperEditor.h>
+#include <ossimGui/HistogramRemapperEditor.h>
+#include <ossimGui/AdjustableParameterEditor.h>
+#include <ossimGui/ExportImageDialog.h>
+
+#include <ossim/base/ossimAdjustableParameterInterface.h>
+#include <ossim/base/ossimGeoidManager.h>
+#include <ossim/base/ossimEcefPoint.h>
+#include <ossim/base/ossimVisitor.h>
+
+#include <ossim/elevation/ossimElevManager.h>
+
+#include <ossim/imaging/ossimImageRenderer.h>
+#include <ossim/imaging/ossimFilterResampler.h>
+
+#include <ossim/projection/ossimImageViewTransform.h>
+#include <ossim/projection/ossimImageViewProjectionTransform.h>
+#include <ossim/projection/ossimImageViewAffineTransform.h>
+#include <ossim/projection/ossimMapProjection.h>
+
+#include <ossimPlanet/ossimPlanetGrid.h>
+#include <ossimPlanet/ossimPlanetLatLonHud.h>
+
+#include <osgGA/KeySwitchMatrixManipulator>
+
 #include <QtGui/QMenuBar>
 #include <QtGui/QPushButton>
 #include <QtGui/QToolBar>
@@ -11,29 +39,9 @@
 #include <QtGui/QMainWindow>
 #include <QtGui/QStatusBar>
 #include <QtGui/QApplication>
-#include <ossimGui/ImageWidget.h>
-#include <ossimGui/Event.h>
-#include <ossim/base/ossimVisitor.h>
-#include <ossim/imaging/ossimImageRenderer.h>
-#include <ossim/imaging/ossimFilterResampler.h>
-#include <ossim/projection/ossimImageViewTransform.h>
-#include <ossim/projection/ossimImageViewProjectionTransform.h>
-#include <ossim/projection/ossimImageViewAffineTransform.h>
-#include <ossim/projection/ossimMapProjection.h>
-#include <ossim/base/ossimAdjustableParameterInterface.h>
-#include <ossim/base/ossimGeoidManager.h>
-#include <ossim/base/ossimEcefPoint.h>
-#include <ossim/elevation/ossimElevManager.h>
-#include <ossimGui/BandSelectorEditor.h>
-#include <ossimGui/BrightnessContrastEditor.h>
-#include <ossimGui/HsiRemapperEditor.h>
-#include <ossimGui/HistogramRemapperEditor.h>
-#include <ossimGui/AdjustableParameterEditor.h>
-#include <ossimGui/ExportImageDialog.h>
-#include <ossimPlanet/ossimPlanetGrid.h>
-#include <osgGA/KeySwitchMatrixManipulator>
-#include <ossimPlanet/ossimPlanetLatLonHud.h>
 #include <QtOpenGL/QGLFormat>
+
+#include <iostream>
 #include <list>
 
 #include <ossim/projection/ossimLlxyProjection.h>
