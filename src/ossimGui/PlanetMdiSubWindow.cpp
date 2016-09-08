@@ -38,7 +38,7 @@
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QMainWindow>
 #include <QtWidgets/QStatusBar>
-#include <QtWidgets/QApplication>
+#include <QtWidgetsg/QApplication>
 #include <QtOpenGL/QGLFormat>
 
 #include <iostream>
