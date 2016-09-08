@@ -28,17 +28,17 @@
 
 #include <osgGA/KeySwitchMatrixManipulator>
 
-#include <QtGui/QMenuBar>
-#include <QtGui/QPushButton>
-#include <QtGui/QToolBar>
-#include <QtGui/QToolButton>
-#include <QtGui/QMenu>
-#include <QtGui/QComboBox>
-#include <QtGui/QMdiArea>
-#include <QtGui/QLabel>
-#include <QtGui/QMainWindow>
-#include <QtGui/QStatusBar>
-#include <QtGui/QApplication>
+#include <QtWidgets/QMenuBar>
+#include <QtWidgets/QPushButton>
+#include <QtWidgets/QToolBar>
+#include <QtWidgets/QToolButton>
+#include <QtWidgets/QMenu>
+#include <QtWidgets/QComboBox>
+#include <QtWidgets/QMdiArea>
+#include <QtWidgets/QLabel>
+#include <QtWidgets/QMainWindow>
+#include <QtWidgets/QStatusBar>
+#include <QtWidgets/QApplication>
 #include <QtOpenGL/QGLFormat>
 
 #include <iostream>
