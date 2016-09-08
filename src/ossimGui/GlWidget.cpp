@@ -5,7 +5,7 @@
 #include <QtCore/QEvent>
 #include <QtGui/QMouseEvent>
 #include <QtGui/QKeyEvent>
-#include <QtGui/QLayout>
+#include <QtWidgets/QLayout>
 #include <QtGui/QFrame>
 #include <OpenThreads/ScopedLock>
 #include <osgUtil/LineSegmentIntersector>
