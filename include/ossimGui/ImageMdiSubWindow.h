@@ -50,6 +50,7 @@ namespace ossimGui {
       const Visitor& visitor()const{return m_visitor;}
    public slots:
       void exportImage();
+      void saveAs();      
       void exportKeywordlist();
       void editBandSelector();
       void editHsiAdjustments();

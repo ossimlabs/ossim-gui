@@ -643,7 +643,7 @@ void ImageScrollView::drawBackground(QPainter* painter,
    }
 }
    
-void ImageScrollView::drawForeground(QPainter* painter, const QRectF& /* rect */  )
+void ImageScrollView::drawForeground(QPainter* painter, const QRectF& inputRect)
 {
    if(!m_trackPoint.hasNans()&&m_showTrackingCursorFlag&&m_trackingFlag)
    {
@@ -678,7 +678,12 @@ void ImageScrollView::drawForeground(QPainter* painter, const QRectF& /* rect */
       }
       painter->setClipping(hasClipping);
    }
+
    m_oldTrackPoint = m_trackPoint;
+
+   emit paintYourGraphics(painter, inputRect);
+
+   // Fix painter color.
 }
 
 void ImageScrollView::paintMultiLayer(QPainter& painter, const QRectF& /* rect */)
@@ -828,6 +833,7 @@ void ImageScrollView::mousePressEvent ( QMouseEvent * e )
    m_lastClickedPoint.x = p.x();
    m_lastClickedPoint.y = p.y();
 
+   emit mousePress(e);
    emit mousePress(e, m_lastClickedPoint);
    
    // Transform to true image coordinates
@@ -911,7 +917,7 @@ void ImageScrollView::mouseMoveEvent ( QMouseEvent * e )
          }
       }
    }
-
+   emit mouseMove(e);
 }
 
 
@@ -938,6 +944,8 @@ void ImageScrollView::mouseReleaseEvent ( QMouseEvent * e )
         emit mouseBox(this, imageStart, imageStop);
       }
    }
+
+   emit mouseRelease(e);
 }
 
 void ossimGui::ImageScrollView::wheelEvent ( QWheelEvent * e )
@@ -1096,6 +1104,12 @@ void ossimGui::ImageScrollView::zoomAnnotation()
          m_metricOverlay->setView(ivtg);
       }
    }
+}
+
+// Called by ImageViewManipulator::setViewToChains()
+void ossimGui::ImageScrollView::emitViewChanged()
+{
+   emit viewChanged();
 }
    
 }

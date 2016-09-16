@@ -1,39 +1,47 @@
 #include <ossimGui/PlanetMdiSubWindow.h>
-#include <iostream>
-#include <QtGui/QMenuBar>
-#include <QtGui/QPushButton>
-#include <QtGui/QToolBar>
-#include <QtGui/QToolButton>
-#include <QtGui/QMenu>
-#include <QtGui/QComboBox>
-#include <QtGui/QMdiArea>
-#include <QtGui/QLabel>
-#include <QtGui/QMainWindow>
-#include <QtGui/QStatusBar>
-#include <QtGui/QApplication>
 #include <ossimGui/ImageWidget.h>
 #include <ossimGui/Event.h>
-#include <ossim/base/ossimVisitor.h>
-#include <ossim/imaging/ossimImageRenderer.h>
-#include <ossim/imaging/ossimFilterResampler.h>
-#include <ossim/projection/ossimImageViewTransform.h>
-#include <ossim/projection/ossimImageViewProjectionTransform.h>
-#include <ossim/projection/ossimImageViewAffineTransform.h>
-#include <ossim/projection/ossimMapProjection.h>
-#include <ossim/base/ossimAdjustableParameterInterface.h>
-#include <ossim/base/ossimGeoidManager.h>
-#include <ossim/base/ossimEcefPoint.h>
-#include <ossim/elevation/ossimElevManager.h>
 #include <ossimGui/BandSelectorEditor.h>
 #include <ossimGui/BrightnessContrastEditor.h>
 #include <ossimGui/HsiRemapperEditor.h>
 #include <ossimGui/HistogramRemapperEditor.h>
 #include <ossimGui/AdjustableParameterEditor.h>
 #include <ossimGui/ExportImageDialog.h>
+
+#include <ossim/base/ossimAdjustableParameterInterface.h>
+#include <ossim/base/ossimGeoidManager.h>
+#include <ossim/base/ossimEcefPoint.h>
+#include <ossim/base/ossimVisitor.h>
+
+#include <ossim/elevation/ossimElevManager.h>
+
+#include <ossim/imaging/ossimImageRenderer.h>
+#include <ossim/imaging/ossimFilterResampler.h>
+
+#include <ossim/projection/ossimImageViewTransform.h>
+#include <ossim/projection/ossimImageViewProjectionTransform.h>
+#include <ossim/projection/ossimImageViewAffineTransform.h>
+#include <ossim/projection/ossimMapProjection.h>
+
 #include <ossimPlanet/ossimPlanetGrid.h>
-#include <osgGA/KeySwitchMatrixManipulator>
 #include <ossimPlanet/ossimPlanetLatLonHud.h>
+
+#include <osgGA/KeySwitchMatrixManipulator>
+
+#include <QtWidgets/QMenuBar>
+#include <QtWidgets/QPushButton>
+#include <QtWidgets/QToolBar>
+#include <QtWidgets/QToolButton>
+#include <QtWidgets/QMenu>
+#include <QtWidgets/QComboBox>
+#include <QtWidgets/QMdiArea>
+#include <QtWidgets/QLabel>
+#include <QtWidgets/QMainWindow>
+#include <QtWidgets/QStatusBar>
+#include <QtWidgets/QApplication>
 #include <QtOpenGL/QGLFormat>
+
+#include <iostream>
 #include <list>
 
 #include <ossim/projection/ossimLlxyProjection.h>

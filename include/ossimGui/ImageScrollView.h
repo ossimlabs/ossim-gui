@@ -307,17 +307,27 @@ namespace ossimGui
       // Overlay access
       ossimGui::RegistrationOverlay* regOverlay()const{return m_regOverlay;}
       ossimGui::MetricOverlay* metOverlay()const{return m_metricOverlay;}
+
+      void emitViewChanged();
       
    signals:
+      
       void wheel(QWheelEvent* event,  const ossimDrect& viewSceneRect, const ossimDpt& scenePoint);
       void mouseMove(QMouseEvent* event,   const ossimDrect& viewSceneRect, const ossimDpt& scenePoint);
+      void mouseMove(QMouseEvent* event);
       void mouseDoubleClick(QMouseEvent* event, const ossimDrect& viewSceneRect, const ossimDpt& scenePoint);
       void mouseRelease(QMouseEvent* event, const ossimDrect& viewSceneRect, const ossimDpt& scenePoint);
+      void mouseRelease(QMouseEvent* event);
       void track(const ossimDpt& scenePoint);
       void mousePress(QMouseEvent* event,  const ossimDrect& viewSceneRect, const ossimDpt& scenePoint);
       void mousePress(QMouseEvent* event, const ossimDpt& scenePoint);
       void mousePress(ImageScrollView* sptr, const ossimDpt& scenePoint);
+      void mousePress(QMouseEvent* event);      
       void mouseBox(ImageScrollView* sptr, const ossimDpt& startPoint, const ossimDpt& stopPoint);
+
+      void paintYourGraphics(QPainter* p, const QRectF& rect);
+
+      void viewChanged();
 
    protected:
       

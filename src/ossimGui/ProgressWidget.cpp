@@ -18,9 +18,11 @@ namespace ossimGui
    {
       if(m_listener)
       {
+         removeListener();
          delete m_listener;
          m_listener = 0;
       }
+      m_object = 0;      
    }
    
    void ProgressWidget::setObject(ossimObject* obj)
