@@ -235,7 +235,7 @@ void ossimGui::HistogramRemapperEditor::stretchModeActivated(int index)
    if(!m_histogramRemapper.valid()) return;
    
    m_histogramRemapper->setStretchModeAsString(stretchModes[index], true);
-   if(stretchModes[index] == "linear_one_piece")
+   if(stretchModes[index] == ossimString("linear_one_piece"))
    {
       m_histogramWidget->setReadOnly(false);
    }
