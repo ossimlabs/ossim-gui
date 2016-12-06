@@ -6,8 +6,9 @@
 #include <ossim/base/ossimBooleanProperty.h>
 #include <ossim/base/ossimNumericProperty.h>
 #include <ossim/base/ossimContainerProperty.h>
-#include <ossim/base/ossimStringProperty.h>
 #include <ossim/base/ossimRefreshEvent.h>
+#include <ossim/base/ossimStringProperty.h>
+#include <ossim/base/ossimUrl.h>
 #include <ossim/base/ossimObjectFactoryRegistry.h>
 #include <ossim/imaging/ossimImageFileWriter.h>
 #include <ossim/imaging/ossimImageHandler.h>
@@ -2625,7 +2626,7 @@ void ossimGui::DataManagerWidget::openLocalImage()
          this,
          tr("Open Image(s)"),
          m_lastOpenedDirectory.c_str() );
-      
+
       if (fileNames.size() > 0) 
       {
          for (int i = 0; i < fileNames.size(); ++i)
@@ -2745,6 +2746,72 @@ void ossimGui::DataManagerWidget::openLocalImageInteractive()
    }
    
 } // End: ossimGui::DataManagerWidget::openLocalImageInteractive()
+
+void ossimGui::DataManagerWidget::openImageUrl()
+{
+   bool ok;
+   QString text = QInputDialog::getText(
+      this, tr("Open image from url."),
+      tr("URL:"), QLineEdit::Normal,
+      QString(""), &ok);
+   if (ok && !text.isEmpty())
+   {
+      ossimUrl url( ossimString(text.toStdString()) );
+      if ( ( url.getProtocol().downcase().string() == std::string("s3") ) ||
+           ( url.getProtocol().downcase().string() == std::string("file") ) )
+      {
+         // Note: ossimUrl::toString() was stripping a '/' so using original.
+         ossimRefPtr<ossimImageHandler> ih =
+            ossimImageHandlerRegistry::instance()->openConnection(  text.toStdString(), true );
+         if(ih.valid())
+         {
+            ossimGui::HandlerList handlers;
+            
+            ossim_uint32 nEntries = ih->getNumberOfEntries();
+            if ( nEntries == 1 )
+            {
+               handlers.push_back( ih.get() );
+            }
+            else
+            {
+               // Let the user select entries.
+               ossimGui::OpenImageDialog oid( ih.get() );
+               oid.exec();
+                  oid.handlerList( handlers );
+            }
+            
+            if ( handlers.size() )
+            {
+               ossim_uint32 idx = 0;
+               ossim_uint32 nImages = handlers.size();
+               DataManager::NodeListType nodeList;;
+               for(idx = 0; idx < nImages; ++idx)
+               {
+                  ossimRefPtr<DataManager::Node> node =
+                     m_dataManager->addSource( handlers[idx].get() );
+                  if(node.valid())
+                  {
+                     ossimRefPtr<DataManager::Node> chain =
+                        m_dataManager->createDefaultImageChain(node.get());
+                     if(chain.valid())
+                     {
+                        nodeList.push_back(chain.get());
+                     }
+                  }
+               }
+               if(!nodeList.empty())
+               {
+                  DataManagerEvent* e =
+                     new DataManagerEvent(DataManagerEvent::COMMAND_DISPLAY_NODE);
+                  e->setNodeList(nodeList);
+                  QCoreApplication::postEvent( mainWindow(), e );
+               }
+            }
+         }
+      }
+   }
+   
+} // End: ossimGui::DataManagerWidget::openImageURL()
 
 void ossimGui::DataManagerWidget::openJpipImage()
 {
