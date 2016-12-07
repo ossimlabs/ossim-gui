@@ -449,7 +449,6 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createDefaultCom
 
 ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createDefault2dImageDisplay(ossimRefPtr<Node> input, bool notifyFlag)
 {
-   cout << "dm1..." << endl;
    ImageMdiSubWindow* display = new ImageMdiSubWindow();
    ossimRefPtr<ossimGui::DataManager::Node> result = addSource(display->connectableObject(), notifyFlag);
    if(m_mdiArea)
