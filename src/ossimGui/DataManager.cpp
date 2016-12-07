@@ -11,6 +11,8 @@
 #include <ossim/base/ossimConnectableObject.h>
 #include <ossim/base/ossimObjectFactoryRegistry.h>
 #include <ossim/base/ossimDate.h>
+#include <ossim/imaging/ossimBandSelector.h>
+#include <ossim/imaging/ossimHistogramRemapper.h>
 #include <ossim/imaging/ossimImageHandler.h>
 #include <ossim/imaging/ossimImageSourceFactoryRegistry.h>
 #include <ossim/imaging/ossimImageChain.h>
@@ -447,6 +449,7 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createDefaultCom
 
 ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createDefault2dImageDisplay(ossimRefPtr<Node> input, bool notifyFlag)
 {
+   cout << "dm1..." << endl;
    ImageMdiSubWindow* display = new ImageMdiSubWindow();
    ossimRefPtr<ossimGui::DataManager::Node> result = addSource(display->connectableObject(), notifyFlag);
    if(m_mdiArea)
@@ -468,13 +471,62 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createDefault2dI
       {
          ossimTypeNameVisitor visitor("ossimImageHandler");
          connectable->accept(visitor);
-         if(!visitor.getObjects().empty())
+         if( !visitor.getObjects().empty() )
          {
             ossimRefPtr<ossimImageHandler> input = dynamic_cast<ossimImageHandler*> (visitor.getObjects()[0].get());
-            ossimString source = input->getFilename();
-            QString windowTitle = QFontMetrics(QFont()).elidedText
-               (source.data(), Qt::ElideLeft, display->width()-100);
-            display->setWindowTitle(windowTitle);
+            if ( input.valid() )
+            {
+               ossimString source = input->getFilename();
+               QString windowTitle = QFontMetrics(QFont()).elidedText
+                  (source.data(), Qt::ElideLeft, display->width()-100);
+               display->setWindowTitle(windowTitle);
+
+               // Set up band selector to rgb if 3 bands or greater.
+               if ( input->getNumberOfOutputBands() >= 3 )
+               {
+                  ossimTypeNameVisitor bsVisitor("ossimBandSelector");
+                  connectable->accept(bsVisitor);
+                  if(!bsVisitor.getObjects().empty())
+                  {
+                     ossimRefPtr<ossimBandSelector> bs =
+                        dynamic_cast<ossimBandSelector*>(bsVisitor.getObjects()[0].get());
+                     if ( bs.valid() )
+                     {
+                        //---
+                        // This will auto-select rgb bands if image handler can
+                        // detect them.
+                        //---
+                        bs->setThreeBandRgb();
+                     }
+                  }
+               }
+
+               // Set up histogram remapper if bit depth is greater than 8.
+               if ( input->getOutputScalarType() != OSSIM_UINT8 )
+               {
+                  ossimTypeNameVisitor hrVisitor("ossimHistogramRemapper");
+                  connectable->accept(hrVisitor);
+                  if(!hrVisitor.getObjects().empty())
+                  {
+                     ossimRefPtr<ossimHistogramRemapper> hr =
+                        dynamic_cast<ossimHistogramRemapper*>(hrVisitor.getObjects()[0].get());
+                     if ( hr.valid() )
+                     {
+                        // Check for histogram file:
+                        ossimFilename f = input->getFilenameWithThisExtension(
+                           ossimString("his") );
+                        if ( hr->openHistogram( f ) == true )
+                        {
+                           // Enable:
+                           hr->setEnableFlag(true);
+                           
+                           // Set the mode:
+                           hr->setStretchMode( ossimHistogramRemapper::LINEAR_AUTO_MIN_MAX );
+                        }
+                     }
+                  }
+               }
+            }
           }
       }
       else
@@ -1326,7 +1378,7 @@ bool ossimGui::DataManager::registerImages(NodeListType& nodes)
       {
          NEWMAT::Matrix coords(1,2);
          obsSet.observ(no)->getMeasurement(meas, coords);
-         ossim_uint32 imIdx = obsSet.imIndex(idx);
+         // ossim_uint32 imIdx = obsSet.imIndex(idx);
          ++idx;
          // std::cout<<"\n  Meas: "<<imIdx+1<<"  "<<coords(1,1)<<","<<coords(1,2);
       }
