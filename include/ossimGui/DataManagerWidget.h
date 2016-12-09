@@ -1,5 +1,5 @@
 #ifndef ossimGuiDataManagerWidget_HEADER
-#define ossimGuiDataManagerWidget_HEADER
+#define ossimGuiDataManagerWidget_HEADER 1
 #include <ossimGui/DataManager.h>
 #include <QTreeView>
 #include <QItemDelegate>
@@ -612,6 +612,15 @@ namespace ossimGui{
        * potentially different geometry options.
        */
       virtual void openLocalImageInteractive();
+
+      /**
+       * @brief Opens image from an URL.
+       *
+       * This method takes URL.  E.g.:
+       * s3://bucket/data1/foo.tif
+       * file:///data1/foo.tif
+       */
+      virtual void openImageUrl();
 
       virtual void openJpipImage();
       

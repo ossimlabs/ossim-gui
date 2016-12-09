@@ -223,8 +223,10 @@ QMenuBar* ossimGui::MainWindow::createAndSetMenuBar()
    m_menubar->addAction(menuHelp->menuAction());
    
    QAction* openImageAction = menuFile->addAction("Open Image");
-   connect(openImageAction, SIGNAL(triggered(bool)),m_dataManagerWidget, SLOT(openLocalImage()));
-//   connect(openImageAction, SIGNAL(triggered(bool)),this, SLOT(openImage()));
+   connect(openImageAction, SIGNAL(triggered(bool)), m_dataManagerWidget, SLOT(openLocalImage()));
+
+   QAction* openImageUrlAction = menuFile->addAction("Open Image URL");
+   connect( openImageUrlAction, SIGNAL(triggered(bool)), m_dataManagerWidget, SLOT(openImageUrl()) );
 
    QAction* openImageInteractiveAction = menuFile->addAction("Open Image Interactive");
    connect(openImageInteractiveAction, SIGNAL(triggered(bool)),
