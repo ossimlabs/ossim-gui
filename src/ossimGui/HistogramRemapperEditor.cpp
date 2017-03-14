@@ -57,7 +57,7 @@ public:
 };
 
 
-const char* stretchModes[] = {"None", "linear_auto_min_max", "linear_1std_from_mean", "linear_2std_from_mean", "linear_3std_from_mean", "linear_one_piece", 0};
+const char* stretchModes[] = {"None", "linear_auto_min_max", "linear_auto_percentile", "linear_1std_from_mean", "linear_2std_from_mean", "linear_3std_from_mean", "linear_one_piece", 0};
 
 ossimGui::HistogramRemapperEditor::HistogramRemapperEditor(QWidget* parent, Qt::WindowFlags f)
 :QDialog(parent, f)
@@ -125,7 +125,8 @@ void ossimGui::HistogramRemapperEditor::initializeUiValues()
       }
       m_stretchModeComboBox->clear();
       m_stretchModeComboBox->addItem("none");
-      m_stretchModeComboBox->addItem("auto");
+      m_stretchModeComboBox->addItem("auto min max");
+      m_stretchModeComboBox->addItem("auto percentile");
       m_stretchModeComboBox->addItem("1 STD");
       m_stretchModeComboBox->addItem("2 STD");
       m_stretchModeComboBox->addItem("3 STD");
@@ -147,21 +148,25 @@ void ossimGui::HistogramRemapperEditor::initializeUiValues()
       {
          m_stretchModeComboBox->setCurrentIndex(1);
       }
-      else if(stretchMode == "linear_1std_from_mean")
+      else if(stretchMode == "linear_auto_percentile")
       {
          m_stretchModeComboBox->setCurrentIndex(2);
+      }
+      else if(stretchMode == "linear_1std_from_mean")
+      {
+         m_stretchModeComboBox->setCurrentIndex(3);
      }
       else if(stretchMode == "linear_2std_from_mean")
       {
-         m_stretchModeComboBox->setCurrentIndex(3);
+         m_stretchModeComboBox->setCurrentIndex(4);
       }
       else if(stretchMode == "linear_3std_from_mean")
       {
-         m_stretchModeComboBox->setCurrentIndex(4);
+         m_stretchModeComboBox->setCurrentIndex(5);
       }
       else if(stretchMode == "linear_one_piece")
       {
-         m_stretchModeComboBox->setCurrentIndex(5);
+         m_stretchModeComboBox->setCurrentIndex(6);
       }
       else 
       {
