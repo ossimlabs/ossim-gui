@@ -187,7 +187,7 @@ void ossimGui::PositionInformationDialog::track( const ossimDpt& scenePt )
          const ossim_uint32 MAX_BANDS_DISPLAYED = ossim::min<ossim_uint32>(BANDS, 16);
          for ( ossim_uint32 band = 0; band < MAX_BANDS_DISPLAYED; ++band )
          {
-            os << "raw_image_pixel_value[ " << band << "]: " << values[band] << "\n";
+            os << setprecision(15) << setw(12)<< "raw_image_pixel_value[ " << band << "]: " << values[band] << "\n";
          }
          if ( BANDS > MAX_BANDS_DISPLAYED )
          {
