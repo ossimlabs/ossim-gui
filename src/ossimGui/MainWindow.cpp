@@ -515,7 +515,8 @@ void ossimGui::MainWindow::about(bool)
    
    QString version(OSSIM_VERSION);
    QString buildDate(OSSIM_BUILD_DATE);
+   QString revision(OSSIM_REVISION);
    
-   window->m_aboutText->setText(QString("OSSIM GeoCell\nVersion: " + version + " Date: " + buildDate));  
+   window->m_aboutText->setText(QString("OSSIM GeoCell\nVersion: " + version + "\nBuild Date: " + buildDate + "\nRevision: " + revision ));  
    window->exec();
 }
