@@ -925,6 +925,7 @@ void ossimGui::DataManager::syncImagesTo(const ossimDpt& sp, ossimRefPtr<DataMan
       ossimImageSource* src = subWindow->scrollWidget()->layers()->layer(idxLayer)->chain();
       ossimGui::GatherImageViewProjTransVisitor visitor;
       src->accept(visitor);
+
       if (visitor.getTransformList().size() == 1)
       {
          ossimRefPtr<IvtGeomTransform> ivtg = visitor.getTransformList()[0].get();
@@ -940,7 +941,6 @@ void ossimGui::DataManager::syncImagesTo(const ossimDpt& sp, ossimRefPtr<DataMan
          }
       }
    }
-
    // Reproject and move all images to sync point
    if (!gp.hasNans())
    {
@@ -965,9 +965,9 @@ void ossimGui::DataManager::syncImagesTo(const ossimDpt& sp, ossimRefPtr<DataMan
                   subWindow->scrollWidget()->setPositionGivenView(vp);
                   subWindow->scrollWidget()->setLastClickedPoint(vp);
 
-                  // ossimDpt ip;
-                  // ivtg->viewToImage(vp, ip);
-                  // std::cout<<"\n ...set position to "<<ip<<std::endl;
+//                   ossimDpt ip;
+//                   ivtg->viewToImage(vp, ip);
+//                   std::cout<<"\n ...set position to "<<ip<<std::endl;
                }
             }
          }

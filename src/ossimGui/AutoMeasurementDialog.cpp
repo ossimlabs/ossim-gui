@@ -243,7 +243,6 @@ void ossimGui::AutoMeasurementDialog::setBox(
    ImageScrollView* sptr, const ossimDpt& sp, const ossimDpt& ep)
 {
 
-   int primeIndex = -1;
    int numOfScrollViews = m_scrollViews.size();
    ossimGpt centerG;
    centerG.makeNan();
@@ -258,7 +257,11 @@ void ossimGui::AutoMeasurementDialog::setBox(
    ossim_uint32 idxLayer = 0;
    for (int i=0; i<numOfScrollViews; ++i)
    {
-      src.push_back(m_scrollViews[i]->layers()->layer(idxLayer)->chain());
+      ossimImageSource* s = m_scrollViews[i]->layers()->layer(idxLayer)->chain();
+      if (sptr == m_scrollViews[i])
+         src.insert(src.begin(), s);
+      else
+         src.push_back(s);
    }
    m_roiRects.resize(numOfScrollViews);
 
@@ -267,8 +270,6 @@ void ossimGui::AutoMeasurementDialog::setBox(
    {
       if (sptr == m_scrollViews[i])
       {
-         primeIndex = i;
-
          // Set to full resolution before defining ROI
          ImageViewManipulator* ivm = m_scrollViews[i]->manipulator();
          if (ivm)
@@ -327,9 +328,9 @@ void ossimGui::AutoMeasurementDialog::setBox(
             ivtg->imageToView(primPtsI[k], primPtsV[k]);
          }
 
-         // Load view coordinate rectangle for primary image
+         // Load view coordinate rectangle for primary image:
          ossimIrect rectAv(primPtsV[0], primPtsV[1], primPtsV[2], primPtsV[3]);
-         m_roiRects[primeIndex] = rectAv;
+         m_roiRects[0] = rectAv;
 
          // We could get patch to insert into imageSource vector....
          //  Note: currently don't have to do this, the later 
@@ -342,53 +343,49 @@ void ossimGui::AutoMeasurementDialog::setBox(
    }
 
    // Define ROI in remaining images
-   for (int i=0; i<numOfScrollViews; ++i)
+   for (int i=1; i<numOfScrollViews; ++i)
    {
-      if (sptr != m_scrollViews[i])
+      // Set to full resolution before defining ROI
+      ImageViewManipulator* ivm = m_scrollViews[i]->manipulator();
+      if (ivm)
       {
-
-         // Set to full resolution before defining ROI
-         ImageViewManipulator* ivm = m_scrollViews[i]->manipulator();
-         if (ivm)
-         {
-            ivm->fullRes();
-         }
-         else
-         {
-            roiOK = false;
-         }
-
-         // Center on patch (view)
-         ossimDpt centerI;
-         ossimDpt centerV;
-         ossimGui::GatherImageViewProjTransVisitor visitor;
-         src[i]->accept(visitor);
-         if (visitor.getTransformList().size() == 1)
-         {
-            ivtg = visitor.getTransformList()[0].get();
-            ivtg->groundToImage(centerG, centerI);
-            ivtg->imageToView(centerI, centerV);
-         }
-         QPointF pt(centerV.x,centerV.y);
-         m_scrollViews[i]->centerOn(pt);
-
-         // Define this patch by projection from primary patch
-         ossimDpt xferPtsI[4];
-         ossimDpt xferPtsV[4];
-         for (int k=0; k<4; ++k)
-         {
-            ivtg->groundToImage(cornG[k], xferPtsI[k]);
-            ivtg->imageToView(xferPtsI[k], xferPtsV[k]);
-         }
-
-         // Load view coordinate rectangle for this image
-         ossimIrect rectXfer(xferPtsV[0],xferPtsV[1],xferPtsV[2],xferPtsV[3]);
-         m_roiRects[i] = rectXfer;
+         ivm->fullRes();
       }
+      else
+      {
+         roiOK = false;
+      }
+
+      // Center on patch (view)
+      ossimDpt centerI;
+      ossimDpt centerV;
+      ossimGui::GatherImageViewProjTransVisitor visitor;
+      src[i]->accept(visitor);
+      if (visitor.getTransformList().size() == 1)
+      {
+         ivtg = visitor.getTransformList()[0].get();
+         ivtg->groundToImage(centerG, centerI);
+         ivtg->imageToView(centerI, centerV);
+      }
+      QPointF pt(centerV.x,centerV.y);
+      m_scrollViews[i]->centerOn(pt);
+
+      // Define this patch by projection from primary patch
+      ossimDpt xferPtsI[4];
+      ossimDpt xferPtsV[4];
+      for (int k=0; k<4; ++k)
+      {
+         ivtg->groundToImage(cornG[k], xferPtsI[k]);
+         ivtg->imageToView(xferPtsI[k], xferPtsV[k]);
+      }
+
+      // Load view coordinate rectangle for this image
+      ossimIrect rectXfer(xferPtsV[0],xferPtsV[1],xferPtsV[2],xferPtsV[3]);
+      m_roiRects[i] = rectXfer;
    }
 
-
-   m_tGen->setBox(m_roiRects, primeIndex, src);
+   m_tGen->setImageList(src);
+   m_tGen->setROIs(m_roiRects);
 
    // return roiOK;
 }
