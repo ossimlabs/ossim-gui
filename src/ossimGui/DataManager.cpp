@@ -1086,7 +1086,7 @@ bool ossimGui::DataManager::intersectRays(NodeListType& nodes)
 
                // Populate sensor model set
                ossimRefPtr<ossimImageGeometry> geom = ivtg->getGeom();
-               if (geom != NULL)
+               if (geom)
                {
                   proj.push_back(geom->getProjection());
                   if (proj.back() != NULL)

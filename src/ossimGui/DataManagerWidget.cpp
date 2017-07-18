@@ -4024,7 +4024,7 @@ bool ossimGui::DataManagerWidget::miAutoMeas(DataManager::NodeListType& nodes)
 // Multi-image syncronization
 void ossimGui::DataManagerWidget::miSync(ossimGui::RegPoint* syncPt, ossimRefPtr<DataManager::Node> node)
 {
-   if (node != NULL)
+   if (node)
    {
       ossimDpt sPt(syncPt->x(), syncPt->y());
       m_dataManager->syncImagesTo(sPt, node);
