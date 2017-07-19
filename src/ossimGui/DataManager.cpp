@@ -1089,7 +1089,7 @@ bool ossimGui::DataManager::intersectRays(NodeListType& nodes)
                if (geom)
                {
                   proj.push_back(geom->getProjection());
-                  if (proj.back() != NULL)
+                  if (proj.back())
                   {
                      ossimSensorModel* m = dynamic_cast<ossimSensorModel*>(proj.back().get());
                      if(m)
