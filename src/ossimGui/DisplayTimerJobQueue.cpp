@@ -17,7 +17,7 @@ ossimGui::DisplayTimerJobQueue::~DisplayTimerJobQueue()
 
 ossimRefPtr<ossimJob> ossimGui::DisplayTimerJobQueue::nextJob(bool blockIfEmptyFlag)
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_timeJobQueueMutex);
+   std::lock_guard<std::mutex> lock(m_timeJobQueueMutex);
    ossimRefPtr<ossimJob> result = ossimJobQueue::nextJob(false);
    if(!result.valid()&&m_displayTimer)
    {
@@ -30,7 +30,7 @@ ossimRefPtr<ossimJob> ossimGui::DisplayTimerJobQueue::nextJob(bool blockIfEmptyF
 void ossimGui::DisplayTimerJobQueue::add(ossimJob* job, bool guaranteeUniqueFlag)
 {
    ossimJobQueue::add(job, guaranteeUniqueFlag);
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_timeJobQueueMutex);
+   std::lock_guard<std::mutex> lock(m_timeJobQueueMutex);
    if(m_displayTimer) m_displayTimer->startProcessingJobs();
 }
 

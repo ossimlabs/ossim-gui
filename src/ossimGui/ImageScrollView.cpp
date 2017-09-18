@@ -28,7 +28,7 @@ void ImageViewJob::start()
 {
    if(m_inputSource.valid())
    {
-      OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_imageViewJobMutex);
+      std::lock_guard<std::mutex> lock(m_imageViewJobMutex);
       QTime start = QTime::currentTime();
       ossimDrect cacheRect(m_tileCache->getRect());
       // ossimDpt ulCachePt = cacheRect.ul();
@@ -98,19 +98,19 @@ ImageScrollView::Layers::~Layers()
 
 ImageScrollView::Layer* ImageScrollView::Layers::layer(ossim_uint32 idx)
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    return layerNoMutex(idx);
 }
 
 ImageScrollView::Layer* ImageScrollView::Layers::layer(ossimConnectableObject* input)
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    return layerNoMutex(input);
 }
 
 void  ImageScrollView::Layers::setCacheRect(const ossimDrect& rect)
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    ossim_uint32 idx = 0;
    for(idx = 0; idx < m_layers.size(); ++idx)
    {
@@ -143,7 +143,7 @@ ImageScrollView::Layer* ImageScrollView::Layers::layerNoMutex(ossimConnectableOb
 
 ImageScrollView::Layer* ImageScrollView::Layers::findFirstDirtyLayer()
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    ossim_uint32 idx = 0;
    for(idx = 0; idx < m_layers.size();++idx)
    {
@@ -158,14 +158,14 @@ ImageScrollView::Layer* ImageScrollView::Layers::findFirstDirtyLayer()
 
 bool ImageScrollView::Layers::isEmpty()const
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    return m_layers.empty();
 }
 
 void ImageScrollView::Layers::adjustLayers(ossimConnectableObject* connectable)
 {
    {
-      OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+      std::lock_guard<std::mutex> lock(m_mutex);
       LayerListType layers;
       ossim_uint32 nInputs = connectable->getNumberOfInputs();
       for(ossim_uint32 inputIdx = 0; inputIdx<nInputs;++inputIdx)
@@ -201,7 +201,7 @@ void ImageScrollView::Layers::adjustLayers(ossimConnectableObject* connectable)
 
 void ImageScrollView::Layers::flushDisplayCaches()
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    ossim_uint32 idx = 0;
    for(idx = 0; idx < m_layers.size(); ++idx)
    {

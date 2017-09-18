@@ -7,7 +7,6 @@
 #include <QtGui/QKeyEvent>
 #include <QtWidgets/QLayout>
 #include <QtWidgets/QFrame>
-#include <OpenThreads/ScopedLock>
 #include <osgUtil/LineSegmentIntersector>
 #include <osg/io_utils>
 #include <osgGA/GUIEventAdapter>
@@ -358,7 +357,7 @@ namespace ossimGui
 #if 0
    void GlViewer::requestRedraw()
    {
-      OpenThreads::ScopedLock<OpenThreads::Mutex> lock(theDrawMutex);
+      std::lock_guard<std::mutex> lock(theDrawMutex);
       theRequestRedrawFlag = true;
       if(!timer()->isActive())
       {
@@ -370,7 +369,7 @@ namespace ossimGui
 #if 0
    void GlViewer::requestContinuousUpdate(bool needed)
    {
-      OpenThreads::ScopedLock<OpenThreads::Mutex> lock(theDrawMutex);
+      std::lock_guard<std::mutex> lock(theDrawMutex);
       theRequestContinuousUpdateFlag = needed;
       if(needed)
       {
@@ -395,7 +394,7 @@ namespace ossimGui
    
    void GlViewer::frameIfNeeded()
    {
-      //OpenThreads::ScopedLock<OpenThreads::Mutex> lock(theDrawMutex);
+      //std::lock_guard<std::mutex> lock(theDrawMutex);
       bool doVBlankLimit = false;
       osg::Timer_t beginT = osg::Timer::instance()->tick();
       osg::Timer_t endT;

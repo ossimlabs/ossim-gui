@@ -10,11 +10,11 @@
 #include <ossim/base/ossimApplicationUsage.h>
 #include <ossim/base/ossimObjectFactoryRegistry.h>
 #include <ossim/init/ossimInit.h>
-#include <OpenThreads/Thread>
 #ifdef OSSIMQT_USE_WINDOWS_STYLE
 #include <QtGui/QWindowsStyle>
 #endif
 #include <ossim/base/ossimEnvironmentUtility.h>
+#include <thread>
 
 #ifdef WIN32
 int main(int argc, char *argv[]);
@@ -109,7 +109,8 @@ int main(int argc, char *argv[])
    }
    mainWindow->show();
 
-   OpenThreads::Thread::microSleep((1000*1000));
+   std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
    //splash.finish(mainWindow);
    splash.close();
    int result = app.exec();

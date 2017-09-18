@@ -38,7 +38,7 @@ namespace ossimGui{
       };
       
       
-      mutable OpenThreads::Mutex m_timeJobQueueMutex; 
+      mutable std::mutex m_timeJobQueueMutex; 
       DisplayTimer* m_displayTimer;
 
    };

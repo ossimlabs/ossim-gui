@@ -142,7 +142,7 @@ bool ossimGui::DataManager::remove(ossimRefPtr<Node> obj, bool notifyFlag)
    ossimRefPtr<Callback> callback;
    bool result = false;
    {
-      OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+      std::lock_guard<std::mutex> lock(m_mutex);
       result = removeIndexMapping(obj.get());
       if(result)
       {
@@ -207,7 +207,7 @@ bool ossimGui::DataManager::remove(NodeListType& nodes, bool notifyFlag)
    {
       ossimRefPtr<Callback> callback;
       {
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+         std::lock_guard<std::mutex> lock(m_mutex);
          if(m_callback.valid()&&m_callback->enabled())
          {
             callback = m_callback;
@@ -226,14 +226,13 @@ bool ossimGui::DataManager::remove(NodeListType& nodes, bool notifyFlag)
 
 bool ossimGui::DataManager::nodeExists(ossimObject* obj)const
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    return (m_nodeMap.find(obj)!=m_nodeMap.end());
 }
 
 ossimRefPtr<ossimGui::DataManager::Node>  ossimGui::DataManager::findNode(ossimObject* obj)
 {
-   // OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
-   m_mutex.lock();
+   std::lock_guard<std::mutex> lock(m_mutex);
    ossimRefPtr<ossimGui::DataManager::Node> result = 0;
    
    NodeMapType::iterator iter = m_nodeMap.find(obj);
@@ -242,7 +241,6 @@ ossimRefPtr<ossimGui::DataManager::Node>  ossimGui::DataManager::findNode(ossimO
    {
       result = iter->second;
    }
-   m_mutex.unlock();
    return result;
 }
 
@@ -269,7 +267,7 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::addSource(ossimR
       
       result->setName(defaultName);
       {
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+         std::lock_guard<std::mutex> lock(m_mutex);
          if(handler)
          {
             m_sourceList.push_back(result.get());
@@ -323,7 +321,7 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createDefaultIma
             result->setName("Affine Chain:" + input->name());
          }
          {
-            OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+            std::lock_guard<std::mutex> lock(m_mutex);
             callback = m_callback;
          }
      }
@@ -366,7 +364,7 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createChainFromT
       result = new Node(connectable.get());
       
       {
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+         std::lock_guard<std::mutex> lock(m_mutex);
          m_chainList.push_back(result.get());
          addIndexMapping(result.get());
          
@@ -430,7 +428,7 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createDefaultCom
                }
                if(m_callback.valid()&&m_callback->enabled()&&notifyFlag)
                {
-                  OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+                  std::lock_guard<std::mutex> lock(m_mutex);
                   callback = m_callback.get();
                }
             }
@@ -563,7 +561,7 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createDefault3dP
 
 void ossimGui::DataManager::accept(ossimVisitor& visitor)
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    NodeListType::iterator iter = m_sourceList.begin();
    while(iter != m_sourceList.end())
    {
@@ -589,7 +587,7 @@ void ossimGui::DataManager::accept(ossimVisitor& visitor)
 
 void ossimGui::DataManager::print()
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    ossim_uint32 idx = 0;
    for(idx =0; idx < m_sourceList.size();++idx)
    {
@@ -613,7 +611,7 @@ void ossimGui::DataManager::clear(bool notifyFlag)
    NodeListType removedNodes;
    {
       {
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+         std::lock_guard<std::mutex> lock(m_mutex);
       
          removedNodes.insert(removedNodes.end(), m_sourceList.begin(), m_sourceList.end());
          removedNodes.insert(removedNodes.end(), m_chainList.begin(), m_chainList.end());
@@ -647,7 +645,7 @@ void ossimGui::DataManager::clear(bool notifyFlag)
 
 bool ossimGui::DataManager::saveState(ossimKeywordlist& kwl, const ossimString& prefix)const
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    
    kwl.add(prefix,
            "type",
@@ -687,7 +685,7 @@ bool ossimGui::DataManager::loadState(const ossimKeywordlist& kwl, const ossimSt
    
    ossimRefPtr<Callback> callback;
    {
-      OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+      std::lock_guard<std::mutex> lock(m_mutex);
       if(m_callback.valid()&&m_callback->enabled())
       {
          callback = m_callback;
@@ -810,7 +808,7 @@ bool ossimGui::DataManager::removeIndexMapping(Node* node)
 }
 ossimGui::DataManager::Node* ossimGui::DataManager::findNode(const ossimId& id)
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    return findNodeNoMutex(id);
 }
 
