@@ -43,6 +43,7 @@
 
 #include <iostream>
 #include <list>
+#include <mutex>
 
 #include <ossim/projection/ossimLlxyProjection.h>
 
@@ -152,7 +153,7 @@ public:
    }
    virtual ossimPlanetTextureLayerStateCode updateExtents()
    {
-      OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_chainTextureLayerMutex);
+      std::lock_guard<std::mutex> lock(m_chainTextureLayerMutex);
       clearState(ossimPlanetTextureLayerStateCode(ossimPlanetTextureLayer_NO_OVERVIEWS |
                                                   ossimPlanetTextureLayer_NO_GEOM |
                                                   ossimPlanetTextureLayer_NO_SOURCE_DATA));
@@ -233,7 +234,7 @@ public:
    }
    ossimScalarType scalarType()const
    {
-      OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_chainTextureLayerMutex);
+      std::lock_guard<std::mutex> lock(m_chainTextureLayerMutex);
       if(m_chain.valid())
       {
          return m_chain->getOutputScalarType();
@@ -254,7 +255,7 @@ public:
       {
          updateExtents();
       }
-      OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_chainTextureLayerMutex);
+      std::lock_guard<std::mutex> lock(m_chainTextureLayerMutex);
       
       osg::Vec2d metersPerPixel;
       grid.getUnitsPerPixel(metersPerPixel, tileId, width, height, OSSIM_METERS);
@@ -284,7 +285,7 @@ public:
       {
          updateExtents();
       }
-      OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_chainTextureLayerMutex);
+      std::lock_guard<std::mutex> lock(m_chainTextureLayerMutex);
       osg::ref_ptr<ossimPlanetImage> result;
       osg::ref_ptr<ossimPlanetExtents> tileExtents = new ossimPlanetExtents;
       if(m_chain.valid())
@@ -511,7 +512,7 @@ public:
    }
    bool setChain(ossimImageChain* connectable)
    {
-      OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_chainTextureLayerMutex);
+      std::lock_guard<std::mutex> lock(m_chainTextureLayerMutex);
       m_chain = connectable;
       if(m_chain.valid())
       {
@@ -529,7 +530,7 @@ public:
    
    virtual double getApproximateHypotneusLength()const
    {
-      OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_chainTextureLayerMutex);
+      std::lock_guard<std::mutex> lock(m_chainTextureLayerMutex);
       ossimGpt p1(theExtents->getMinLat(), theExtents->getMinLon());
       ossimGpt p2(theExtents->getMaxLat(), theExtents->getMaxLon());
       ossimEcefPoint ep1(p1);
@@ -547,7 +548,7 @@ public:
    }
    void setFilterType(const ossimString& filterType)
    {
-      OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_chainTextureLayerMutex);
+      std::lock_guard<std::mutex> lock(m_chainTextureLayerMutex);
       if(m_chain.valid())
       {
          ossimPlanetChainSetViewVisitor visitor;
@@ -566,7 +567,7 @@ protected:
    ossimRefPtr<ossimMapProjection> m_mapProj;
    ossimRefPtr<ossimImageGeometry> m_geom;
    
-   mutable OpenThreads::Mutex m_chainTextureLayerMutex;
+   mutable std::mutex m_chainTextureLayerMutex;
 };
 
 

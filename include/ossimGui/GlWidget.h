@@ -30,7 +30,6 @@
 #include <osgViewer/Viewer>
 #include <osgViewer/CompositeViewer>
 #include <osgViewer/ViewerEventHandlers>
-#include <OpenThreads/ReentrantMutex>
 //class ossimOsgMainFormController;
 namespace ossimGui
 {
@@ -101,7 +100,7 @@ namespace ossimGui
       void clearPointersInViewer();
       QTimer *timer();    // Ensures that qtimer_ exists
       void noRenderCycle();
-      OpenThreads::ReentrantMutex theDrawMutex;
+      std::recursive_mutex   theDrawMutex;
       //   bool theRequestRedrawFlag;
       //   bool theRequestContinuousUpdateFlag;
       int m_timerInterval;

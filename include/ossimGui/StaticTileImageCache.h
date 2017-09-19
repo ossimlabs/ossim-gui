@@ -10,7 +10,7 @@
 #include <ossim/base/ossimIpt.h>
 #include <ossim/base/ossimIrect.h>
 #include <ossimGui/Export.h>
-#include <OpenThreads/Mutex>
+
 namespace ossimGui
 {
    class OSSIMGUI_DLL StaticTileImageCache :public ossimReferenced
@@ -111,13 +111,13 @@ namespace ossimGui
       bool hasInvalidTiles()const;
       
    protected:
-      QImage* m_cache;
-      ossimIrect m_cacheRect;
-      ossimIrect m_actualRect;
-      ossimIpt m_tileSize;
-      std::vector<bool> m_validTileArray;
-      ossimIpt          m_numberOfTiles;
-      mutable OpenThreads::Mutex m_mutex;
+      QImage*            m_cache;
+      ossimIrect         m_cacheRect;
+      ossimIrect         m_actualRect;
+      ossimIpt           m_tileSize;
+      std::vector<bool>  m_validTileArray;
+      ossimIpt           m_numberOfTiles;
+      mutable std::mutex m_mutex;
       
       ossim_int32 getTileIndex(const ossimIrect& rect,
                                const ossimIpt& numberOfTiles,

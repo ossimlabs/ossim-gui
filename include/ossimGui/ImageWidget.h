@@ -36,37 +36,37 @@ namespace ossimGui
       virtual void start();
       void setMaxProcessingTimeInMillis(ossim_float64 t)
       {
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_jobMutex);
+         std::lock_guard<std::mutex> lock(m_jobMutex);
          m_maxProcessingTime = t;
       }
       ossim_float64 maxProcessingTimeInMillis()const
       {
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_jobMutex);
+         std::lock_guard<std::mutex> lock(m_jobMutex);
          return m_maxProcessingTime;
       }
       void setCacheToViewTransform(const QTransform& trans)
       {
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_jobMutex);
+         std::lock_guard<std::mutex> lock(m_jobMutex);
          m_cacheToView = trans;
       }
       void setViewToCacheTransform(const QTransform& trans)
       {
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_jobMutex);
+         std::lock_guard<std::mutex> lock(m_jobMutex);
          m_viewToCache = trans;
       }
       void setTileCache(StaticTileImageCache* cache)
       {
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_jobMutex);
+         std::lock_guard<std::mutex> lock(m_jobMutex);
          m_tileCache = cache;
       }
       StaticTileImageCache* tileCache()
       {
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_jobMutex);
+         std::lock_guard<std::mutex> lock(m_jobMutex);
          return m_tileCache.get();
       }
       void setInputSource(ossimImageSource* input)
       {
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_jobMutex);
+         std::lock_guard<std::mutex> lock(m_jobMutex);
          m_inputSource = input;
       }
       
@@ -76,7 +76,7 @@ namespace ossimGui
       QTransform                        m_viewToCache;
       ossimRefPtr<StaticTileImageCache> m_tileCache;
       ossimRefPtr<ossimImageSource>     m_inputSource;
-      OpenThreads::Mutex                m_imageWidgetJobMutex;
+      std::mutex                        m_imageWidgetJobMutex;
    };
    
    class OSSIMGUI_DLL ImageScrollWidget : public QScrollArea
@@ -162,7 +162,7 @@ namespace ossimGui
          void flushDisplayCaches();
          ossim_uint32 numberOfLayers()const
          {
-            OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+            std::lock_guard<std::mutex> lock(m_mutex);
             return m_layers.size();
          }
       protected:
@@ -170,7 +170,7 @@ namespace ossimGui
          Layer* layerNoMutex(ossimConnectableObject* input);
          LayerListType m_layers;
          
-         mutable OpenThreads::Mutex m_mutex;
+         mutable std::mutex m_mutex;
       };
       ImageScrollWidget(QWidget* parent=0);
       virtual ~ImageScrollWidget();

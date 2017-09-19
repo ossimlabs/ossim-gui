@@ -960,7 +960,7 @@ void ossimGui::DataManagerNodeItem::setMarkForDeletion(bool flag)
    DataManagerItem::setMarkForDeletion(flag);
   
    setNodeListenerEnabled(!flag);
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_itemMutex);
+   std::lock_guard<std::mutex> lock(m_itemMutex);
 
    ossim_int32 nChildren = childCount();
    ossim_int32 idx = 0;
@@ -976,7 +976,7 @@ void ossimGui::DataManagerNodeItem::setMarkForDeletion(bool flag)
 
 void ossimGui::DataManagerNodeItem::setNodeListenerEnabled(bool flag)
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_itemMutex);
+   std::lock_guard<std::mutex> lock(m_itemMutex);
    if(flag)
    {
       if(m_node.valid())
@@ -1211,7 +1211,7 @@ void ossimGui::DataManagerRawImageSourceItem::reset()
 
 void ossimGui::DataManagerFolder::setMarkForDeletion(bool flag)
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_itemMutex);
+   std::lock_guard<std::mutex> lock(m_itemMutex);
    
    ossim_int32 nChildren = childCount();
    ossim_int32 idx = 0;
@@ -1227,7 +1227,7 @@ void ossimGui::DataManagerFolder::setMarkForDeletion(bool flag)
 
 void ossimGui::DataManagerFolder::setNodeListenerEnabled(bool flag)
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_itemMutex);
+   std::lock_guard<std::mutex> lock(m_itemMutex);
    ossim_int32 nChildren = childCount();
    ossim_int32 idx = 0;
    for(idx = 0; idx < nChildren; ++idx)
@@ -1473,7 +1473,7 @@ void ossimGui::DataManagerJobsFolder::removeStoppedJobs()
 
 void ossimGui::DataManagerJobsFolder::setQueue(ossimJobQueue* q)
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_jobsFolderMutex);
+   std::lock_guard<std::mutex> lock(m_jobsFolderMutex);
    m_queues.clear();
    m_queues.push_back(q);
    q->setCallback(m_jobQueueCallback.get());

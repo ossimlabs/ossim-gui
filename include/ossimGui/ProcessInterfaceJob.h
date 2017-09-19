@@ -4,6 +4,7 @@
 #include <ossim/parallel/ossimJob.h>
 #include <ossim/base/ossimProcessInterface.h>
 #include <ossim/base/ossimProcessListener.h>
+#include <mutex>
 
 namespace ossimGui
 {
@@ -30,7 +31,7 @@ namespace ossimGui
       void setPercentComplete(double value);
 
       
-      mutable OpenThreads::Mutex m_processInterfaceMutex;
+      mutable std::mutex m_processInterfaceMutex;
       ossimRefPtr<ossimObject> m_obj;
       ossimProcessInterface* m_processInterface;
    };

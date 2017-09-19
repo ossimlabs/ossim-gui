@@ -92,17 +92,17 @@ namespace ossimGui{
       
       virtual void setMarkForDeletion(bool flag)
       {
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_itemMutex);
+         std::lock_guard<std::mutex> lock(m_itemMutex);
          m_markedForDeletion = flag;
       }
       bool markedForDeletion()const
       {  
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_itemMutex);
+         std::lock_guard<std::mutex> lock(m_itemMutex);
          return m_markedForDeletion;
       }
       virtual void setObject(ossimObject* obj)
       {
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_itemMutex);
+         std::lock_guard<std::mutex> lock(m_itemMutex);
          m_object = obj;
       }
       virtual DataManager::Node* objectAsNode(){return dynamic_cast<DataManager::Node*> (object());}
@@ -121,7 +121,7 @@ namespace ossimGui{
       virtual void setNodeListenerEnabled(bool /* flag */){}
       virtual void reset(){}
    protected:
-      mutable OpenThreads::Mutex m_itemMutex;
+      mutable std::mutex m_itemMutex;
       bool m_markedForDeletion;
       ossimRefPtr<ossimObject> m_object;
    };
@@ -540,7 +540,7 @@ namespace ossimGui{
       
       QueueListType m_queues;   
       ossimRefPtr<JobQueueCallback> m_jobQueueCallback;
-      mutable OpenThreads::Mutex m_jobsFolderMutex;
+      mutable std::mutex m_jobsFolderMutex;
       JobMapType m_jobItemMap;
    };
    
@@ -753,7 +753,7 @@ namespace ossimGui{
       QPoint m_dragStartPosition;
       
       std::set<DataManagerItem*> m_activeItems;
-      mutable OpenThreads::Mutex m_activeItemsMutex;
+      mutable std::mutex m_activeItemsMutex;
       
       // Registration-related members
       MultiImageDialog* m_miDialog;

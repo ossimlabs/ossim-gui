@@ -23,7 +23,7 @@ void ossimGui::ImageWidgetJob::start()
 {
    if(m_inputSource.valid())
    {
-      OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_imageWidgetJobMutex);
+      std::lock_guard<std::mutex> lock(m_imageWidgetJobMutex);
       QTime start = QTime::currentTime();
       ossimDrect cacheRect(m_tileCache->getRect());
       // ossimDpt ulCachePt = cacheRect.ul();
@@ -582,19 +582,19 @@ ossimGui::ImageScrollWidget::Layers::~Layers()
 
 ossimGui::ImageScrollWidget::Layer* ossimGui::ImageScrollWidget::Layers::layer(ossim_uint32 idx)
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    return layerNoMutex(idx);
 }
 
 ossimGui::ImageScrollWidget::Layer* ossimGui::ImageScrollWidget::Layers::layer(ossimConnectableObject* input)
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    return layerNoMutex(input);
 }
 
 void  ossimGui::ImageScrollWidget::Layers::setCacheRect(const ossimDrect& rect)
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    ossim_uint32 idx = 0;
    for(idx = 0; idx < m_layers.size(); ++idx)
    {
@@ -628,7 +628,7 @@ ossimGui::ImageScrollWidget::Layer* ossimGui::ImageScrollWidget::Layers::layerNo
 
 ossimGui::ImageScrollWidget::Layer* ossimGui::ImageScrollWidget::Layers::findFirstDirtyLayer()
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    ossim_uint32 idx = 0;
    for(idx = 0; idx < m_layers.size();++idx)
    {
@@ -644,14 +644,14 @@ ossimGui::ImageScrollWidget::Layer* ossimGui::ImageScrollWidget::Layers::findFir
 
 bool ossimGui::ImageScrollWidget::Layers::isEmpty()const
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    return m_layers.empty();
 }
 
 void ossimGui::ImageScrollWidget::Layers::adjustLayers(ossimConnectableObject* connectable)
 {
    {
-      OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+      std::lock_guard<std::mutex> lock(m_mutex);
       LayerListType layers;
       ossim_uint32 nInputs = connectable->getNumberOfInputs();
       for(ossim_uint32 inputIdx = 0; inputIdx<nInputs;++inputIdx)
@@ -687,7 +687,7 @@ void ossimGui::ImageScrollWidget::Layers::adjustLayers(ossimConnectableObject* c
 
 void ossimGui::ImageScrollWidget::Layers::flushDisplayCaches()
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    ossim_uint32 idx = 0;
    for(idx = 0; idx < m_layers.size(); ++idx)
    {
