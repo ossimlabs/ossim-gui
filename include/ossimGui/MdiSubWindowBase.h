@@ -21,7 +21,7 @@ namespace ossimGui{
       QMainWindow* mainWindow();
       
       virtual void sync(View& /* viewInfo */){}
-      virtual void setJobQueue(ossimJobQueue* /* q */){}
+      virtual void setJobQueue(std::shared_ptr<ossimJobQueue> /* q */){}
       virtual ConnectableObject* connectableObject(){return m_connectableObject.get();}
       virtual const ConnectableObject* connectableObject()const{return m_connectableObject.get();}
       virtual void setConnectableObject(ConnectableObject* connectable);

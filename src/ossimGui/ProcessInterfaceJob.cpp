@@ -27,7 +27,7 @@ namespace ossimGui
       if(m_processInterface)
       {
          m_processInterfaceMutex.unlock();
-         ProgressListener* listener = new ProgressListener(this);
+         ProgressListener* listener = new ProgressListener(getSharedFromThis());
          ossimConnectableObject* obj = dynamic_cast<ossimConnectableObject*> (m_obj.get());
          if(obj) 
          {
@@ -53,7 +53,7 @@ namespace ossimGui
 
       if(c)
       {
-         c->percentCompleteChanged(value, this);
+         c->percentCompleteChanged(value, getSharedFromThis());
       }
    }
 }

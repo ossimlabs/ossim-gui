@@ -152,11 +152,11 @@ namespace ossimGui
       m_item(i)
       {
       }
-      virtual void finished(ossimJob* job)
+      virtual void finished(std::shared_ptr<ossimJob> job)
       {
-         ossimRefPtr<ImageStagerJob> stagerJob = dynamic_cast<ImageStagerJob*> (job);
+         std::shared_ptr<ImageStagerJob> stagerJob = std::dynamic_pointer_cast<ImageStagerJob> (job);
          
-         if(stagerJob.valid())
+         if(stagerJob)
          {
             if(m_item)
             {
@@ -166,7 +166,7 @@ namespace ossimGui
                QApplication::postEvent(m_dataManagerWidget, evt);
             }
          }
-         stagerJob = 0;
+         stagerJob.reset();
       }
       
    protected:
@@ -214,11 +214,11 @@ namespace ossimGui
    {
    public:
       ImageOpenJobCallback(DataManagerWidget* widget, ossimRefPtr<DataManager> manager):m_dataManagerWidget(widget),m_dataManager(manager){}
-      virtual void finished(ossimJob* job)
+      virtual void finished(std::shared_ptr<ossimJob> job)
       {
          if(m_dataManager.valid())
          {
-            ossimGui::OpenImageUrlJob* imageOpenJob = dynamic_cast<ossimGui::OpenImageUrlJob*> (job);
+            std::shared_ptr<ossimGui::OpenImageUrlJob> imageOpenJob = std::dynamic_pointer_cast<ossimGui::OpenImageUrlJob> (job);
             if(imageOpenJob)
             {
                ossimGui::HandlerList& handlerList =imageOpenJob->handlerList();
@@ -725,15 +725,15 @@ void ossimGui::DataManagerImageWriterItem::execute()
       ossimPropertyInterface* propInterface = objectAsNode()->getObjectAs<ossimPropertyInterface>();
       if(dataManagerWidget())
       {
-         ossimRefPtr<ossimJobQueue> q = dataManagerWidget()->jobQueue();
-         if(q.valid())
+         std::shared_ptr<ossimJobQueue> q = dataManagerWidget()->jobQueue();
+         if(q)
          {
             ossimString defaultName = propInterface?propInterface->getPropertyValueAsString("filename"):ossimString(text(0).toStdString());
-            ossimRefPtr<ossimJob> job = new ImageWriterJob(visitor.kwl());
+            std::shared_ptr<ossimJob> job = std::make_shared<ImageWriterJob>(visitor.kwl());
             job->setName("Output " + defaultName);
             visitor.reset();
             job->ready();
-            q->add(job.get());
+            q->add(job);
          }
       }
    }   
@@ -1311,20 +1311,20 @@ ossimGui::DataManagerJobItem::DataManagerJobItem()
 
 ossimGui::DataManagerJobItem::~DataManagerJobItem()
 {
-   if(m_job.valid())
+   if(m_job)
    {
       m_job->setCallback(m_jobCallback->callback());
    }
 }
 
-void ossimGui::DataManagerJobItem::setJob(ossimJob* job)
+void ossimGui::DataManagerJobItem::setJob(std::shared_ptr<ossimJob> job)
 {
-   if(m_job.valid()&&m_jobCallback)
+   if(m_job&&m_jobCallback)
    {
       m_job->setCallback(m_jobCallback->callback());
    }
    m_job = job;
-   if(m_job.valid())
+   if(m_job)
    {
       m_jobCallback = std::make_shared<JobCallback>(this, m_job->callback());
       m_job->setCallback(m_jobCallback);
@@ -1340,7 +1340,7 @@ void ossimGui::DataManagerJobItem::setJob(ossimJob* job)
 
 void ossimGui::DataManagerJobItem::cancel()
 {
-   if(m_job.valid())
+   if(m_job)
    {
       m_job->cancel();
       
@@ -1352,7 +1352,7 @@ void ossimGui::DataManagerJobItem::cancel()
    }
 }
 
-void ossimGui::DataManagerJobItem::JobCallback::ready(ossimJob* job)
+void ossimGui::DataManagerJobItem::JobCallback::ready(std::shared_ptr<ossimJob> job)
 {
    DataManagerJobsFolder* folder = m_jobItem->findParentItemAs<DataManagerJobsFolder>();
    if(folder)
@@ -1364,7 +1364,7 @@ void ossimGui::DataManagerJobItem::JobCallback::ready(ossimJob* job)
    ossimJobCallback::ready(job);
 }
 
-void ossimGui::DataManagerJobItem::JobCallback::started(ossimJob* job)
+void ossimGui::DataManagerJobItem::JobCallback::started(std::shared_ptr<ossimJob> job)
 {
    DataManagerJobsFolder* folder = m_jobItem->findParentItemAs<DataManagerJobsFolder>();
    if(folder)
@@ -1376,7 +1376,7 @@ void ossimGui::DataManagerJobItem::JobCallback::started(ossimJob* job)
    ossimJobCallback::started(job);
 }
 
-void ossimGui::DataManagerJobItem::JobCallback::finished(ossimJob* job)
+void ossimGui::DataManagerJobItem::JobCallback::finished(std::shared_ptr<ossimJob> job)
 {
    DataManagerJobsFolder* folder = m_jobItem->findParentItemAs<DataManagerJobsFolder>();
    if(folder)
@@ -1388,7 +1388,7 @@ void ossimGui::DataManagerJobItem::JobCallback::finished(ossimJob* job)
    ossimJobCallback::finished(job);
 }
 
-void ossimGui::DataManagerJobItem::JobCallback::canceled(ossimJob* job)
+void ossimGui::DataManagerJobItem::JobCallback::canceled(std::shared_ptr<ossimJob> job)
 {
    DataManagerWidgetJobEvent* e = new DataManagerWidgetJobEvent(DataManagerWidgetJobEvent::COMMAND_JOB_STATE_CHANGED);
    e->setJobList(job);
@@ -1396,7 +1396,7 @@ void ossimGui::DataManagerJobItem::JobCallback::canceled(ossimJob* job)
    ossimJobCallback::canceled(job);
 }
 
-void ossimGui::DataManagerJobItem::JobCallback::nameChanged(const ossimString& name, ossimJob* job)
+void ossimGui::DataManagerJobItem::JobCallback::nameChanged(const ossimString& name, std::shared_ptr<ossimJob> job)
 {
    DataManagerWidgetJobEvent* e = new DataManagerWidgetJobEvent(DataManagerWidgetJobEvent::COMMAND_JOB_PROPERTY_CHANGED);
    e->setJobList(job);
@@ -1405,7 +1405,7 @@ void ossimGui::DataManagerJobItem::JobCallback::nameChanged(const ossimString& n
    ossimJobCallback::nameChanged(name, job);
 }
 
-void ossimGui::DataManagerJobItem::JobCallback::descriptionChanged(const ossimString& description, ossimJob* job)
+void ossimGui::DataManagerJobItem::JobCallback::descriptionChanged(const ossimString& description, std::shared_ptr<ossimJob> job)
 {
    DataManagerWidgetJobEvent* e = new DataManagerWidgetJobEvent(DataManagerWidgetJobEvent::COMMAND_JOB_PROPERTY_CHANGED);
    e->setJobList(job);
@@ -1414,7 +1414,7 @@ void ossimGui::DataManagerJobItem::JobCallback::descriptionChanged(const ossimSt
    ossimJobCallback::descriptionChanged(description, job);
 }
 
-void ossimGui::DataManagerJobItem::JobCallback::idChanged(const ossimString& id, ossimJob* job)
+void ossimGui::DataManagerJobItem::JobCallback::idChanged(const ossimString& id, std::shared_ptr<ossimJob> job)
 {
    DataManagerWidgetJobEvent* e = new DataManagerWidgetJobEvent(DataManagerWidgetJobEvent::COMMAND_JOB_PROPERTY_CHANGED);
    e->setJobList(job);
@@ -1423,7 +1423,7 @@ void ossimGui::DataManagerJobItem::JobCallback::idChanged(const ossimString& id,
    ossimJobCallback::idChanged(id, job);
 }
 
-void ossimGui::DataManagerJobItem::JobCallback::percentCompleteChanged(double percentValue, ossimJob* job)
+void ossimGui::DataManagerJobItem::JobCallback::percentCompleteChanged(double percentValue, std::shared_ptr<ossimJob> job)
 {
    ossimJobCallback::percentCompleteChanged(percentValue, job);
    DataManagerWidgetJobEvent* e = new DataManagerWidgetJobEvent(DataManagerWidgetJobEvent::COMMAND_JOB_PERCENT_COMPLETE);
@@ -1471,7 +1471,7 @@ void ossimGui::DataManagerJobsFolder::removeStoppedJobs()
    m_jobsFolderMutex.unlock();
 }
 
-void ossimGui::DataManagerJobsFolder::setQueue(ossimJobQueue* q)
+void ossimGui::DataManagerJobsFolder::setQueue(std::shared_ptr<ossimJobQueue> q)
 {
    std::lock_guard<std::mutex> lock(m_jobsFolderMutex);
    m_queues.clear();
@@ -1527,7 +1527,7 @@ ossimGui::DataManagerWidget::DataManagerWidget(QWidget* parent)
      m_dataManager( new DataManager() ),
      m_dataManagerCallback( std::make_shared<DataManagerCallback>(this) ),
      m_jobQueue(0),
-     m_displayQueue(new DisplayTimerJobQueue()),
+     m_displayQueue(std::make_shared<DisplayTimerJobQueue>()),
      m_rootImageFolder(0),
      m_rootJobsFolder(0),
      m_rawImageSources(0),
@@ -2049,10 +2049,10 @@ void ossimGui::DataManagerWidget::buildOverviewsForSelected(const QString& type)
             ossimRefPtr<ossimImageHandler> isource = node->getObjectAs<ossimImageHandler>();
             if(isource.valid())
             {
-               ossimRefPtr<ImageStagerJob> stagerJob = new ImageStagerJob(isource.get(), ImageStagerJob::STAGE_OVERVIEWS);
+               std::shared_ptr<ImageStagerJob> stagerJob = std::make_shared<ImageStagerJob>(isource.get(), ImageStagerJob::STAGE_OVERVIEWS);
                stagerJob->setCallback(std::make_shared<ImageStagerJobCallback>(this, (*item)));
                stagerJob->setOverviewType(type.toStdString());
-               m_jobQueue->add(stagerJob.get());
+               m_jobQueue->add(stagerJob);
                stagerJob = 0; isource = 0;
             }
          }
@@ -2620,7 +2620,7 @@ void ossimGui::DataManagerWidget::utmView()
 
 void ossimGui::DataManagerWidget::openLocalImage()
 {
-   if(m_jobQueue.valid())
+   if(m_jobQueue)
    {
       QStringList fileNames = QFileDialog::getOpenFileNames(
          this,
@@ -2632,7 +2632,7 @@ void ossimGui::DataManagerWidget::openLocalImage()
          for (int i = 0; i < fileNames.size(); ++i)
          {
             QUrl url = QUrl::fromLocalFile(fileNames.at(i));
-            OpenImageUrlJob* job = new OpenImageUrlJob(url);
+            std::shared_ptr<OpenImageUrlJob> job = std::make_shared<OpenImageUrlJob>(url);
             job->setName(ossimString("open ") + url.toString().toStdString());
             std::shared_ptr<ImageOpenJobCallback> callback = std::make_shared<ImageOpenJobCallback>(this, m_dataManager);
             job->setCallback(callback);
@@ -2663,7 +2663,7 @@ void ossimGui::DataManagerWidget::openLocalImage()
 
 void ossimGui::DataManagerWidget::openLocalImageInteractive()
 {
-   if(m_jobQueue.valid())
+   if(m_jobQueue)
    {
       QStringList fileNames = QFileDialog::getOpenFileNames(
          this,
@@ -3249,7 +3249,7 @@ bool	ossimGui::DataManagerWidget::event( QEvent * e )
                   DataManagerWidgetJobEvent::JobListType::iterator iter = jobList.begin();
                   while(iter!=jobList.end())
                   {
-                     m_jobQueue->add((*iter).get());
+                     m_jobQueue->add((*iter));
                      ++iter;
                   }
                   break;
@@ -3260,7 +3260,7 @@ bool	ossimGui::DataManagerWidget::event( QEvent * e )
                   DataManagerWidgetJobEvent::JobListType::iterator iter = jobList.begin();
                   while(iter!=jobList.end())
                   {
-                     m_rootJobsFolder->addJob((*iter).get());
+                     m_rootJobsFolder->addJob((*iter));
                      ++iter;
                   }
                   break;
@@ -3271,7 +3271,7 @@ bool	ossimGui::DataManagerWidget::event( QEvent * e )
                   DataManagerWidgetJobEvent::JobListType::iterator iter = jobList.begin();
                   while(iter!=jobList.end())
                   {
-                     m_rootJobsFolder->stateChanged((*iter).get());
+                     m_rootJobsFolder->stateChanged(*iter);
                      ++iter;
                   }
                   
@@ -3283,7 +3283,7 @@ bool	ossimGui::DataManagerWidget::event( QEvent * e )
                   DataManagerWidgetJobEvent::JobListType::iterator iter = jobList.begin();
                   while(iter!=jobList.end())
                   {
-                     m_rootJobsFolder->propertyChanged((*iter).get());
+                     m_rootJobsFolder->propertyChanged(*iter);
                      ++iter;
                   }
                   break;
@@ -3294,7 +3294,7 @@ bool	ossimGui::DataManagerWidget::event( QEvent * e )
                   DataManagerWidgetJobEvent::JobListType::iterator iter = jobList.begin();
                   while(iter!=jobList.end())
                   {
-                     m_rootJobsFolder->percentCompleteChanged((*iter).get(), jEvent->percentComplete());
+                     m_rootJobsFolder->percentCompleteChanged(*iter, jEvent->percentComplete());
                      ++iter;
                   }
                   break;

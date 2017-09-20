@@ -95,7 +95,7 @@ namespace ossimGui {
       virtual ~ImageMdiSubWindow();
       
       ossimGui::ImageScrollView* scrollWidget();
-      virtual void setJobQueue(ossimJobQueue* q);
+      virtual void setJobQueue(std::shared_ptr<ossimJobQueue> q);
       virtual void sync(View& syncInfo);
       virtual void setConnectableObject(ConnectableObject* connectable);
       ImageActions* getImageActions()const {return m_actions;}

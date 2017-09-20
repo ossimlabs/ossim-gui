@@ -158,12 +158,12 @@ namespace ossimGui
                CopyChainVisitor visitor;
                m_writer->connectMyInputTo(0, m_connectable.get());
                m_writer->accept(visitor);
-               ossimRefPtr<ossimJob> job = new ImageWriterJob(visitor.kwl());
+               std::shared_ptr<ossimJob> job = std::make_shared<ImageWriterJob>(visitor.kwl());
                job->setName("Output " + m_writer->getFilename());
                job->ready();
                
                DataManagerWidgetJobEvent* evt = new DataManagerWidgetJobEvent(DataManagerWidgetJobEvent::COMMAND_JOB_ADD);
-               evt->setJobList(job.get());
+               evt->setJobList(job);
                QApplication::postEvent(mainWindow, evt);
             }
             else 

@@ -4,6 +4,7 @@
 #include <ossim/parallel/ossimJob.h>
 #include <ossim/base/ossimProcessInterface.h>
 #include <ossim/base/ossimProcessListener.h>
+#include <ossim/base/ossimRefPtr.h>
 #include <mutex>
 
 namespace ossimGui
@@ -21,10 +22,10 @@ namespace ossimGui
       class ProgressListener : public ossimProcessListener
       {
       public:
-         ProgressListener(ossimJob* job):m_job(job){}
+         ProgressListener(std::shared_ptr<ossimJob> job):m_job(job){}
          virtual void processProgressEvent(ossimProcessProgressEvent& event);
          
-         ossimJob* m_job;
+         std::shared_ptr<ossimJob> m_job;
          
       };
       friend class ProgressListener;

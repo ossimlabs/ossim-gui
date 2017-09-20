@@ -12,8 +12,8 @@ namespace ossimGui{
    public:
       DisplayTimerJobQueue();
       virtual ~DisplayTimerJobQueue();
-      virtual void add(ossimJob* job, bool guaranteeUniqueFlag=true);
-      virtual ossimRefPtr<ossimJob> nextJob(bool blockIfEmptyFlag=true);
+      virtual void add(std::shared_ptr<ossimJob> job, bool guaranteeUniqueFlag=true);
+      virtual std::shared_ptr<ossimJob> nextJob(bool blockIfEmptyFlag=true);
       
       
    protected:
@@ -24,15 +24,15 @@ namespace ossimGui{
       class DisplayTimer : public QObject 
       {
       public:         
-         DisplayTimer(DisplayTimerJobQueue* q);
+         DisplayTimer(std::shared_ptr<DisplayTimerJobQueue> q);
          void startProcessingJobs();
          void stopProcessingJobs();
          virtual ~DisplayTimer();
-         void setJobQueue(DisplayTimerJobQueue* que);
+         void setJobQueue(std::shared_ptr<DisplayTimerJobQueue> que);
          virtual void timerEvent ( QTimerEvent * event );
          
       protected:
-         DisplayTimerJobQueue* m_jobQueue;
+         std::shared_ptr<DisplayTimerJobQueue> m_jobQueue;
          int m_timerId;
          int m_timerInterval;
       };

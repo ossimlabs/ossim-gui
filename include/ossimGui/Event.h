@@ -98,7 +98,7 @@ namespace ossimGui{
    class OSSIMGUI_DLL DataManagerWidgetJobEvent : public QEvent
    {
    public:
-      typedef std::vector<ossimRefPtr<ossimJob> > JobListType;
+      typedef std::vector<std::shared_ptr<ossimJob> > JobListType;
       enum CommandType
       {
          COMMAND_NONE = 0,
@@ -115,11 +115,11 @@ namespace ossimGui{
       {}
       void setCommand(int commandType){m_commandType = static_cast<CommandType>(commandType);}
       int command(){return m_commandType;}
-      void setJobList(ossimJob* job){m_jobList.clear();if(job) m_jobList.push_back(job);}
+      void setJobList(std::shared_ptr<ossimJob> job){m_jobList.clear();if(job) m_jobList.push_back(job);}
       void setJobList(const JobListType& jobs){m_jobList = jobs;}
       JobListType& jobList(){return m_jobList;}
       const JobListType& jobList()const{return m_jobList;}
-      void setJobList(ossim_float64 percentComplete, ossimJob* job){setJobList(job);m_percentComplete=percentComplete;}
+      void setJobList(ossim_float64 percentComplete, std::shared_ptr<ossimJob> job){setJobList(job);m_percentComplete=percentComplete;}
       ossim_float64 percentComplete()const{return m_percentComplete;}
       
    protected:
