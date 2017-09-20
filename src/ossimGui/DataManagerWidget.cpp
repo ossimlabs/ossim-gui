@@ -1319,15 +1319,15 @@ ossimGui::DataManagerJobItem::~DataManagerJobItem()
 
 void ossimGui::DataManagerJobItem::setJob(ossimJob* job)
 {
-   if(m_job.valid()&&m_jobCallback.valid())
+   if(m_job.valid()&&m_jobCallback)
    {
       m_job->setCallback(m_jobCallback->callback());
    }
    m_job = job;
    if(m_job.valid())
    {
-      m_jobCallback = new JobCallback(this, m_job->callback());
-      m_job->setCallback(m_jobCallback.get());
+      m_jobCallback = std::make_shared<JobCallback>(this, m_job->callback());
+      m_job->setCallback(m_jobCallback);
    }
    if(dataManagerWidget())
    {
@@ -1438,21 +1438,21 @@ ossimGui::DataManagerJobsFolder::DataManagerJobsFolder()
 {
    setExpanded(true);
    setText(0, "Jobs");
-   m_jobQueueCallback = new JobQueueCallback(this);
+   m_jobQueueCallback = std::make_shared<JobQueueCallback>(this);
 }
 ossimGui::DataManagerJobsFolder::DataManagerJobsFolder(QTreeWidget* parent)
 :DataManagerFolder(parent)
 {
    setExpanded(true);
    setText(0, "Jobs");
-   m_jobQueueCallback = new JobQueueCallback(this);
+   m_jobQueueCallback = std::make_shared<JobQueueCallback>(this);
 }
 ossimGui::DataManagerJobsFolder::DataManagerJobsFolder(QTreeWidgetItem* parent)
 :DataManagerFolder(parent)
 {
    setExpanded(true);
    setText(0, "Jobs");
-   m_jobQueueCallback = new JobQueueCallback(this);
+   m_jobQueueCallback = std::make_shared<JobQueueCallback>(this);
 }
 
 ossimGui::DataManagerJobsFolder::~DataManagerJobsFolder()
@@ -1476,7 +1476,7 @@ void ossimGui::DataManagerJobsFolder::setQueue(ossimJobQueue* q)
    std::lock_guard<std::mutex> lock(m_jobsFolderMutex);
    m_queues.clear();
    m_queues.push_back(q);
-   q->setCallback(m_jobQueueCallback.get());
+   q->setCallback(m_jobQueueCallback);
 }
 
 
@@ -1525,7 +1525,7 @@ void ossimGui::DataManagerWidget::DataManagerCallback::nodesAdded(DataManager::N
 ossimGui::DataManagerWidget::DataManagerWidget(QWidget* parent)
    : QTreeWidget(parent),
      m_dataManager( new DataManager() ),
-     m_dataManagerCallback( new DataManagerCallback(this) ),
+     m_dataManagerCallback( std::make_shared<DataManagerCallback>(this) ),
      m_jobQueue(0),
      m_displayQueue(new DisplayTimerJobQueue()),
      m_rootImageFolder(0),
@@ -1550,7 +1550,7 @@ ossimGui::DataManagerWidget::DataManagerWidget(QWidget* parent)
 {
    setAcceptDrops(true);
    
-   m_dataManager->setCallback(m_dataManagerCallback.get());
+   m_dataManager->setCallback(m_dataManagerCallback);
    
    initialize();
    //connect(this, SIGNAL(itemDoubleClicked(QTreeWidgetItem*, int)), this, SLOT(itemDoubleClicked(QTreeWidgetItem*, int)));
@@ -2050,7 +2050,7 @@ void ossimGui::DataManagerWidget::buildOverviewsForSelected(const QString& type)
             if(isource.valid())
             {
                ossimRefPtr<ImageStagerJob> stagerJob = new ImageStagerJob(isource.get(), ImageStagerJob::STAGE_OVERVIEWS);
-               stagerJob->setCallback(new ImageStagerJobCallback(this, (*item)));
+               stagerJob->setCallback(std::make_shared<ImageStagerJobCallback>(this, (*item)));
                stagerJob->setOverviewType(type.toStdString());
                m_jobQueue->add(stagerJob.get());
                stagerJob = 0; isource = 0;
@@ -2634,7 +2634,7 @@ void ossimGui::DataManagerWidget::openLocalImage()
             QUrl url = QUrl::fromLocalFile(fileNames.at(i));
             OpenImageUrlJob* job = new OpenImageUrlJob(url);
             job->setName(ossimString("open ") + url.toString().toStdString());
-            ImageOpenJobCallback* callback = new ImageOpenJobCallback(this, m_dataManager);
+            std::shared_ptr<ImageOpenJobCallback> callback = std::make_shared<ImageOpenJobCallback>(this, m_dataManager);
             job->setCallback(callback);
             m_jobQueue->add(job);
 

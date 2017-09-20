@@ -139,7 +139,7 @@ ossimGui::DataManager::DataManager()
 
 bool ossimGui::DataManager::remove(ossimRefPtr<Node> obj, bool notifyFlag)
 {
-   ossimRefPtr<Callback> callback;
+   std::shared_ptr<Callback> callback;
    bool result = false;
    {
       std::lock_guard<std::mutex> lock(m_mutex);
@@ -175,7 +175,7 @@ bool ossimGui::DataManager::remove(ossimRefPtr<Node> obj, bool notifyFlag)
    {
       //std::cout << "ossimGui::DataManager::remove(:REMOVING " << obj->getObject()->getClassName() << std::endl;
       if(obj->getObjectAsConnectable()) obj->getObjectAsConnectable()->disconnect();
-      if(callback.valid()&&callback->enabled()&&notifyFlag)
+      if(callback&&callback->enabled()&&notifyFlag)
       {
          callback->nodeRemoved(obj.get());
          obj = 0;
@@ -205,15 +205,15 @@ bool ossimGui::DataManager::remove(NodeListType& nodes, bool notifyFlag)
    }
    if(notifyFlag)
    {
-      ossimRefPtr<Callback> callback;
+      std::shared_ptr<Callback> callback;
       {
          std::lock_guard<std::mutex> lock(m_mutex);
-         if(m_callback.valid()&&m_callback->enabled())
+         if(m_callback&&m_callback->enabled())
          {
             callback = m_callback;
          }
       }
-      if(callback.valid())
+      if(callback)
       {
          callback->nodesRemoved(nodesRemoved);
          nodesRemoved.clear();
@@ -247,7 +247,7 @@ ossimRefPtr<ossimGui::DataManager::Node>  ossimGui::DataManager::findNode(ossimO
 ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::addSource(ossimRefPtr<ossimObject> obj, bool notifyFlag)
 {
    ossimRefPtr<Node> result;
-   ossimRefPtr<Callback> callback;
+   std::shared_ptr<Callback> callback;
    if(obj.valid()&&!nodeExists(obj.get()))
    {
       QString defaultName = "";
@@ -285,13 +285,13 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::addSource(ossimR
             m_sourceList.push_back(result.get());
          }
          addIndexMapping(result.get());
-         if(m_callback.valid()&&m_callback->enabled()&&notifyFlag)
+         if(m_callback&&m_callback->enabled()&&notifyFlag)
          {
             callback = m_callback;
          }
       }
    }
-   if(result.valid()&&callback.valid())
+   if(result.valid()&&callback)
    {
       callback->nodeAdded(result.get());
    }      
@@ -302,7 +302,7 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createDefaultIma
 {
    ossimRefPtr<Node> result;
    ossimConnectableObject* connectableInput = input->getObjectAsConnectable();
-   ossimRefPtr<Callback> callback;
+   std::shared_ptr<Callback> callback;
 
    if(connectableInput)
    {
@@ -327,7 +327,7 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createDefaultIma
      }
       
    }
-   if(callback.valid()&&callback->enabled()&&notifyFlag)
+   if(callback&&callback->enabled()&&notifyFlag)
    {
       callback->nodeAdded(result.get());
    }
@@ -354,7 +354,7 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createChainFromT
 {
    ossimRefPtr<Node> result;
    ossimConnectableObject* connectableInput = input->getObjectAsConnectable();
-   ossimRefPtr<Callback> callback;
+   std::shared_ptr<Callback> callback;
    
    ossimRefPtr<ossimObject> obj = ossimObjectFactoryRegistry::instance()->createObject(templatChain);
    if(obj.valid())
@@ -372,7 +372,7 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createChainFromT
          callback = m_callback;
       }
    }
-   if(callback.valid()&&callback->enabled()&&notifyFlag)
+   if(callback&&callback->enabled()&&notifyFlag)
    {
       callback->nodeAdded(result.get());
    }
@@ -385,7 +385,7 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createDefaultCom
    ossimRefPtr<Node> result;
    ossimRefPtr<ossimImageSource> obj = ossimImageSourceFactoryRegistry::instance()->createImageSource(combinerType);
    ossimRefPtr<ossimImageCombiner> combinerObj = dynamic_cast<ossimImageCombiner*>(obj.get());
-   ossimRefPtr<Callback> callback;
+   std::shared_ptr<Callback> callback;
    if(combinerObj.valid())
    {
          // we will need to make the combiner chain a template as well and remove from here
@@ -426,10 +426,10 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createDefaultCom
                      ++iter;
                   }
                }
-               if(m_callback.valid()&&m_callback->enabled()&&notifyFlag)
+               if(m_callback&&m_callback->enabled()&&notifyFlag)
                {
                   std::lock_guard<std::mutex> lock(m_mutex);
-                  callback = m_callback.get();
+                  callback = m_callback;
                }
             }
          }
@@ -437,7 +437,7 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createDefaultCom
    }
    if(result.valid())
    {
-      if(callback.valid())
+      if(callback)
       {
          callback->nodeAdded(result.get());
       }
@@ -607,7 +607,7 @@ void ossimGui::DataManager::print()
 
 void ossimGui::DataManager::clear(bool notifyFlag)
 {
-   ossimRefPtr<Callback> callback;
+   std::shared_ptr<Callback> callback;
    NodeListType removedNodes;
    {
       {
@@ -625,12 +625,12 @@ void ossimGui::DataManager::clear(bool notifyFlag)
       {
          remove(removedNodes[idx],false);
       }
-      if(m_callback.valid()&&m_callback->enabled()&&notifyFlag)
+      if(m_callback&&m_callback->enabled()&&notifyFlag)
       {
          callback = m_callback;
       }
    }
-   if(callback.valid())
+   if(callback)
    {
       callback->nodesRemoved(removedNodes);
    }
@@ -683,10 +683,10 @@ bool ossimGui::DataManager::loadState(const ossimKeywordlist& kwl, const ossimSt
    bool result = true;
    NodeListType nodes;
    
-   ossimRefPtr<Callback> callback;
+   std::shared_ptr<Callback> callback;
    {
       std::lock_guard<std::mutex> lock(m_mutex);
-      if(m_callback.valid()&&m_callback->enabled())
+      if(m_callback&&m_callback->enabled())
       {
          callback = m_callback;
       }
@@ -781,7 +781,7 @@ bool ossimGui::DataManager::loadState(const ossimKeywordlist& kwl, const ossimSt
          }
       }
    }   
-   if(!nodes.empty()&&callback.valid())
+   if(!nodes.empty()&&callback)
    {
       callback->nodesAdded(nodes);
    }

@@ -181,7 +181,7 @@ void ossimGui::MainWindow::dropEvent( QDropEvent * event )
             {
                OpenImageUrlJob* job = new OpenImageUrlJob(*iter);
                job->setName("Open " + ossimString((*iter).toString().toStdString()));
-               ossimImageOpenJobCallback* callback = new ossimImageOpenJobCallback();
+               std::shared_ptr<ossimImageOpenJobCallback> callback = std::make_shared<ossimImageOpenJobCallback>();
                callback->m_object = this;
                job->setCallback(callback);
                m_stagerQueue->getJobQueue()->add(job);
@@ -379,7 +379,7 @@ void ossimGui::MainWindow::openImage( bool /*checked*/ )
       {
          QUrl url(QUrl::fromLocalFile(fileNames.at(i)));
          OpenImageUrlJob* job = new OpenImageUrlJob(url);
-         ossimImageOpenJobCallback* callback = new ossimImageOpenJobCallback();
+         std::shared_ptr<ossimImageOpenJobCallback> callback = std::make_shared<ossimImageOpenJobCallback>();
          callback->m_object = this;
          job->setCallback(callback);
          m_stagerQueue->getJobQueue()->add(job);
@@ -399,7 +399,7 @@ void ossimGui::MainWindow::openJpip( bool /*checked*/ )
       if(jpip.scheme() == "jpip")
       {
          OpenImageUrlJob* job = new OpenImageUrlJob(jpip);
-         ossimImageOpenJobCallback* callback = new ossimImageOpenJobCallback();
+         std::shared_ptr<ossimImageOpenJobCallback> callback = std::make_shared<ossimImageOpenJobCallback>();
          callback->m_object = this;
          job->setCallback(callback);
          m_stagerQueue->getJobQueue()->add(job);
@@ -467,7 +467,7 @@ bool ossimGui::MainWindow::loadImageFileList(std::vector<ossimString>& ilist)
       {
          QUrl url(QUrl::fromLocalFile(fileNames.at(i)));
          OpenImageUrlJob* job = new OpenImageUrlJob(url);
-         ossimImageOpenJobCallback* callback = new ossimImageOpenJobCallback();
+         std::shared_ptr<ossimImageOpenJobCallback> callback = std::make_shared<ossimImageOpenJobCallback>();
          callback->m_object = this;
          job->setCallback(callback);
          m_stagerQueue->getJobQueue()->add(job);
