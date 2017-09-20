@@ -48,10 +48,10 @@ namespace ossimGui
    void ProcessInterfaceJob::setPercentComplete(double value)
    {
       m_processInterfaceMutex.lock();
-      ossimRefPtr<ossimJobCallback> c = callback();
+      std::shared_ptr<ossimJobCallback> c = callback();
       m_processInterfaceMutex.unlock();
 
-      if(c.valid())
+      if(c)
       {
          c->percentCompleteChanged(value, this);
       }

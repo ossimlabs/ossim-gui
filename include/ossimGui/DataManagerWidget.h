@@ -398,7 +398,7 @@ namespace ossimGui{
       class JobCallback : public ossimJobCallback
       {
       public:
-         JobCallback(DataManagerJobItem* item, ossimJobCallback* next):ossimJobCallback(next),m_jobItem(item){}
+         JobCallback(DataManagerJobItem* item, std::shared_ptr<ossimJobCallback> next):ossimJobCallback(next),m_jobItem(item){}
          virtual void ready(ossimJob* job);
          virtual void started(ossimJob* job);
          virtual void finished(ossimJob* job);
@@ -414,7 +414,7 @@ namespace ossimGui{
       };
       
       ossimRefPtr<ossimJob> m_job;
-      ossimRefPtr<JobCallback> m_jobCallback;
+      std::shared_ptr<JobCallback> m_jobCallback;
       QTreeWidgetItem* m_progressItem;
       QProgressBar* m_progressBar;
    };
@@ -539,7 +539,7 @@ namespace ossimGui{
       };
       
       QueueListType m_queues;   
-      ossimRefPtr<JobQueueCallback> m_jobQueueCallback;
+      std::shared_ptr<JobQueueCallback> m_jobQueueCallback;
       mutable std::mutex m_jobsFolderMutex;
       JobMapType m_jobItemMap;
    };
@@ -738,7 +738,7 @@ namespace ossimGui{
       ossimGui::DataManager::NodeListType getSelectedNodeList();
       
       ossimRefPtr<DataManager>         m_dataManager;
-      ossimRefPtr<DataManagerCallback> m_dataManagerCallback;
+      std::shared_ptr<DataManagerCallback> m_dataManagerCallback;
       ossimRefPtr<ossimJobQueue>       m_jobQueue;
       ossimRefPtr<ossimJobQueue>       m_displayQueue;
 

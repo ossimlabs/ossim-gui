@@ -239,7 +239,7 @@ ImageScrollView::ImageScrollView (QWidget* parent)
    m_trackPoint.makeNan();
    m_oldTrackPoint.makeNan();
    m_inputBounds.makeNan();
-   m_imageViewJob->setCallback(new Callback(this));
+   m_imageViewJob->setCallback(std::make_shared<Callback>(this));
    m_manipulator = new ImageViewManipulator(this);
    viewport()->setCursor(Qt::CrossCursor);
    m_regOverlay = new RegistrationOverlay("Reg", scene());
@@ -249,7 +249,7 @@ ImageScrollView::ImageScrollView (QWidget* parent)
    // setViewport(new QGLWidget());
    // m_layers = new Layers();
    // m_imageViewJob = new ImageViewJob();
-   // m_imageViewJob->setCallback(new Callback(this));
+   // m_imageViewJob->setCallback(std::make_shared<Callback>(this));
    // m_multiLayerAlgorithm = BOX_SWIPE_ALGORITHM;
    // m_trackPoint.makeNan();
    // m_oldTrackPoint.makeNan();
@@ -287,7 +287,7 @@ ImageScrollView::ImageScrollView (QGraphicsScene* scene, QWidget* parent)
    m_trackPoint.makeNan();
    m_oldTrackPoint.makeNan();
    m_inputBounds.makeNan();
-   m_imageViewJob->setCallback(new Callback(this));
+   m_imageViewJob->setCallback(std::make_shared<Callback>(this));
    m_manipulator = new ImageViewManipulator(this);
    viewport()->setCursor(Qt::CrossCursor);
    m_regOverlay = new RegistrationOverlay( "Reg", scene );
@@ -296,7 +296,7 @@ ImageScrollView::ImageScrollView (QGraphicsScene* scene, QWidget* parent)
    //setViewport(new QGLWidget());
    // m_layers = new Layers();
    // m_imageViewJob = new ImageViewJob();
-   // m_imageViewJob->setCallback(new Callback(this));
+   // m_imageViewJob->setCallback(std::make_shared<Callback>(this));
    // m_multiLayerAlgorithm = BOX_SWIPE_ALGORITHM;
    // m_trackPoint.makeNan();
    // m_oldTrackPoint.makeNan();

@@ -14,6 +14,7 @@
 #include <QMdiArea>
 #include <ossim/projection/ossimSensorModelTuple.h>
 #include <mutex>
+#include <memory>
 
 namespace ossimGui{
 
@@ -130,7 +131,7 @@ namespace ossimGui{
       
       virtual void accept(ossimVisitor& visitor);
       
-      void setCallback(ossimRefPtr<Callback> callback){m_callback = callback.get();}
+      void setCallback(std::shared_ptr<Callback> callback){m_callback = callback;}
       void print();
       
       bool saveState(ossimKeywordlist& kwl, const ossimString& prefix=ossimString())const;
@@ -171,7 +172,7 @@ namespace ossimGui{
                                   const ossimKeywordlist& kwl,
                                   const ossimString& prefix);
       mutable std::mutex m_mutex;
-      ossimRefPtr<Callback> m_callback;
+      std::shared_ptr<Callback> m_callback;
       
       NodeListType m_sourceList;
       NodeListType m_chainList;

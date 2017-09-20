@@ -85,7 +85,7 @@ m_jobQueue(new DisplayTimerJobQueue())
    m_timerId = -1;
    viewport()->setCursor(Qt::CrossCursor);
    m_imageWidgetJob = new ImageWidgetJob();//this);
-   m_imageWidgetJob->setCallback(new Callback(this));
+   m_imageWidgetJob->setCallback(std::make_shared<Callback>(this));
    
  //  m_multiLayerAlgorithm = HORIZONTAL_SWIPE_ALGORITHM;
  //  m_multiLayerAlgorithm = VERTICAL_SWIPE_ALGORITHM;
