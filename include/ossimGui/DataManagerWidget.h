@@ -385,7 +385,7 @@ namespace ossimGui{
    public:
       DataManagerJobItem();
       virtual ~DataManagerJobItem();
-      virtual void setJob(ossimJob* job);
+      virtual void setJob(std::shared_ptr<ossimJob> job);
       virtual void cancel();
       void setPercentComplete(double value)
       {
@@ -399,21 +399,21 @@ namespace ossimGui{
       {
       public:
          JobCallback(DataManagerJobItem* item, std::shared_ptr<ossimJobCallback> next):ossimJobCallback(next),m_jobItem(item){}
-         virtual void ready(ossimJob* job);
-         virtual void started(ossimJob* job);
-         virtual void finished(ossimJob* job);
-         virtual void canceled(ossimJob* job);
+         virtual void ready(std::shared_ptr<ossimJob> job);
+         virtual void started(std::shared_ptr<ossimJob> job);
+         virtual void finished(std::shared_ptr<ossimJob> job);
+         virtual void canceled(std::shared_ptr<ossimJob> job);
          
-         virtual void nameChanged(const ossimString& name, ossimJob* job);
-         virtual void descriptionChanged(const ossimString& description, ossimJob* job);
-         virtual void idChanged(const ossimString& id, ossimJob* job);
+         virtual void nameChanged(const ossimString& name, std::shared_ptr<ossimJob> job);
+         virtual void descriptionChanged(const ossimString& description, std::shared_ptr<ossimJob> job);
+         virtual void idChanged(const ossimString& id, std::shared_ptr<ossimJob> job);
          
-         virtual void percentCompleteChanged(double percentValue, ossimJob* job);
+         virtual void percentCompleteChanged(double percentValue, std::shared_ptr<ossimJob> job);
          
          DataManagerJobItem* m_jobItem;
       };
       
-      ossimRefPtr<ossimJob> m_job;
+      std::shared_ptr<ossimJob> m_job;
       std::shared_ptr<JobCallback> m_jobCallback;
       QTreeWidgetItem* m_progressItem;
       QProgressBar* m_progressBar;
@@ -422,15 +422,15 @@ namespace ossimGui{
    class OSSIMGUI_DLL DataManagerJobsFolder : public DataManagerFolder
    {
    public:
-      typedef std::vector<ossimRefPtr<ossimJobQueue> > QueueListType;
-      typedef std::map<ossimRefPtr<ossimJob>, QTreeWidgetItem* > JobMapType;
+      typedef std::vector<std::shared_ptr<ossimJobQueue> > QueueListType;
+      typedef std::map<std::shared_ptr<ossimJob>, QTreeWidgetItem* > JobMapType;
       DataManagerJobsFolder();
       DataManagerJobsFolder(QTreeWidget* parent);
       DataManagerJobsFolder(QTreeWidgetItem* parent);
       virtual ~DataManagerJobsFolder();
-      void setQueue(ossimJobQueue* q);
+      void setQueue(std::shared_ptr<ossimJobQueue> q);
       void removeStoppedJobs();
-      void addJob(ossimJob* job)
+      void addJob(std::shared_ptr<ossimJob> job)
       {
          m_jobsFolderMutex.lock();
          if(m_jobItemMap.find(job)==m_jobItemMap.end())
@@ -443,7 +443,7 @@ namespace ossimGui{
          m_jobsFolderMutex.unlock();
          stateChanged(job);
       }
-      void removeJob(ossimJob* job)
+      void removeJob(std::shared_ptr<ossimJob> job)
       {
          m_jobsFolderMutex.lock();
          JobMapType::iterator iter = m_jobItemMap.find(job);
@@ -455,7 +455,7 @@ namespace ossimGui{
          }
          m_jobsFolderMutex.unlock();
       }
-      void stateChanged(ossimJob* job)
+      void stateChanged(std::shared_ptr<ossimJob> job)
       {
          m_jobsFolderMutex.lock();
          JobMapType::iterator iter = m_jobItemMap.find(job);
@@ -490,7 +490,7 @@ namespace ossimGui{
          }
          m_jobsFolderMutex.unlock();
       }
-      void propertyChanged(ossimJob* job)
+      void propertyChanged(std::shared_ptr<ossimJob> job)
       {
          m_jobsFolderMutex.lock();
          JobMapType::iterator iter = m_jobItemMap.find(job);
@@ -500,7 +500,7 @@ namespace ossimGui{
          }
          m_jobsFolderMutex.unlock();
       }
-      void percentCompleteChanged(ossimJob* job, double percentComplete)
+      void percentCompleteChanged(std::shared_ptr<ossimJob> job, double percentComplete)
       {
          m_jobsFolderMutex.lock();
          JobMapType::iterator iter = m_jobItemMap.find(job);
@@ -519,7 +519,7 @@ namespace ossimGui{
       {
       public:
          JobQueueCallback(DataManagerJobsFolder* f):m_folder(f){}
-         virtual void adding(ossimJobQueue* /* q */, ossimJob* job)
+         virtual void adding(ossimJobQueue* /* q */, std::shared_ptr<ossimJob> job)
          {
             if(m_folder)
             {
@@ -528,7 +528,7 @@ namespace ossimGui{
                QCoreApplication::postEvent(m_folder->treeWidget(), e);
             }
          }
-         virtual void removed(ossimJobQueue* /*q*/, ossimJob* /*job*/)
+         virtual void removed(ossimJobQueue* /*q*/, std::shared_ptr<ossimJob> /*job*/)
          {
             if(m_folder)
             {
@@ -557,10 +557,10 @@ namespace ossimGui{
       
       QMenu* createMenu(QList<DataManagerItem*>& selection, DataManagerItem* activeItem=0);
       QMainWindow* mainWindow();
-      void setJobQueue(ossimJobQueue* que){m_jobQueue = que; m_rootJobsFolder->setQueue(que);}
-      ossimJobQueue* jobQueue(){return m_jobQueue.get();}
-      ossimJobQueue* displayQueue(){return m_displayQueue.get();}
-      void setDisplayQueue(ossimJobQueue* q){m_displayQueue = q;}
+      void setJobQueue(std::shared_ptr<ossimJobQueue> que){m_jobQueue = que; m_rootJobsFolder->setQueue(que);}
+      std::shared_ptr<ossimJobQueue> jobQueue(){return m_jobQueue;}
+      std::shared_ptr<ossimJobQueue> displayQueue(){return m_displayQueue;}
+      void setDisplayQueue(std::shared_ptr<ossimJobQueue> q){m_displayQueue = q;}
       bool openDataManager(const ossimFilename& file);
       void refresh();
       QModelIndex indexFromDataManagerItem(DataManagerItem* item, int col=0);
@@ -739,8 +739,8 @@ namespace ossimGui{
       
       ossimRefPtr<DataManager>         m_dataManager;
       std::shared_ptr<DataManagerCallback> m_dataManagerCallback;
-      ossimRefPtr<ossimJobQueue>       m_jobQueue;
-      ossimRefPtr<ossimJobQueue>       m_displayQueue;
+      std::shared_ptr<ossimJobQueue>       m_jobQueue;
+      std::shared_ptr<ossimJobQueue>       m_displayQueue;
 
       DataManagerImageFolder*          m_rootImageFolder;
       DataManagerJobsFolder*           m_rootJobsFolder;

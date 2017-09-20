@@ -2,10 +2,11 @@
 #include <iostream>
 #include <QApplication>
 ossimGui::DisplayTimerJobQueue::DisplayTimerJobQueue()
-:m_displayTimer(new DisplayTimer(this))
-
+:m_displayTimer(0)
 {
+
 }
+
 ossimGui::DisplayTimerJobQueue::~DisplayTimerJobQueue()
 {
    if(m_displayTimer)
@@ -15,11 +16,11 @@ ossimGui::DisplayTimerJobQueue::~DisplayTimerJobQueue()
    }
 }
 
-ossimRefPtr<ossimJob> ossimGui::DisplayTimerJobQueue::nextJob(bool blockIfEmptyFlag)
+std::shared_ptr<ossimJob> ossimGui::DisplayTimerJobQueue::nextJob(bool blockIfEmptyFlag)
 {
    std::lock_guard<std::mutex> lock(m_timeJobQueueMutex);
-   ossimRefPtr<ossimJob> result = ossimJobQueue::nextJob(false);
-   if(!result.valid()&&m_displayTimer)
+   std::shared_ptr<ossimJob> result = ossimJobQueue::nextJob(false);
+   if(!result&&m_displayTimer)
    {
       m_displayTimer->stopProcessingJobs();
    }
@@ -27,15 +28,19 @@ ossimRefPtr<ossimJob> ossimGui::DisplayTimerJobQueue::nextJob(bool blockIfEmptyF
    return result;
 }
 
-void ossimGui::DisplayTimerJobQueue::add(ossimJob* job, bool guaranteeUniqueFlag)
+void ossimGui::DisplayTimerJobQueue::add(std::shared_ptr<ossimJob> job, bool guaranteeUniqueFlag)
 {
+   if(!m_displayTimer)
+   {
+      m_displayTimer = new DisplayTimer(std::static_pointer_cast<DisplayTimerJobQueue>(getSharedFromThis()));
+   }
    ossimJobQueue::add(job, guaranteeUniqueFlag);
    std::lock_guard<std::mutex> lock(m_timeJobQueueMutex);
    if(m_displayTimer) m_displayTimer->startProcessingJobs();
 }
 
 
-ossimGui::DisplayTimerJobQueue::DisplayTimer::DisplayTimer(DisplayTimerJobQueue* q)
+ossimGui::DisplayTimerJobQueue::DisplayTimer::DisplayTimer(std::shared_ptr<DisplayTimerJobQueue> q)
 :m_jobQueue(q),
 m_timerId(-1),
 m_timerInterval(10)
@@ -44,7 +49,7 @@ m_timerInterval(10)
 
 ossimGui::DisplayTimerJobQueue::DisplayTimer::~DisplayTimer()
 {
-   m_jobQueue = 0;
+   m_jobQueue.reset();
    if(m_timerId >=0)
    {
       killTimer(m_timerId);
@@ -69,7 +74,7 @@ void ossimGui::DisplayTimerJobQueue::DisplayTimer::stopProcessingJobs()
    }
 }
 
-void ossimGui::DisplayTimerJobQueue::DisplayTimer::setJobQueue(DisplayTimerJobQueue* que)
+void ossimGui::DisplayTimerJobQueue::DisplayTimer::setJobQueue(std::shared_ptr<DisplayTimerJobQueue> que)
 {
    m_jobQueue = que;
 }
@@ -80,8 +85,8 @@ void ossimGui::DisplayTimerJobQueue::DisplayTimer::timerEvent ( QTimerEvent * ev
    {
       if((event->timerId() == m_timerId)&&m_jobQueue)
       {
-         ossimRefPtr<ossimJob> job = m_jobQueue->nextJob(); 
-         if(job.valid())
+         std::shared_ptr<ossimJob> job = m_jobQueue->nextJob(); 
+         if(job)
          {
             QApplication::processEvents();
             if(!job->isCanceled())

@@ -1107,7 +1107,7 @@ void ossimGui::ImageMdiSubWindow::syncView(View& viewInfo)
    }
 }
 
-void ossimGui::ImageMdiSubWindow::setJobQueue(ossimJobQueue* q)
+void ossimGui::ImageMdiSubWindow::setJobQueue(std::shared_ptr<ossimJobQueue> q)
 {
    m_imageScrollView->setJobQueue(q);
 }
