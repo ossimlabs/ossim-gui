@@ -15,7 +15,6 @@ namespace ossimGui
       ProcessInterfaceJob():m_processInterface(0){}
       
       virtual void setState(int value, bool on=true);
-      virtual void start();
       ossimObject* object(){return m_obj.get();}
       
    protected:
@@ -29,6 +28,7 @@ namespace ossimGui
          
       };
       friend class ProgressListener;
+      virtual void run();
       void setPercentComplete(double value);
 
       

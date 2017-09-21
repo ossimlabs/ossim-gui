@@ -16,7 +16,6 @@ namespace ossimGui
       :m_url(url)
       {
       }
-      virtual void start();
       ossimGui::HandlerList& handlerList()
       {
          return m_handlers;
@@ -28,6 +27,8 @@ namespace ossimGui
    protected:
       QUrl        m_url;
       ossimGui::HandlerList m_handlers;
+
+      virtual void run();
    };
 }
 

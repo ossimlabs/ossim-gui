@@ -1,6 +1,6 @@
 #include <ossimGui/OpenImageUrlJob.h>
 #include <ossim/imaging/ossimImageHandlerRegistry.h>
-void ossimGui::OpenImageUrlJob::start()
+void ossimGui::OpenImageUrlJob::run()
 {
    ossimFilename file = m_url.toString().toStdString();
    

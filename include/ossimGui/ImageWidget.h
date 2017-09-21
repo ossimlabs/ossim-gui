@@ -33,7 +33,6 @@ namespace ossimGui
    {
    public:
       ImageWidgetJob();
-      virtual void start();
       void setMaxProcessingTimeInMillis(ossim_float64 t)
       {
          std::lock_guard<std::mutex> lock(m_jobMutex);
@@ -77,6 +76,8 @@ namespace ossimGui
       ossimRefPtr<StaticTileImageCache> m_tileCache;
       ossimRefPtr<ossimImageSource>     m_inputSource;
       std::mutex                        m_imageWidgetJobMutex;
+
+      virtual void run();
    };
    
    class OSSIMGUI_DLL ImageScrollWidget : public QScrollArea

@@ -91,10 +91,8 @@ void ossimGui::DisplayTimerJobQueue::DisplayTimer::timerEvent ( QTimerEvent * ev
             QApplication::processEvents();
             if(!job->isCanceled())
             {
-               job->running();
                job->start();
             }
-            job->finished(); // turn on finished
             job = 0;
          }
          else 
