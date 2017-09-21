@@ -107,7 +107,12 @@ namespace ossimGui
       }
       int flags()const{return m_flags;}
       
-      virtual void start()
+      
+      ossimImageHandler* handler(){return m_source.get();}
+      const ossimImageHandler* handler()const{return m_source.get();}
+      
+   protected:
+      virtual void run()
       {
          if(m_flags&STAGE_OVERVIEWS)
          {
@@ -133,11 +138,6 @@ namespace ossimGui
             overviewBuilder = 0;
          }
       }
-      
-      ossimImageHandler* handler(){return m_source.get();}
-      const ossimImageHandler* handler()const{return m_source.get();}
-      
-   protected:
       void stageOverviews();
       void stageHistograms();
       ossimRefPtr<ossimImageHandler> m_source;

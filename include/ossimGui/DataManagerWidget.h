@@ -519,7 +519,8 @@ namespace ossimGui{
       {
       public:
          JobQueueCallback(DataManagerJobsFolder* f):m_folder(f){}
-         virtual void adding(ossimJobQueue* /* q */, std::shared_ptr<ossimJob> job)
+         virtual void adding(std::shared_ptr<ossimJobQueue> /* q */, 
+                             std::shared_ptr<ossimJob> job)
          {
             if(m_folder)
             {
@@ -528,12 +529,16 @@ namespace ossimGui{
                QCoreApplication::postEvent(m_folder->treeWidget(), e);
             }
          }
-         virtual void removed(ossimJobQueue* /*q*/, std::shared_ptr<ossimJob> /*job*/)
+         virtual void removed(std::shared_ptr<ossimJobQueue> /*q*/, 
+                              std::shared_ptr<ossimJob> /*job*/)
          {
             if(m_folder)
             {
             }
          }
+         virtual void added(std::shared_ptr<ossimJobQueue> /*q*/, 
+                            std::shared_ptr<ossimJob> /*job*/)
+         {}
          
          DataManagerJobsFolder* m_folder;
       };

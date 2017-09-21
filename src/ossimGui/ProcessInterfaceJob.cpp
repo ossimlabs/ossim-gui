@@ -20,7 +20,7 @@ namespace ossimGui
       ossimJob::setState(value, on);
    }
    
-   void ProcessInterfaceJob::start()
+   void ProcessInterfaceJob::run()
    {
       m_processInterfaceMutex.lock();
       m_processInterface = dynamic_cast<ossimProcessInterface*> (m_obj.get());

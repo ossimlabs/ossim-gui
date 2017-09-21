@@ -19,7 +19,7 @@ ossimGui::ImageWidgetJob::ImageWidgetJob()
    m_maxProcessingTime = 20;
 }
 
-void ossimGui::ImageWidgetJob::start()
+void ossimGui::ImageWidgetJob::run()
 {
    if(m_inputSource.valid())
    {

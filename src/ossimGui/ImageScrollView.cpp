@@ -24,7 +24,7 @@ ImageViewJob::ImageViewJob()
 {
 }
 
-void ImageViewJob::start()
+void ImageViewJob::run()
 {
    if(m_inputSource.valid())
    {
