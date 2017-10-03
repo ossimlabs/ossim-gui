@@ -3,13 +3,14 @@
 //*************************************************************************
 // $Id$
 #ifndef ossimGuiStaticTileImageCache_HEADER
-#define ossimGuiStaticTileImageCache_HEADER
-#include <QtGui/QImage>
-#include <vector>
+#define ossimGuiStaticTileImageCache_HEADER 1
 #include <ossim/base/ossimReferenced.h>
 #include <ossim/base/ossimIpt.h>
 #include <ossim/base/ossimIrect.h>
 #include <ossimGui/Export.h>
+#include <QtGui/QImage>
+#include <mutex>
+#include <vector>
 
 namespace ossimGui
 {
