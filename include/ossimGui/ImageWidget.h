@@ -33,40 +33,39 @@ namespace ossimGui
    {
    public:
       ImageWidgetJob();
-      virtual void start();
       void setMaxProcessingTimeInMillis(ossim_float64 t)
       {
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_jobMutex);
+         std::lock_guard<std::mutex> lock(m_jobMutex);
          m_maxProcessingTime = t;
       }
       ossim_float64 maxProcessingTimeInMillis()const
       {
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_jobMutex);
+         std::lock_guard<std::mutex> lock(m_jobMutex);
          return m_maxProcessingTime;
       }
       void setCacheToViewTransform(const QTransform& trans)
       {
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_jobMutex);
+         std::lock_guard<std::mutex> lock(m_jobMutex);
          m_cacheToView = trans;
       }
       void setViewToCacheTransform(const QTransform& trans)
       {
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_jobMutex);
+         std::lock_guard<std::mutex> lock(m_jobMutex);
          m_viewToCache = trans;
       }
       void setTileCache(StaticTileImageCache* cache)
       {
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_jobMutex);
+         std::lock_guard<std::mutex> lock(m_jobMutex);
          m_tileCache = cache;
       }
       StaticTileImageCache* tileCache()
       {
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_jobMutex);
+         std::lock_guard<std::mutex> lock(m_jobMutex);
          return m_tileCache.get();
       }
       void setInputSource(ossimImageSource* input)
       {
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_jobMutex);
+         std::lock_guard<std::mutex> lock(m_jobMutex);
          m_inputSource = input;
       }
       
@@ -76,7 +75,9 @@ namespace ossimGui
       QTransform                        m_viewToCache;
       ossimRefPtr<StaticTileImageCache> m_tileCache;
       ossimRefPtr<ossimImageSource>     m_inputSource;
-      OpenThreads::Mutex                m_imageWidgetJobMutex;
+      std::mutex                        m_imageWidgetJobMutex;
+
+      virtual void run();
    };
    
    class OSSIMGUI_DLL ImageScrollWidget : public QScrollArea
@@ -162,7 +163,7 @@ namespace ossimGui
          void flushDisplayCaches();
          ossim_uint32 numberOfLayers()const
          {
-            OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+            std::lock_guard<std::mutex> lock(m_mutex);
             return m_layers.size();
          }
       protected:
@@ -170,11 +171,11 @@ namespace ossimGui
          Layer* layerNoMutex(ossimConnectableObject* input);
          LayerListType m_layers;
          
-         mutable OpenThreads::Mutex m_mutex;
+         mutable std::mutex m_mutex;
       };
       ImageScrollWidget(QWidget* parent=0);
       virtual ~ImageScrollWidget();
-      void setJobQueue(ossimJobQueue* jobQueue);
+      void setJobQueue(std::shared_ptr<ossimJobQueue> jobQueue);
       void refreshDisplay();
       ossimIpt getViewportSize();
       void inputConnected(ossim_int32 idx    = -1);
@@ -291,9 +292,9 @@ namespace ossimGui
       {
       public:
          Callback(ImageScrollWidget* w):m_imageScrollWidget(w){}
-         virtual void started(ossimJob* job)
+         virtual void started(std::shared_ptr<ossimJob> job)
          {
-            ImageWidgetJob* imageWidgetJob = dynamic_cast<ImageWidgetJob*>(job);
+            std::shared_ptr<ImageWidgetJob> imageWidgetJob = std::dynamic_pointer_cast<ImageWidgetJob>(job);
             if(imageWidgetJob)
             {
                ossimRefPtr<Layer> layer = m_imageScrollWidget->m_layers->findFirstDirtyLayer();
@@ -306,9 +307,9 @@ namespace ossimGui
                imageWidgetJob->setViewToCacheTransform(m_imageScrollWidget->viewToScroll());
             }
          }
-         virtual void finished(ossimJob* job)
+         virtual void finished(std::shared_ptr<ossimJob> job)
          {
-            ImageWidgetJob* imageWidgetJob = dynamic_cast<ImageWidgetJob*>(job);
+            std::shared_ptr<ImageWidgetJob> imageWidgetJob = std::dynamic_pointer_cast<ImageWidgetJob>(job);
             if(imageWidgetJob)
             {
                m_imageScrollWidget->m_widget->update();
@@ -351,8 +352,8 @@ namespace ossimGui
       ImageWidget* m_widget;
       ossimIpt m_tileSize;
       ossim_int32 m_timerId;
-      ossimRefPtr<ossimJobQueue> m_jobQueue;
-      ossimRefPtr<ImageWidgetJob> m_imageWidgetJob;
+      std::shared_ptr<ossimJobQueue> m_jobQueue;
+      std::shared_ptr<ImageWidgetJob> m_imageWidgetJob;
       
       ossimRefPtr<Layers> m_layers;
 

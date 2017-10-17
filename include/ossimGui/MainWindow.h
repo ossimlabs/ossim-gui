@@ -51,8 +51,8 @@ namespace ossimGui
    protected:
       ImageMdiSubWindow* createImageWindow();
       //QMdiArea *mdiArea;
-      ossimRefPtr<ossimJobMultiThreadQueue>       m_stagerQueue;
-      ossimRefPtr<ossimGui::DisplayTimerJobQueue> m_displayQueue;
+      std::shared_ptr<ossimJobMultiThreadQueue>       m_stagerQueue;
+      std::shared_ptr<ossimGui::DisplayTimerJobQueue> m_displayQueue;
       
       ossimRefPtr<DataManager>                    m_dataManager;
 

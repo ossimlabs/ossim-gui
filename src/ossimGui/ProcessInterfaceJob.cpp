@@ -20,14 +20,14 @@ namespace ossimGui
       ossimJob::setState(value, on);
    }
    
-   void ProcessInterfaceJob::start()
+   void ProcessInterfaceJob::run()
    {
       m_processInterfaceMutex.lock();
       m_processInterface = dynamic_cast<ossimProcessInterface*> (m_obj.get());
       if(m_processInterface)
       {
          m_processInterfaceMutex.unlock();
-         ProgressListener* listener = new ProgressListener(this);
+         ProgressListener* listener = new ProgressListener(getSharedFromThis());
          ossimConnectableObject* obj = dynamic_cast<ossimConnectableObject*> (m_obj.get());
          if(obj) 
          {
@@ -48,12 +48,12 @@ namespace ossimGui
    void ProcessInterfaceJob::setPercentComplete(double value)
    {
       m_processInterfaceMutex.lock();
-      ossimRefPtr<ossimJobCallback> c = callback();
+      std::shared_ptr<ossimJobCallback> c = callback();
       m_processInterfaceMutex.unlock();
 
-      if(c.valid())
+      if(c)
       {
-         c->percentCompleteChanged(value, this);
+         c->percentCompleteChanged(value, getSharedFromThis());
       }
    }
 }

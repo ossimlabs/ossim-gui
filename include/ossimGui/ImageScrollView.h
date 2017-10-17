@@ -22,7 +22,6 @@
 #include <ossim/base/ossimConnectableObjectListener.h>
 #include <ossim/parallel/ossimJobQueue.h>
 #include <vector>
-
 namespace ossimGui
 {
    class RegistrationOverlay;
@@ -32,30 +31,29 @@ namespace ossimGui
    {
    public:
       ImageViewJob();
-      virtual void start();
       void setMaxProcessingTimeInMillis(ossim_float64 t)
       {
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_jobMutex);
+         std::lock_guard<std::mutex> lock(m_jobMutex);
          m_maxProcessingTime = t;
       }
       ossim_float64 maxProcessingTimeInMillis()const
       {
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_jobMutex);
+         std::lock_guard<std::mutex> lock(m_jobMutex);
          return m_maxProcessingTime;
       }
       void setTileCache(StaticTileImageCache* cache)
       {
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_jobMutex);
+         std::lock_guard<std::mutex> lock(m_jobMutex);
          m_tileCache = cache;
       }
       StaticTileImageCache* tileCache()
       {
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_jobMutex);
+         std::lock_guard<std::mutex> lock(m_jobMutex);
          return m_tileCache.get();
       }
       void setInputSource(ossimImageSource* input)
       {
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_jobMutex);
+         std::lock_guard<std::mutex> lock(m_jobMutex);
          m_inputSource = input;
       }
       
@@ -63,7 +61,9 @@ namespace ossimGui
       ossim_float64                     m_maxProcessingTime;
       ossimRefPtr<StaticTileImageCache> m_tileCache;
       ossimRefPtr<ossimImageSource>     m_inputSource;
-      OpenThreads::Mutex                m_imageViewJobMutex;
+      std::mutex                m_imageViewJobMutex;
+
+      virtual void run();
    };
    
    class OSSIMGUI_DLL ImageScrollView : public QGraphicsView
@@ -149,9 +149,9 @@ namespace ossimGui
       {
       public:
          Callback(ImageScrollView* w):m_imageScrollWidget(w){}
-         virtual void started(ossimJob* job)
+         virtual void started(std::shared_ptr<ossimJob> job)
          {
-            ImageViewJob* imageViewJob = dynamic_cast<ImageViewJob*>(job);
+            std::shared_ptr<ImageViewJob> imageViewJob = std::dynamic_pointer_cast<ImageViewJob>(job);
             if(imageViewJob)
             {
                ossimRefPtr<Layer> layer = m_imageScrollWidget->m_layers->findFirstDirtyLayer();
@@ -162,9 +162,9 @@ namespace ossimGui
                }
             }
          }
-         virtual void finished(ossimJob* job)
+         virtual void finished(std::shared_ptr<ossimJob> job)
          {
-            ImageViewJob* imageViewJob = dynamic_cast<ImageViewJob*>(job);
+            std::shared_ptr<ImageViewJob> imageViewJob = std::dynamic_pointer_cast<ImageViewJob>(job);
             if(imageViewJob)
             {
                m_imageScrollWidget->viewport()->update();
@@ -235,7 +235,7 @@ namespace ossimGui
          void flushDisplayCaches();
          ossim_uint32 numberOfLayers()const
          {
-            OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+            std::lock_guard<std::mutex> lock(m_mutex);
             return m_layers.size();
          }
          
@@ -244,7 +244,7 @@ namespace ossimGui
          Layer* layerNoMutex(ossimConnectableObject* input);
          LayerListType m_layers;
          
-         mutable OpenThreads::Mutex m_mutex;
+         mutable std::mutex m_mutex;
       };
       
       ImageScrollView ( QWidget * parent = 0 );
@@ -278,7 +278,7 @@ namespace ossimGui
       bool showTrackCursor()const{return m_showTrackingCursorFlag;}
       const ossimDpt& trackPoint()const;
       void setTrackPoint(const ossimDpt& position);
-      void setJobQueue(ossimJobQueue* jobQueue);
+      void setJobQueue(std::shared_ptr<ossimJobQueue> jobQueue);
       void refreshDisplay();
       void setMultiLayerAlgorithm(int algorithm){m_multiLayerAlgorithm = static_cast<MultiLayerAlgorithmType> (algorithm);}
       ossim_int32 multiLayerAlgorithmType()const{return m_multiLayerAlgorithm;}
@@ -353,10 +353,10 @@ namespace ossimGui
       QPoint                            m_mouseStartPoint;
       QPointF                           m_activePointStart;
       QPointF                           m_activePointEnd;
-      ossimRefPtr<ImageViewJob>         m_imageViewJob;
+      std::shared_ptr<ImageViewJob>     m_imageViewJob;
       ossimRefPtr<Layers>               m_layers;
       ConnectionListener*               m_listener;
-      ossimRefPtr<ossimJobQueue>        m_jobQueue;
+      std::shared_ptr<ossimJobQueue>    m_jobQueue;
       ossimDrect                        m_inputBounds;
       MultiLayerAlgorithmType           m_multiLayerAlgorithm;
       DataManager::ExploitationModeType m_exploitationMode;

@@ -139,10 +139,10 @@ ossimGui::DataManager::DataManager()
 
 bool ossimGui::DataManager::remove(ossimRefPtr<Node> obj, bool notifyFlag)
 {
-   ossimRefPtr<Callback> callback;
+   std::shared_ptr<Callback> callback;
    bool result = false;
    {
-      OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+      std::lock_guard<std::mutex> lock(m_mutex);
       result = removeIndexMapping(obj.get());
       if(result)
       {
@@ -175,7 +175,7 @@ bool ossimGui::DataManager::remove(ossimRefPtr<Node> obj, bool notifyFlag)
    {
       //std::cout << "ossimGui::DataManager::remove(:REMOVING " << obj->getObject()->getClassName() << std::endl;
       if(obj->getObjectAsConnectable()) obj->getObjectAsConnectable()->disconnect();
-      if(callback.valid()&&callback->enabled()&&notifyFlag)
+      if(callback&&callback->enabled()&&notifyFlag)
       {
          callback->nodeRemoved(obj.get());
          obj = 0;
@@ -205,15 +205,15 @@ bool ossimGui::DataManager::remove(NodeListType& nodes, bool notifyFlag)
    }
    if(notifyFlag)
    {
-      ossimRefPtr<Callback> callback;
+      std::shared_ptr<Callback> callback;
       {
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
-         if(m_callback.valid()&&m_callback->enabled())
+         std::lock_guard<std::mutex> lock(m_mutex);
+         if(m_callback&&m_callback->enabled())
          {
             callback = m_callback;
          }
       }
-      if(callback.valid())
+      if(callback)
       {
          callback->nodesRemoved(nodesRemoved);
          nodesRemoved.clear();
@@ -226,14 +226,13 @@ bool ossimGui::DataManager::remove(NodeListType& nodes, bool notifyFlag)
 
 bool ossimGui::DataManager::nodeExists(ossimObject* obj)const
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    return (m_nodeMap.find(obj)!=m_nodeMap.end());
 }
 
 ossimRefPtr<ossimGui::DataManager::Node>  ossimGui::DataManager::findNode(ossimObject* obj)
 {
-   // OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
-   m_mutex.lock();
+   std::lock_guard<std::mutex> lock(m_mutex);
    ossimRefPtr<ossimGui::DataManager::Node> result = 0;
    
    NodeMapType::iterator iter = m_nodeMap.find(obj);
@@ -242,14 +241,13 @@ ossimRefPtr<ossimGui::DataManager::Node>  ossimGui::DataManager::findNode(ossimO
    {
       result = iter->second;
    }
-   m_mutex.unlock();
    return result;
 }
 
 ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::addSource(ossimRefPtr<ossimObject> obj, bool notifyFlag)
 {
    ossimRefPtr<Node> result;
-   ossimRefPtr<Callback> callback;
+   std::shared_ptr<Callback> callback;
    if(obj.valid()&&!nodeExists(obj.get()))
    {
       QString defaultName = "";
@@ -269,7 +267,7 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::addSource(ossimR
       
       result->setName(defaultName);
       {
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+         std::lock_guard<std::mutex> lock(m_mutex);
          if(handler)
          {
             m_sourceList.push_back(result.get());
@@ -287,13 +285,13 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::addSource(ossimR
             m_sourceList.push_back(result.get());
          }
          addIndexMapping(result.get());
-         if(m_callback.valid()&&m_callback->enabled()&&notifyFlag)
+         if(m_callback&&m_callback->enabled()&&notifyFlag)
          {
             callback = m_callback;
          }
       }
    }
-   if(result.valid()&&callback.valid())
+   if(result.valid()&&callback)
    {
       callback->nodeAdded(result.get());
    }      
@@ -304,7 +302,7 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createDefaultIma
 {
    ossimRefPtr<Node> result;
    ossimConnectableObject* connectableInput = input->getObjectAsConnectable();
-   ossimRefPtr<Callback> callback;
+   std::shared_ptr<Callback> callback;
 
    if(connectableInput)
    {
@@ -323,13 +321,13 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createDefaultIma
             result->setName("Affine Chain:" + input->name());
          }
          {
-            OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+            std::lock_guard<std::mutex> lock(m_mutex);
             callback = m_callback;
          }
      }
       
    }
-   if(callback.valid()&&callback->enabled()&&notifyFlag)
+   if(callback&&callback->enabled()&&notifyFlag)
    {
       callback->nodeAdded(result.get());
    }
@@ -356,7 +354,7 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createChainFromT
 {
    ossimRefPtr<Node> result;
    ossimConnectableObject* connectableInput = input->getObjectAsConnectable();
-   ossimRefPtr<Callback> callback;
+   std::shared_ptr<Callback> callback;
    
    ossimRefPtr<ossimObject> obj = ossimObjectFactoryRegistry::instance()->createObject(templatChain);
    if(obj.valid())
@@ -366,7 +364,7 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createChainFromT
       result = new Node(connectable.get());
       
       {
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+         std::lock_guard<std::mutex> lock(m_mutex);
          m_chainList.push_back(result.get());
          addIndexMapping(result.get());
          
@@ -374,7 +372,7 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createChainFromT
          callback = m_callback;
       }
    }
-   if(callback.valid()&&callback->enabled()&&notifyFlag)
+   if(callback&&callback->enabled()&&notifyFlag)
    {
       callback->nodeAdded(result.get());
    }
@@ -387,7 +385,7 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createDefaultCom
    ossimRefPtr<Node> result;
    ossimRefPtr<ossimImageSource> obj = ossimImageSourceFactoryRegistry::instance()->createImageSource(combinerType);
    ossimRefPtr<ossimImageCombiner> combinerObj = dynamic_cast<ossimImageCombiner*>(obj.get());
-   ossimRefPtr<Callback> callback;
+   std::shared_ptr<Callback> callback;
    if(combinerObj.valid())
    {
          // we will need to make the combiner chain a template as well and remove from here
@@ -428,10 +426,10 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createDefaultCom
                      ++iter;
                   }
                }
-               if(m_callback.valid()&&m_callback->enabled()&&notifyFlag)
+               if(m_callback&&m_callback->enabled()&&notifyFlag)
                {
-                  OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
-                  callback = m_callback.get();
+                  std::lock_guard<std::mutex> lock(m_mutex);
+                  callback = m_callback;
                }
             }
          }
@@ -439,7 +437,7 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createDefaultCom
    }
    if(result.valid())
    {
-      if(callback.valid())
+      if(callback)
       {
          callback->nodeAdded(result.get());
       }
@@ -563,7 +561,7 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createDefault3dP
 
 void ossimGui::DataManager::accept(ossimVisitor& visitor)
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    NodeListType::iterator iter = m_sourceList.begin();
    while(iter != m_sourceList.end())
    {
@@ -589,7 +587,7 @@ void ossimGui::DataManager::accept(ossimVisitor& visitor)
 
 void ossimGui::DataManager::print()
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    ossim_uint32 idx = 0;
    for(idx =0; idx < m_sourceList.size();++idx)
    {
@@ -609,11 +607,11 @@ void ossimGui::DataManager::print()
 
 void ossimGui::DataManager::clear(bool notifyFlag)
 {
-   ossimRefPtr<Callback> callback;
+   std::shared_ptr<Callback> callback;
    NodeListType removedNodes;
    {
       {
-         OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+         std::lock_guard<std::mutex> lock(m_mutex);
       
          removedNodes.insert(removedNodes.end(), m_sourceList.begin(), m_sourceList.end());
          removedNodes.insert(removedNodes.end(), m_chainList.begin(), m_chainList.end());
@@ -627,12 +625,12 @@ void ossimGui::DataManager::clear(bool notifyFlag)
       {
          remove(removedNodes[idx],false);
       }
-      if(m_callback.valid()&&m_callback->enabled()&&notifyFlag)
+      if(m_callback&&m_callback->enabled()&&notifyFlag)
       {
          callback = m_callback;
       }
    }
-   if(callback.valid())
+   if(callback)
    {
       callback->nodesRemoved(removedNodes);
    }
@@ -647,7 +645,7 @@ void ossimGui::DataManager::clear(bool notifyFlag)
 
 bool ossimGui::DataManager::saveState(ossimKeywordlist& kwl, const ossimString& prefix)const
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    
    kwl.add(prefix,
            "type",
@@ -685,10 +683,10 @@ bool ossimGui::DataManager::loadState(const ossimKeywordlist& kwl, const ossimSt
    bool result = true;
    NodeListType nodes;
    
-   ossimRefPtr<Callback> callback;
+   std::shared_ptr<Callback> callback;
    {
-      OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
-      if(m_callback.valid()&&m_callback->enabled())
+      std::lock_guard<std::mutex> lock(m_mutex);
+      if(m_callback&&m_callback->enabled())
       {
          callback = m_callback;
       }
@@ -783,7 +781,7 @@ bool ossimGui::DataManager::loadState(const ossimKeywordlist& kwl, const ossimSt
          }
       }
    }   
-   if(!nodes.empty()&&callback.valid())
+   if(!nodes.empty()&&callback)
    {
       callback->nodesAdded(nodes);
    }
@@ -810,7 +808,7 @@ bool ossimGui::DataManager::removeIndexMapping(Node* node)
 }
 ossimGui::DataManager::Node* ossimGui::DataManager::findNode(const ossimId& id)
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    return findNodeNoMutex(id);
 }
 

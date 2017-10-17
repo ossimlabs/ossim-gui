@@ -4,6 +4,8 @@
 #include <ossim/parallel/ossimJob.h>
 #include <ossim/base/ossimProcessInterface.h>
 #include <ossim/base/ossimProcessListener.h>
+#include <ossim/base/ossimRefPtr.h>
+#include <mutex>
 
 namespace ossimGui
 {
@@ -13,24 +15,24 @@ namespace ossimGui
       ProcessInterfaceJob():m_processInterface(0){}
       
       virtual void setState(int value, bool on=true);
-      virtual void start();
       ossimObject* object(){return m_obj.get();}
       
    protected:
       class ProgressListener : public ossimProcessListener
       {
       public:
-         ProgressListener(ossimJob* job):m_job(job){}
+         ProgressListener(std::shared_ptr<ossimJob> job):m_job(job){}
          virtual void processProgressEvent(ossimProcessProgressEvent& event);
          
-         ossimJob* m_job;
+         std::shared_ptr<ossimJob> m_job;
          
       };
       friend class ProgressListener;
+      virtual void run();
       void setPercentComplete(double value);
 
       
-      mutable OpenThreads::Mutex m_processInterfaceMutex;
+      mutable std::mutex m_processInterfaceMutex;
       ossimRefPtr<ossimObject> m_obj;
       ossimProcessInterface* m_processInterface;
    };

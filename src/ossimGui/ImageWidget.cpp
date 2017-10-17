@@ -19,11 +19,11 @@ ossimGui::ImageWidgetJob::ImageWidgetJob()
    m_maxProcessingTime = 20;
 }
 
-void ossimGui::ImageWidgetJob::start()
+void ossimGui::ImageWidgetJob::run()
 {
    if(m_inputSource.valid())
    {
-      OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_imageWidgetJobMutex);
+      std::lock_guard<std::mutex> lock(m_imageWidgetJobMutex);
       QTime start = QTime::currentTime();
       ossimDrect cacheRect(m_tileCache->getRect());
       // ossimDpt ulCachePt = cacheRect.ul();
@@ -63,7 +63,7 @@ void ossimGui::ImageWidgetJob::start()
 ossimGui::ImageScrollWidget::ImageScrollWidget(QWidget* parent)
 :QScrollArea(parent),
 m_listener(new ConnectionListener(this)),
-m_jobQueue(new DisplayTimerJobQueue())
+m_jobQueue(std::make_shared<DisplayTimerJobQueue>())
 {
    m_trackPoint.makeNan();
    m_oldTrackPoint.makeNan();
@@ -84,8 +84,8 @@ m_jobQueue(new DisplayTimerJobQueue())
    //m_widget->setTileCache(new StaticTileImageCache(m_tileSize));
    m_timerId = -1;
    viewport()->setCursor(Qt::CrossCursor);
-   m_imageWidgetJob = new ImageWidgetJob();//this);
-   m_imageWidgetJob->setCallback(new Callback(this));
+   m_imageWidgetJob = std::make_shared<ImageWidgetJob>();//this);
+   m_imageWidgetJob->setCallback(std::make_shared<Callback>(this));
    
  //  m_multiLayerAlgorithm = HORIZONTAL_SWIPE_ALGORITHM;
  //  m_multiLayerAlgorithm = VERTICAL_SWIPE_ALGORITHM;
@@ -177,10 +177,10 @@ void ossimGui::ImageScrollWidget::inputConnected(ossim_int32 /* idx */)
    // QPoint localPt(50,50);
    // QPoint viewPoint = m_localToView.map(localPt);
    
-   if(m_jobQueue.valid())
+   if(m_jobQueue)
    {
       if(!m_imageWidgetJob->isRunning()) m_imageWidgetJob->ready();
-      m_jobQueue->add(m_imageWidgetJob.get());
+      m_jobQueue->add(m_imageWidgetJob);
    }
 }
 
@@ -200,10 +200,10 @@ void ossimGui::ImageScrollWidget::inputDisconnected(ossim_int32 /* idx */)
    updateTransforms();
    setCacheRect();
    
-   if(m_jobQueue.valid())
+   if(m_jobQueue)
    {
       if(!m_imageWidgetJob->isRunning()) m_imageWidgetJob->ready();
-      m_jobQueue->add(m_imageWidgetJob.get());
+      m_jobQueue->add(m_imageWidgetJob);
    }
 }
 
@@ -214,7 +214,7 @@ ossimDrect ossimGui::ImageScrollWidget::viewportBoundsInViewSpace()const
    return ossimDrect(out.x(), out.y(),out.x()+(out.width()-1), out.y() + (out.height()-1));
 }
 
-void ossimGui::ImageScrollWidget::setJobQueue(ossimJobQueue* jobQueue)
+void ossimGui::ImageScrollWidget::setJobQueue(std::shared_ptr<ossimJobQueue> jobQueue)
 {
    m_jobQueue = jobQueue;
 }
@@ -234,11 +234,11 @@ void ossimGui::ImageScrollWidget::refreshDisplay()
    updateTransforms();
    setCacheRect();
       
-   if(m_jobQueue.valid())
+   if(m_jobQueue)
    {
       if(!m_imageWidgetJob->isRunning()) m_imageWidgetJob->ready();
 
-      m_jobQueue->add(m_imageWidgetJob.get());
+      m_jobQueue->add(m_imageWidgetJob);
    }
 }
 
@@ -279,10 +279,10 @@ void ossimGui::ImageScrollWidget::resizeEvent(QResizeEvent* event)
    setCacheRect();
    if(m_layers->findFirstDirtyLayer())
    {
-      if(m_jobQueue.valid())
+      if(m_jobQueue)
       {
          if(!m_imageWidgetJob->isRunning()) m_imageWidgetJob->ready();
-         m_jobQueue->add(m_imageWidgetJob.get());
+         m_jobQueue->add(m_imageWidgetJob);
       }
    }
 
@@ -303,10 +303,10 @@ void ossimGui::ImageScrollWidget::scrollContentsBy( int dx, int dy )
    m_widget->update();
    if(m_layers->findFirstDirtyLayer())
    {
-      if(m_jobQueue.valid())
+      if(m_jobQueue)
       {
          if(!m_imageWidgetJob->isRunning()) m_imageWidgetJob->ready();
-         m_jobQueue->add(m_imageWidgetJob.get());
+         m_jobQueue->add(m_imageWidgetJob);
       }
    }
 }
@@ -582,19 +582,19 @@ ossimGui::ImageScrollWidget::Layers::~Layers()
 
 ossimGui::ImageScrollWidget::Layer* ossimGui::ImageScrollWidget::Layers::layer(ossim_uint32 idx)
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    return layerNoMutex(idx);
 }
 
 ossimGui::ImageScrollWidget::Layer* ossimGui::ImageScrollWidget::Layers::layer(ossimConnectableObject* input)
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    return layerNoMutex(input);
 }
 
 void  ossimGui::ImageScrollWidget::Layers::setCacheRect(const ossimDrect& rect)
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    ossim_uint32 idx = 0;
    for(idx = 0; idx < m_layers.size(); ++idx)
    {
@@ -628,7 +628,7 @@ ossimGui::ImageScrollWidget::Layer* ossimGui::ImageScrollWidget::Layers::layerNo
 
 ossimGui::ImageScrollWidget::Layer* ossimGui::ImageScrollWidget::Layers::findFirstDirtyLayer()
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    ossim_uint32 idx = 0;
    for(idx = 0; idx < m_layers.size();++idx)
    {
@@ -644,14 +644,14 @@ ossimGui::ImageScrollWidget::Layer* ossimGui::ImageScrollWidget::Layers::findFir
 
 bool ossimGui::ImageScrollWidget::Layers::isEmpty()const
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    return m_layers.empty();
 }
 
 void ossimGui::ImageScrollWidget::Layers::adjustLayers(ossimConnectableObject* connectable)
 {
    {
-      OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+      std::lock_guard<std::mutex> lock(m_mutex);
       LayerListType layers;
       ossim_uint32 nInputs = connectable->getNumberOfInputs();
       for(ossim_uint32 inputIdx = 0; inputIdx<nInputs;++inputIdx)
@@ -687,7 +687,7 @@ void ossimGui::ImageScrollWidget::Layers::adjustLayers(ossimConnectableObject* c
 
 void ossimGui::ImageScrollWidget::Layers::flushDisplayCaches()
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    ossim_uint32 idx = 0;
    for(idx = 0; idx < m_layers.size(); ++idx)
    {

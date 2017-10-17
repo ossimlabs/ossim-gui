@@ -13,7 +13,8 @@
 #include <QString>
 #include <QMdiArea>
 #include <ossim/projection/ossimSensorModelTuple.h>
-
+#include <mutex>
+#include <memory>
 
 namespace ossimGui{
 
@@ -63,7 +64,7 @@ namespace ossimGui{
          }
       protected:
          void setId();
-         mutable OpenThreads::Mutex m_mutex;
+         mutable std::mutex m_mutex;
          
          QString m_name;
          QString m_description;
@@ -130,7 +131,7 @@ namespace ossimGui{
       
       virtual void accept(ossimVisitor& visitor);
       
-      void setCallback(ossimRefPtr<Callback> callback){m_callback = callback.get();}
+      void setCallback(std::shared_ptr<Callback> callback){m_callback = callback;}
       void print();
       
       bool saveState(ossimKeywordlist& kwl, const ossimString& prefix=ossimString())const;
@@ -170,8 +171,8 @@ namespace ossimGui{
       void findInputConnectionIds(std::vector<ossimId>& result,
                                   const ossimKeywordlist& kwl,
                                   const ossimString& prefix);
-      mutable OpenThreads::Mutex m_mutex;
-      ossimRefPtr<Callback> m_callback;
+      mutable std::mutex m_mutex;
+      std::shared_ptr<Callback> m_callback;
       
       NodeListType m_sourceList;
       NodeListType m_chainList;

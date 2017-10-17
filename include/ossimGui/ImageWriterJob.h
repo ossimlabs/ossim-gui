@@ -3,7 +3,6 @@
 #include <ossimGui/Export.h>
 #include <ossimGui/ProcessInterfaceJob.h>
 #include <ossim/base/ossimKeywordlist.h>
-#include <OpenThreads/Mutex>
 
 namespace ossimGui
 {

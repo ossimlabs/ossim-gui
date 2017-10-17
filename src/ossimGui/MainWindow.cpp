@@ -23,10 +23,10 @@
 class ossimImageOpenJobCallback : public ossimJobCallback
 {
 public:
-   virtual void finished(ossimJob* job)
+   virtual void finished(std::shared_ptr<ossimJob> job)
    {
       ossimGui::ImageOpenEvent* imageOpenEvent = new ossimGui::ImageOpenEvent();
-      ossimGui::OpenImageUrlJob* imageOpenJob = dynamic_cast<ossimGui::OpenImageUrlJob*> (job);
+      std::shared_ptr<ossimGui::OpenImageUrlJob> imageOpenJob = std::dynamic_pointer_cast<ossimGui::OpenImageUrlJob>(job);
       if(imageOpenJob)
       {
          ossimGui::HandlerList& handlerList =imageOpenJob->handlerList();
@@ -61,9 +61,9 @@ ossimGui::MainWindow::MainWindow(QWidget* parent)
    QToolBar* toolbar = addToolBar("Main Tool Bar");
    toolbar->setObjectName("mainToolbar");
    setAcceptDrops(true);
-   m_stagerQueue  = new ossimJobMultiThreadQueue(new ossimJobQueue(), 4); 
-   m_displayQueue = new DisplayTimerJobQueue();
-   m_dataManagerWidget->setDisplayQueue(m_displayQueue.get());
+   m_stagerQueue  = std::make_shared<ossimJobMultiThreadQueue>(std::make_shared<ossimJobQueue>(), 4); 
+   m_displayQueue = std::make_shared<DisplayTimerJobQueue>();
+   m_dataManagerWidget->setDisplayQueue(m_displayQueue);
    m_dataManager  = m_dataManagerWidget->dataManager();
    m_dataManager->setMdiArea(m_mdiArea);
    m_dataManagerWidget->setJobQueue(m_stagerQueue->getJobQueue());
@@ -179,9 +179,9 @@ void ossimGui::MainWindow::dropEvent( QDropEvent * event )
             }           
             else
             {
-               OpenImageUrlJob* job = new OpenImageUrlJob(*iter);
+               std::shared_ptr<OpenImageUrlJob> job = std::make_shared<OpenImageUrlJob>(*iter);
                job->setName("Open " + ossimString((*iter).toString().toStdString()));
-               ossimImageOpenJobCallback* callback = new ossimImageOpenJobCallback();
+               std::shared_ptr<ossimImageOpenJobCallback> callback = std::make_shared<ossimImageOpenJobCallback>();
                callback->m_object = this;
                job->setCallback(callback);
                m_stagerQueue->getJobQueue()->add(job);
@@ -289,7 +289,7 @@ void ossimGui::MainWindow::showNode(DataManager::Node* node)
          if(d)
          {
             MdiSubWindowBase* child = d->display();
-            child->setJobQueue(m_displayQueue.get());
+            child->setJobQueue(m_displayQueue);
             child->show();
          }
       }
@@ -300,7 +300,7 @@ void ossimGui::MainWindow::showNode(DataManager::Node* node)
          {
             display = new ImageMdiSubWindow();
             display->setWindowTitle(n->name());
-            display->setJobQueue(m_displayQueue.get());
+            display->setJobQueue(m_displayQueue);
             if(display->connectableObject() != d)
             {
                display->setConnectableObject(d);
@@ -311,7 +311,7 @@ void ossimGui::MainWindow::showNode(DataManager::Node* node)
          else if(!display->parent()) 
          {
             display->setWindowTitle(n->name());
-            display->setJobQueue(m_displayQueue.get());
+            display->setJobQueue(m_displayQueue);
             if(display->connectableObject() != d)
             {
                display->setConnectableObject(d);
@@ -321,7 +321,7 @@ void ossimGui::MainWindow::showNode(DataManager::Node* node)
          }
          else 
          {
-            display->setJobQueue(m_displayQueue.get());
+            display->setJobQueue(m_displayQueue);
             display->show();
          }
 
@@ -378,8 +378,8 @@ void ossimGui::MainWindow::openImage( bool /*checked*/ )
       for (int i = 0; i < fileNames.size(); ++i)
       {
          QUrl url(QUrl::fromLocalFile(fileNames.at(i)));
-         OpenImageUrlJob* job = new OpenImageUrlJob(url);
-         ossimImageOpenJobCallback* callback = new ossimImageOpenJobCallback();
+         std::shared_ptr<OpenImageUrlJob> job = std::make_shared<OpenImageUrlJob>(url);
+         std::shared_ptr<ossimImageOpenJobCallback> callback = std::make_shared<ossimImageOpenJobCallback>();
          callback->m_object = this;
          job->setCallback(callback);
          m_stagerQueue->getJobQueue()->add(job);
@@ -398,8 +398,8 @@ void ossimGui::MainWindow::openJpip( bool /*checked*/ )
       QUrl jpip(text);
       if(jpip.scheme() == "jpip")
       {
-         OpenImageUrlJob* job = new OpenImageUrlJob(jpip);
-         ossimImageOpenJobCallback* callback = new ossimImageOpenJobCallback();
+         std::shared_ptr<OpenImageUrlJob> job = std::make_shared<OpenImageUrlJob>(jpip);
+         std::shared_ptr<ossimImageOpenJobCallback> callback = std::make_shared<ossimImageOpenJobCallback>();
          callback->m_object = this;
          job->setCallback(callback);
          m_stagerQueue->getJobQueue()->add(job);
@@ -466,8 +466,8 @@ bool ossimGui::MainWindow::loadImageFileList(std::vector<ossimString>& ilist)
       for (int i = 0; i < fileNames.size(); ++i)
       {
          QUrl url(QUrl::fromLocalFile(fileNames.at(i)));
-         OpenImageUrlJob* job = new OpenImageUrlJob(url);
-         ossimImageOpenJobCallback* callback = new ossimImageOpenJobCallback();
+         std::shared_ptr<OpenImageUrlJob> job = std::make_shared<OpenImageUrlJob>(url);
+         std::shared_ptr<ossimImageOpenJobCallback> callback = std::make_shared<ossimImageOpenJobCallback>();
          callback->m_object = this;
          job->setCallback(callback);
          m_stagerQueue->getJobQueue()->add(job);

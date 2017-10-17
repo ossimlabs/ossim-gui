@@ -8,7 +8,6 @@
 // $Id$
 #include <ossimGui/StaticTileImageCache.h>
 #include <QtGui/QImage>
-#include <OpenThreads/ScopedLock>
 
 ossimGui::StaticTileImageCache::StaticTileImageCache(const ossimIpt& tileSize)
    :m_tileSize(tileSize)
@@ -43,19 +42,19 @@ ossimGui::StaticTileImageCache::~StaticTileImageCache()
 
 QImage& ossimGui::StaticTileImageCache::getCache()
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    return *m_cache;
 }
 
 const QImage& ossimGui::StaticTileImageCache::getCache()const
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    return *m_cache;
 }
 
 void ossimGui::StaticTileImageCache::flush()
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    std::fill(m_validTileArray.begin(),
              m_validTileArray.end(),
              false);
@@ -72,7 +71,7 @@ void ossimGui::StaticTileImageCache::flush(const ossimIpt& pt)
 
 void ossimGui::StaticTileImageCache::flush(const ossimIrect& rect)
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    if(rect == getRect())
    {
       std::fill(m_validTileArray.begin(),
@@ -125,7 +124,7 @@ const ossimIrect& ossimGui::StaticTileImageCache::getActualRect()const
 
 void ossimGui::StaticTileImageCache::setRect(const ossimIrect& newRect)
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    ossimIrect tempRect = newRect;
    m_actualRect = newRect;
    tempRect.stretchToTileBoundary(m_tileSize);
@@ -232,14 +231,14 @@ ossim_int32 ossimGui::StaticTileImageCache::getTileIndex(const ossimIpt& origin)
 ossim_int32 ossimGui::StaticTileImageCache::getTileIndex(ossim_int32 x,
                                                       ossim_int32 y)const
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    return getTileIndex(m_cacheRect, m_numberOfTiles, x, y);
 }
 
 bool ossimGui::StaticTileImageCache::getTile(const ossimIpt& pt,
                                       QImage& image)const
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    bool result = false;
    ossimIpt tileOrigin = getTileOrigin(pt);
    ossimIrect cacheRect = getRect();
@@ -323,7 +322,7 @@ void ossimGui::StaticTileImageCache::getSubImage(QImage& image)const
 void ossimGui::StaticTileImageCache::setTileSize(const ossimIpt& tileSize)
 {
    flush();
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    m_tileSize = tileSize;
    ossimIrect currentRect = m_cacheRect;
    m_numberOfTiles.x = currentRect.width()/m_tileSize.x;
@@ -337,7 +336,7 @@ const ossimIpt& ossimGui::StaticTileImageCache::getTileSize()const
 
 bool ossimGui::StaticTileImageCache::addTile(const QImage& image)
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    bool result = false;
    
    ossimIrect tileRect(image.offset().x(),
@@ -450,7 +449,7 @@ ossim_int32 ossimGui::StaticTileImageCache::computeTileId(const ossimIpt& origin
 
 bool ossimGui::StaticTileImageCache::nextInvalidTile(ossimIrect& rect)const
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    ossim_uint32 idx = 0;
    ossimIpt origin = m_cacheRect.ul();
    for(idx = 0; idx < m_validTileArray.size(); ++idx)

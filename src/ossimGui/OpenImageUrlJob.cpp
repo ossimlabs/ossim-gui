@@ -1,6 +1,6 @@
 #include <ossimGui/OpenImageUrlJob.h>
 #include <ossim/imaging/ossimImageHandlerRegistry.h>
-void ossimGui::OpenImageUrlJob::start()
+void ossimGui::OpenImageUrlJob::run()
 {
    ossimFilename file = m_url.toString().toStdString();
    
@@ -10,7 +10,8 @@ void ossimGui::OpenImageUrlJob::start()
       file = m_url.toLocalFile().toStdString();
       if(!file.exists()) return;
    }
-   ossimRefPtr<ossimImageHandler> ih = ossimImageHandlerRegistry::instance()->open(file);
+   // ossimRefPtr<ossimImageHandler> ih = ossimImageHandlerRegistry::instance()->open(file);
+   ossimRefPtr<ossimImageHandler> ih = ossimImageHandlerRegistry::instance()->openConnection(file);
    if(ih.valid())
    {
       m_handlers.push_back(ih.get());

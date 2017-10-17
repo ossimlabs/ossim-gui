@@ -24,11 +24,11 @@ ImageViewJob::ImageViewJob()
 {
 }
 
-void ImageViewJob::start()
+void ImageViewJob::run()
 {
    if(m_inputSource.valid())
    {
-      OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_imageViewJobMutex);
+      std::lock_guard<std::mutex> lock(m_imageViewJobMutex);
       QTime start = QTime::currentTime();
       ossimDrect cacheRect(m_tileCache->getRect());
       // ossimDpt ulCachePt = cacheRect.ul();
@@ -98,19 +98,19 @@ ImageScrollView::Layers::~Layers()
 
 ImageScrollView::Layer* ImageScrollView::Layers::layer(ossim_uint32 idx)
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    return layerNoMutex(idx);
 }
 
 ImageScrollView::Layer* ImageScrollView::Layers::layer(ossimConnectableObject* input)
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    return layerNoMutex(input);
 }
 
 void  ImageScrollView::Layers::setCacheRect(const ossimDrect& rect)
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    ossim_uint32 idx = 0;
    for(idx = 0; idx < m_layers.size(); ++idx)
    {
@@ -143,7 +143,7 @@ ImageScrollView::Layer* ImageScrollView::Layers::layerNoMutex(ossimConnectableOb
 
 ImageScrollView::Layer* ImageScrollView::Layers::findFirstDirtyLayer()
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    ossim_uint32 idx = 0;
    for(idx = 0; idx < m_layers.size();++idx)
    {
@@ -158,14 +158,14 @@ ImageScrollView::Layer* ImageScrollView::Layers::findFirstDirtyLayer()
 
 bool ImageScrollView::Layers::isEmpty()const
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    return m_layers.empty();
 }
 
 void ImageScrollView::Layers::adjustLayers(ossimConnectableObject* connectable)
 {
    {
-      OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+      std::lock_guard<std::mutex> lock(m_mutex);
       LayerListType layers;
       ossim_uint32 nInputs = connectable->getNumberOfInputs();
       for(ossim_uint32 inputIdx = 0; inputIdx<nInputs;++inputIdx)
@@ -201,7 +201,7 @@ void ImageScrollView::Layers::adjustLayers(ossimConnectableObject* connectable)
 
 void ImageScrollView::Layers::flushDisplayCaches()
 {
-   OpenThreads::ScopedLock<OpenThreads::Mutex> lock(m_mutex);
+   std::lock_guard<std::mutex> lock(m_mutex);
    ossim_uint32 idx = 0;
    for(idx = 0; idx < m_layers.size(); ++idx)
    {
@@ -221,10 +221,10 @@ ImageScrollView::ImageScrollView (QWidget* parent)
      m_mouseStartPoint(),
      m_activePointStart(),
      m_activePointEnd(),
-     m_imageViewJob( new ImageViewJob() ),
+     m_imageViewJob( std::make_shared<ImageViewJob>() ),
      m_layers( new Layers() ),
      m_listener( new ConnectionListener(this) ),
-     m_jobQueue( new DisplayTimerJobQueue() ),
+     m_jobQueue( std::make_shared<DisplayTimerJobQueue>() ),
      m_inputBounds(),
      m_multiLayerAlgorithm( BOX_SWIPE_ALGORITHM ),
      m_exploitationMode( DataManager::NO_MODE ),
@@ -239,7 +239,7 @@ ImageScrollView::ImageScrollView (QWidget* parent)
    m_trackPoint.makeNan();
    m_oldTrackPoint.makeNan();
    m_inputBounds.makeNan();
-   m_imageViewJob->setCallback(new Callback(this));
+   m_imageViewJob->setCallback(std::make_shared<Callback>(this));
    m_manipulator = new ImageViewManipulator(this);
    viewport()->setCursor(Qt::CrossCursor);
    m_regOverlay = new RegistrationOverlay("Reg", scene());
@@ -249,7 +249,7 @@ ImageScrollView::ImageScrollView (QWidget* parent)
    // setViewport(new QGLWidget());
    // m_layers = new Layers();
    // m_imageViewJob = new ImageViewJob();
-   // m_imageViewJob->setCallback(new Callback(this));
+   // m_imageViewJob->setCallback(std::make_shared<Callback>(this));
    // m_multiLayerAlgorithm = BOX_SWIPE_ALGORITHM;
    // m_trackPoint.makeNan();
    // m_oldTrackPoint.makeNan();
@@ -270,10 +270,10 @@ ImageScrollView::ImageScrollView (QGraphicsScene* scene, QWidget* parent)
      m_mouseStartPoint(),
      m_activePointStart(),
      m_activePointEnd(),
-     m_imageViewJob( new ImageViewJob() ),
+     m_imageViewJob( std::make_shared<ImageViewJob>() ),
      m_layers( new Layers() ),
      m_listener( new ConnectionListener(this) ),
-     m_jobQueue( new DisplayTimerJobQueue() ),
+     m_jobQueue( std::make_shared<DisplayTimerJobQueue>() ),
      m_inputBounds(),
      m_multiLayerAlgorithm( BOX_SWIPE_ALGORITHM ),
      m_exploitationMode( DataManager::NO_MODE ),
@@ -287,7 +287,7 @@ ImageScrollView::ImageScrollView (QGraphicsScene* scene, QWidget* parent)
    m_trackPoint.makeNan();
    m_oldTrackPoint.makeNan();
    m_inputBounds.makeNan();
-   m_imageViewJob->setCallback(new Callback(this));
+   m_imageViewJob->setCallback(std::make_shared<Callback>(this));
    m_manipulator = new ImageViewManipulator(this);
    viewport()->setCursor(Qt::CrossCursor);
    m_regOverlay = new RegistrationOverlay( "Reg", scene );
@@ -296,7 +296,7 @@ ImageScrollView::ImageScrollView (QGraphicsScene* scene, QWidget* parent)
    //setViewport(new QGLWidget());
    // m_layers = new Layers();
    // m_imageViewJob = new ImageViewJob();
-   // m_imageViewJob->setCallback(new Callback(this));
+   // m_imageViewJob->setCallback(std::make_shared<Callback>(this));
    // m_multiLayerAlgorithm = BOX_SWIPE_ALGORITHM;
    // m_trackPoint.makeNan();
    // m_oldTrackPoint.makeNan();
@@ -367,11 +367,11 @@ void ImageScrollView::refreshDisplay()
    m_inputBounds = m_connectableObject->getBounds();
    updateSceneRect();
       
-   if(m_jobQueue.valid())
+   if(m_jobQueue)
    {
       if(!m_imageViewJob->isRunning()) m_imageViewJob->ready();
 
-      m_jobQueue->add(m_imageViewJob.get());
+      m_jobQueue->add(m_imageViewJob);
    }
 }
    
@@ -381,7 +381,7 @@ ossimDrect ImageScrollView::viewportBoundsInSceneSpace()const
    return ossimDrect(r.x(),r.y(),r.x()+r.width()-1,r.y()+r.height()-1);
 }
    
-void ImageScrollView::setJobQueue(ossimJobQueue* jobQueue)
+void ImageScrollView::setJobQueue(std::shared_ptr<ossimJobQueue> jobQueue)
 {
    m_jobQueue = jobQueue;
 }
@@ -401,10 +401,10 @@ void ImageScrollView::inputConnected(ossim_int32 /* idx */)
          m_manipulator->initializeToCurrentView();
       }
    }
-   if(m_jobQueue.valid())
+   if(m_jobQueue)
    {
       if(!m_imageViewJob->isRunning()) m_imageViewJob->ready();
-      m_jobQueue->add(m_imageViewJob.get());
+      m_jobQueue->add(m_imageViewJob);
    }
 }
    
@@ -416,10 +416,10 @@ void ImageScrollView::inputDisconnected(ossim_int32 /* idx */)
    
    updateSceneRect();
    
-   if(m_jobQueue.valid())
+   if(m_jobQueue)
    {
       if(!m_imageViewJob->isRunning()) m_imageViewJob->ready();
-      m_jobQueue->add(m_imageViewJob.get());
+      m_jobQueue->add(m_imageViewJob);
    }
 }
 
@@ -446,10 +446,10 @@ void ImageScrollView::resizeEvent(QResizeEvent* event)
    }
    if(m_layers->findFirstDirtyLayer())
    {
-      if(m_jobQueue.valid())
+      if(m_jobQueue)
       {
          if(!m_imageViewJob->isRunning()) m_imageViewJob->ready();
-         m_jobQueue->add(m_imageViewJob.get());
+         m_jobQueue->add(m_imageViewJob);
       }
    }
    if(m_manipulator.valid())
@@ -472,10 +472,10 @@ void ImageScrollView::scrollContentsBy( int dx, int dy )
    }
    if(m_layers->findFirstDirtyLayer())
    {
-      if(m_jobQueue.valid())
+      if(m_jobQueue)
       {
          if(!m_imageViewJob->isRunning()) m_imageViewJob->ready();
-         m_jobQueue->add(m_imageViewJob.get());
+         m_jobQueue->add(m_imageViewJob);
       }
    }
 }

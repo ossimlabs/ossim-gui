@@ -1,8 +1,8 @@
-#ifndef  ossimGuiQtGlWidget_HEADER
-#define ossimGuiQtGlWidget_HEADER
+#ifndef ossimGuiQtGlWidget_HEADER
+#define ossimGuiQtGlWidget_HEADER 1
+
 #include <QtOpenGL/QGLWidget>
 #include <ossimGui/Export.h>
-#include <iostream>
 #include <osg/Node>
 #include <osg/Timer>
 #include <osg/Matrixd>
@@ -30,7 +30,8 @@
 #include <osgViewer/Viewer>
 #include <osgViewer/CompositeViewer>
 #include <osgViewer/ViewerEventHandlers>
-#include <OpenThreads/ReentrantMutex>
+#include <mutex>
+
 //class ossimOsgMainFormController;
 namespace ossimGui
 {
@@ -101,7 +102,7 @@ namespace ossimGui
       void clearPointersInViewer();
       QTimer *timer();    // Ensures that qtimer_ exists
       void noRenderCycle();
-      OpenThreads::ReentrantMutex theDrawMutex;
+      std::recursive_mutex   theDrawMutex;
       //   bool theRequestRedrawFlag;
       //   bool theRequestContinuousUpdateFlag;
       int m_timerInterval;
