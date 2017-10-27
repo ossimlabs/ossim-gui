@@ -266,6 +266,7 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::addSource(ossimR
       }
       
       result->setName(defaultName);
+      // add scope for lock
       {
          std::lock_guard<std::mutex> lock(m_mutex);
          if(handler)
@@ -291,10 +292,11 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::addSource(ossimR
          }
       }
    }
-   if(result.valid()&&callback)
+   if(result&&callback)
    {
       callback->nodeAdded(result.get());
-   }      
+   }
+    
    return result.get();
 }
 
@@ -325,12 +327,12 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createDefaultIma
             callback = m_callback;
          }
      }
-      
    }
    if(callback&&callback->enabled()&&notifyFlag)
    {
       callback->nodeAdded(result.get());
    }
+
    return result.get();
 }
 
@@ -355,7 +357,6 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createChainFromT
    ossimRefPtr<Node> result;
    ossimConnectableObject* connectableInput = input->getObjectAsConnectable();
    std::shared_ptr<Callback> callback;
-   
    ossimRefPtr<ossimObject> obj = ossimObjectFactoryRegistry::instance()->createObject(templatChain);
    if(obj.valid())
    {
@@ -372,11 +373,10 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createChainFromT
          callback = m_callback;
       }
    }
-   if(callback&&callback->enabled()&&notifyFlag)
+   if(callback&&callback->enabled()&&notifyFlag&&result.valid())
    {
       callback->nodeAdded(result.get());
    }
-   
    return result.get();
 }
 
