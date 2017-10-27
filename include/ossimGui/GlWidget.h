@@ -1,8 +1,8 @@
-#ifndef  ossimGuiQtGlWidget_HEADER
-#define ossimGuiQtGlWidget_HEADER
+#ifndef ossimGuiQtGlWidget_HEADER
+#define ossimGuiQtGlWidget_HEADER 1
+
 #include <QtOpenGL/QGLWidget>
 #include <ossimGui/Export.h>
-#include <iostream>
 #include <osg/Node>
 #include <osg/Timer>
 #include <osg/Matrixd>
@@ -30,6 +30,8 @@
 #include <osgViewer/Viewer>
 #include <osgViewer/CompositeViewer>
 #include <osgViewer/ViewerEventHandlers>
+#include <mutex>
+
 //class ossimOsgMainFormController;
 namespace ossimGui
 {
