@@ -10,7 +10,8 @@ void ossimGui::OpenImageUrlJob::run()
       file = m_url.toLocalFile().toStdString();
       if(!file.exists()) return;
    }
-   ossimRefPtr<ossimImageHandler> ih = ossimImageHandlerRegistry::instance()->open(file);
+   // ossimRefPtr<ossimImageHandler> ih = ossimImageHandlerRegistry::instance()->open(file);
+   ossimRefPtr<ossimImageHandler> ih = ossimImageHandlerRegistry::instance()->openConnection(file);
    if(ih.valid())
    {
       m_handlers.push_back(ih.get());
