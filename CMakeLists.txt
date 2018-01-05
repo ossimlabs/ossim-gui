@@ -46,7 +46,6 @@ find_package(Qt5OpenGL)
 SET(QT_USE_QTOPENGL ON)
 # find_package(Qt4)
 
-find_package(OpenThreads)
 find_package(ossim)
 find_package(TIFF)
 IF(BUILD_OSSIM_PLANET)
