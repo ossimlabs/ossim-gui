@@ -126,13 +126,14 @@ void ossimGui::HistogramWidget::updateScaledHistogram()
    if(m_histogram.valid())
    {
       ossim_uint32 w = width();
-      ossim_uint32 h = height();
       float minValue = m_histogram->GetRangeMin();//floor(m_histogram->GetMinVal());
       float maxValue = m_histogram->GetRangeMax();//ceil(m_histogram->GetMaxVal());
+      float nullValue = m_histogram->getNullValue();
       float maxBins  = m_histogram->GetRes();
-      m_scaledHistogram = new ossimHistogram(w, minValue, maxValue);
-      float* counts     = m_histogram->GetCounts();
-      float* sumCounts = m_scaledHistogram->GetCounts();
+      m_scaledHistogram = new ossimHistogram(
+         w, minValue, maxValue, nullValue, m_histogram->getScalarType());
+      ossim_int64* counts    = m_histogram->GetCounts();
+      ossim_int64* sumCounts = m_scaledHistogram->GetCounts();
       ossim_uint32 binIdx = 0;
       float delta = (maxValue - minValue)/maxBins;
       ossim_int32 sumIndex = 0;
@@ -201,7 +202,7 @@ void ossimGui::HistogramWidget::paintEvent(QPaintEvent* /* event */)
    if (m_scaledHistogram.valid())
    {
      // p.drawRect(QRect(0,0,width()-1,H-1));
-      float* sumCounts = m_scaledHistogram->GetCounts();
+      ossim_int64* sumCounts = m_scaledHistogram->GetCounts();
       ossim_int32 col;
       ossim_int32 res = m_scaledHistogram->GetRes();
 
@@ -219,7 +220,6 @@ void ossimGui::HistogramWidget::paintEvent(QPaintEvent* /* event */)
          alphaBrush.setColor(QColor(255,255,255,128));
          alphaBrush.setStyle(Qt::SolidPattern);
          painter->setBrush(alphaBrush);
-         QSize thisSize = size();
          double clipW = fabs(clipMaxxValue-clipMinxValue);
          painter->drawRect(QRect(clipMinxValue,0,clipW,H));
          painter->restore();

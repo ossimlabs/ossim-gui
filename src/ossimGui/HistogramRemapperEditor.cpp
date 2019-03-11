@@ -186,32 +186,65 @@ void ossimGui::HistogramRemapperEditor::initializeUiValues()
 
 void ossimGui::HistogramRemapperEditor::populateClipPoints()
 {
-   QString currentText = m_bandComboBox->currentText();
-   bool masterFlag = currentText=="master";
-   double value =0.0;
    if(m_histogramRemapper.valid())
    {
-      value = masterFlag?m_histogramRemapper->getLowNormalizedClipPoint():m_histogramRemapper->getLowNormalizedClipPoint(currentText.toLong());
-      m_lowClipPercentLineEdit->setText(QString().setNum(value, 'g', 8));
-      value = masterFlag?m_histogramRemapper->getHighNormalizedClipPoint():m_histogramRemapper->getHighNormalizedClipPoint(currentText.toLong());
-      m_highClipPercentLineEdit->setText(QString().setNum(value, 'g', 8));
+      QString currentText = m_bandComboBox->currentText();
+      bool masterFlag = currentText=="master";
+      double value =0.0;
+      std::ostringstream os;
       
-      value = masterFlag?m_histogramRemapper->getLowClipPoint():m_histogramRemapper->getLowClipPoint(currentText.toLong());
-      m_lowClipValueLineEdit->setText(QString().setNum(value, 'g', 8));
-      value = masterFlag?m_histogramRemapper->getHighClipPoint():m_histogramRemapper->getHighClipPoint(currentText.toLong());
-      m_highClipValueLineEdit->setText(QString().setNum(value, 'g', 8));
+      os.precision(2);
+      os.setf( std::ios::fixed, std:: ios::floatfield );
       
-      value = masterFlag?m_histogramRemapper->getMidPoint():m_histogramRemapper->getMidPoint(currentText.toLong());
-      m_midPointLineEdit->setText(QString().setNum(value, 'g', 8));
+      value = masterFlag?m_histogramRemapper->getLowNormalizedClipPoint():
+         m_histogramRemapper->getLowNormalizedClipPoint(currentText.toLong());
+      value *= 100.0;
+      os << value;
+      
+      m_lowClipPercentLineEdit->setText( QString( os.str().c_str() ) );
+      
+      value = masterFlag?m_histogramRemapper->getHighNormalizedClipPoint():
+         m_histogramRemapper->getHighNormalizedClipPoint(currentText.toLong());
+      value = (1.0 - value)  * 100.0;
+      os.str( std::string("") );
+      os << value;
+      m_highClipPercentLineEdit->setText( QString( os.str().c_str() ) );
 
-      value = masterFlag?m_histogramRemapper->getMinOutputValue():m_histogramRemapper->getMinOutputValue(currentText.toLong());
-      m_outputMinValue->setText(QString().setNum(value, 'g', 8));
-      value = masterFlag?m_histogramRemapper->getMaxOutputValue():m_histogramRemapper->getMaxOutputValue(currentText.toLong());
-      m_outputMaxValue->setText(QString().setNum(value, 'g', 8));
+      if ( ossim::isInteger( m_histogramRemapper->getOutputScalarType() ) )
+      {
+         os.precision(0); 
+      }
+      
+      value = masterFlag?m_histogramRemapper->getLowClipPoint():
+         m_histogramRemapper->getLowClipPoint(currentText.toLong());
+      os.str( std::string("") );
+      os << value;
+      m_lowClipValueLineEdit->setText( QString( os.str().c_str() ) );
+      
+      value = masterFlag?m_histogramRemapper->getHighClipPoint():
+         m_histogramRemapper->getHighClipPoint(currentText.toLong());
+      os.str( std::string("") );
+      os << value;
+      m_highClipValueLineEdit->setText(QString( os.str().c_str() ) );
+
+      value = masterFlag?m_histogramRemapper->getMinOutputValue():
+         m_histogramRemapper->getMinOutputValue(currentText.toLong());
+      os.str( std::string("") );
+      os << value;
+      m_outputMinValue->setText(QString( os.str().c_str() ) );
+      
+      value = masterFlag?m_histogramRemapper->getMaxOutputValue():
+         m_histogramRemapper->getMaxOutputValue(currentText.toLong());
+      os.str( std::string("") );
+      os << value;
+      m_outputMaxValue->setText( QString( os.str().c_str() ) );
       
       m_histogramWidget->blockSignals(true);
-      m_histogramWidget->setPenetration(masterFlag?m_histogramRemapper->getLowNormalizedClipPoint():m_histogramRemapper->getLowNormalizedClipPoint(currentText.toLong()),
-                                          1.0-(masterFlag?m_histogramRemapper->getHighNormalizedClipPoint():m_histogramRemapper->getHighNormalizedClipPoint(currentText.toLong()))
+      m_histogramWidget->setPenetration(
+         masterFlag?m_histogramRemapper->getLowNormalizedClipPoint():
+         m_histogramRemapper->getLowNormalizedClipPoint(currentText.toLong()),
+         1.0-(masterFlag?m_histogramRemapper->getHighNormalizedClipPoint():
+              m_histogramRemapper->getHighNormalizedClipPoint(currentText.toLong()))
                                           );
       m_histogramWidget->blockSignals(false);
   }
@@ -237,20 +270,21 @@ void	ossimGui::HistogramRemapperEditor::bandActivated ( int index )
 
 void ossimGui::HistogramRemapperEditor::stretchModeActivated(int index)
 {
-   if(!m_histogramRemapper.valid()) return;
-   
-   m_histogramRemapper->setStretchModeAsString(stretchModes[index], true);
-   if(stretchModes[index] == ossimString("linear_one_piece"))
+   if( m_histogramRemapper.valid() )
    {
-      m_histogramWidget->setReadOnly(false);
+      // "true" arg to rebuild table on mode change.
+      m_histogramRemapper->setStretchModeAsString(stretchModes[index], true);
+      if(stretchModes[index] == ossimString("linear_one_piece"))
+      {
+         m_histogramWidget->setReadOnly(false);
+      }
+      else
+      {
+         m_histogramWidget->setReadOnly(true);
+      }
+      populateClipPoints();
+      fireRefreshEvent();
    }
-   else 
-   {
-      m_histogramWidget->setReadOnly(true);
-   }
-
-   populateClipPoints();
-   fireRefreshEvent();
 }
 
 void ossimGui::HistogramRemapperEditor::openHistogramButton(bool)
@@ -291,12 +325,15 @@ void ossimGui::HistogramRemapperEditor::calculateAverageHistogram()
    h.resize(nBands);
    
    if(!h.size()) return;
-   bool validDrawFlag = true;
+   //bool validDrawFlag = true;
    for(band = 0; band < nBands; ++ band)
    {
       h[band] = m_multiResHistogram->getHistogram(band);
    }
-   
+
+   // Assuming all bands have the same scalar and null value.
+   ossimScalarType scalar = h[0]->getScalarType();
+   float nullValue = h[0]->getNullValue();
    float minValue = 99999.0;
    float maxValue = -99999.0;
    float max_count = 0.0;
@@ -317,13 +354,15 @@ void ossimGui::HistogramRemapperEditor::calculateAverageHistogram()
          max_count += hmax_count;
       }
    }
-   m_averageHistogram = new ossimHistogram(maxBins, minValue, maxValue);
+   
+   m_averageHistogram = new ossimHistogram(
+      maxBins, minValue, maxValue, nullValue, scalar);
    ossim_uint32 binIdx = 0;
    float delta = (maxValue-minValue)/maxBins;
-   float* sumCounts = m_averageHistogram->GetCounts();
+   ossim_int64* sumCounts = m_averageHistogram->GetCounts();
    ossim_int32 sumIndex = 0;
    float value = 0.0;
-   memset(sumCounts, '\0', sizeof(float)*maxBins);
+   memset(sumCounts, '\0', sizeof(ossim_int64)*maxBins);
    value = minValue+delta*0.5;
    for(binIdx = 0; binIdx < maxBins;++binIdx)
    {
