@@ -130,7 +130,7 @@ namespace ossimGui
                {
                   overviewBuilder->setInputSource(dupHandler.get());
                   m_obj =  overviewBuilder.get();
-                  ProcessInterfaceJob::start();
+                  ProcessInterfaceJob::run();
                }
                dupHandler = 0;
                m_obj = 0;
@@ -1199,6 +1199,10 @@ void ossimGui::DataManagerRawImageSourceItem::reset()
       ossimImageHandler* handler = m_node->getObjectAs<ossimImageHandler>();
       if(handler)
       {
+         if(handler->getState())
+         {
+            handler->getState()->setOverviewState(0);
+         }
          handler->closeOverview();
          handler->openOverview();
          ossimRefPtr<ossimRefreshEvent> refreshEvent = new ossimRefreshEvent(ossimRefreshEvent::REFRESH_GEOMETRY);
