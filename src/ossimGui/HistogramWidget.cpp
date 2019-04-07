@@ -119,8 +119,6 @@ void  ossimGui::HistogramWidget::setShowClipPointsFlag(bool flag)
    if(updateFlag) viewport()->update();
 }
 
-
-
 void ossimGui::HistogramWidget::updateScaledHistogram()
 {
    if(m_histogram.valid())
@@ -161,12 +159,8 @@ void ossimGui::HistogramWidget::updateScaledHistogram()
          sumCounts[idx] += m_histogram->ComputeArea(tempMin, tempMin +colWidth); 
       }
       */
-      m_scaledHistogram = m_scaledHistogram->fillInteriorEmptyBins();
+      m_scaledHistogram = m_scaledHistogram->fillEmptyBins(false);
       m_scaledNormalizer = m_scaledHistogram->GetMaxCount();
-//      ossimKeywordlist kwl;
-
-//      m_scaledHistogram->saveState(kwl);
-//      std::cout << kwl << std::endl;
 
 #if 0
       float sumMaxCount= m_scaledHistogram->GetMaxCount();
