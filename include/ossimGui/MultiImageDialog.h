@@ -22,7 +22,7 @@ namespace ossimGui
       void initDialog();
       void initContent(DataManager::NodeListType& nodeList, const bool& amDialogAvailable);
 
-      void setImgList(const vector<ossimString>& ilist, const vector<ossimString>& tlist);
+      void setImgList(const std::vector<ossimString>& ilist, const std::vector<ossimString>& tlist);
       void setPtTable(const int& nPts);
       ossimString getCurrentId()const {return ossimString::toString(m_currentIdCounter);}
       ossim_uint32 getNumObs()const {return m_pointTable->columnCount();}

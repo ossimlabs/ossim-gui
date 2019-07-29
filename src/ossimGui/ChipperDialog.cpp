@@ -418,7 +418,7 @@ void ossimGui::ChipperDialog::updateOutputGrect()
             << "\nlines: " << m_lines
             << "\nsamples: " << m_samples
             << "\nm_outputGeoPolygon\n" << m_outputGeoPolygon
-            << endl;
+            << std::endl;
       }
       // updateDialog();
       
@@ -780,7 +780,7 @@ void ossimGui::ChipperDialog::runIgenPushButtonClicked()
                               if (traceDebug())
                               {
                                  ossimNotify(ossimNotifyLevel_DEBUG)
-                                    << "Add to datamanager autoload..." << endl;
+                                    << "Add to datamanager autoload..." << std::endl;
                               }
                               // ossimQtAddImageFileEvent event(m_outputFile);
                               // ossimQtApplicationUtility::sendEventToRoot(this,
@@ -790,7 +790,7 @@ void ossimGui::ChipperDialog::runIgenPushButtonClicked()
                         else
                         {
                            // Should never happen...
-                           ossimNotify(ossimNotifyLevel_WARN) << "Writer null!" << endl;
+                           ossimNotify(ossimNotifyLevel_WARN) << "Writer null!" << std::endl;
                         }
                      }
                   }

@@ -61,7 +61,7 @@ namespace ossimGui
 
       ossimTieMeasurementGeneratorInterface* m_tGen;
 
-      ostringstream m_report;
+      std::ostringstream m_report;
 
       void initDialog();
       void initContent();

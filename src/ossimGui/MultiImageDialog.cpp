@@ -456,8 +456,8 @@ void ossimGui::MultiImageDialog::setPointPositionContent(const ossimString& repo
    m_pointPositionBrowser->setText(report.data());
 }
 
-void ossimGui::MultiImageDialog::setImgList(const vector<ossimString>& ilist,
-                                            const vector<ossimString>& tlist)
+void ossimGui::MultiImageDialog::setImgList(const std::vector<ossimString>& ilist,
+                                            const std::vector<ossimString>& tlist)
 {
    ossim_uint32 nImgs = ilist.size();
 

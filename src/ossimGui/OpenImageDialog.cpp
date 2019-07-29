@@ -166,7 +166,7 @@ void ossimGui::OpenImageDialog::allStateChanged( int state )
             QCheckBox* cb = dynamic_cast<QCheckBox*>( button );
             if ( cb )
             {
-               cout << "b..." << endl;
+               std::cout << "b..." << std::endl;
                cb->setCheckState( (Qt::CheckState)state );
             }
          }

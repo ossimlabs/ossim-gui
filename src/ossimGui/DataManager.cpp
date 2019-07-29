@@ -842,7 +842,7 @@ void ossimGui::DataManager::findInputConnectionIds(std::vector<ossimId>& result,
    ossim_uint32 idx = 0;
    
    ossimString regExpression =  ossimString("^") + ossimString(prefix) + "input_connection[0-9]+";
-   vector<ossimString> keys =
+   std::vector<ossimString> keys =
    kwl.getSubstringKeyList( regExpression );
    
    ossim_int32 offset = (ossim_int32)(copyPrefix+"input_connection").size();
@@ -1033,7 +1033,7 @@ bool ossimGui::DataManager::setAutoMeasureResults(NodeListType& nodes,
 bool ossimGui::DataManager::intersectRays(NodeListType& nodes)
 {
    bool intersectionOK;
-   ostringstream report;
+   std::ostringstream report;
 
    DptSet_t measSet;
    NodeListType::iterator iter = nodes.begin();
@@ -1044,7 +1044,7 @@ bool ossimGui::DataManager::intersectRays(NodeListType& nodes)
    ossim_uint32 idxLayer = 0;
    ossimDpt imgPt;
 
-   report<<"\nSingle-ray..."<<endl;
+   report << "\nSingle-ray..." << std::endl;
 
    while(iter != nodes.end())
    {
@@ -1079,7 +1079,7 @@ bool ossimGui::DataManager::intersectRays(NodeListType& nodes)
                   // Single-ray drop comparison
                   ossimGpt gp;
                   ivtg->imageToGround(imgPt, gp);
-                  report<<" Image "<<kk+1<<": "<<gp<<endl;
+                  report<<" Image "<<kk+1<<": "<<gp<<std::endl;
                }
 
                // Populate sensor model set
@@ -1136,12 +1136,12 @@ bool ossimGui::DataManager::intersectRays(NodeListType& nodes)
 
    if (stat==0 || stat==1)
    {
-      report << setprecision(15);
+      report << std::setprecision(15);
       report << "  Position: (" << intG.latd() << ", " << intG.lond() << ") DD" << std::endl;
-      report << setprecision(3);
+      report << std::setprecision(3);
       report << "       HAE: " << intG.height() << " m" << std::endl;
       report << "       MSL: " << hgtMSL << " m" << std::endl;
-      report << setprecision(1);
+      report << std::setprecision(1);
       report << "      ECEF: (" << intECF[0] << ", " << intECF[1] << ", " << intECF[2] << ") m" << std::endl;
    }
    report << "\n  Status: " << statS << std::endl;
@@ -1200,7 +1200,7 @@ bool ossimGui::DataManager::saveImageGeometries(NodeListType& nodes)
 
    ossimLocalTm stamp;
    stamp.now();
-   ostringstream tmp;
+   std::ostringstream tmp;
    int fmt = ossimLocalTm::ossimLocalTmFormatDMY|
              ossimLocalTm::ossimLocalTmFormatMonText|
              ossimLocalTm::ossimLocalTmFormatPadMon|
@@ -1209,7 +1209,7 @@ bool ossimGui::DataManager::saveImageGeometries(NodeListType& nodes)
    stamp.printDate(tmp, fmt);
    tmp<<"_";
    stamp.printTime(tmp);
-   string adjTag(tmp.str());
+   std::string adjTag(tmp.str());
 
    while(iter != nodes.end())
    {
@@ -1381,7 +1381,7 @@ bool ossimGui::DataManager::registerImages(NodeListType& nodes)
       }
    }
 
-   ostringstream report;
+   std::ostringstream report;
    ossimAdjustmentExecutive adjExec(report);
 
    if (adjExec.initializeSolution(obsSet))

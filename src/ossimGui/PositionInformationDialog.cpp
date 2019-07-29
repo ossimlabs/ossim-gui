@@ -54,8 +54,8 @@ void ossimGui::PositionInformationDialog::setWidget(ossimGui::ImageScrollView* w
 void ossimGui::PositionInformationDialog::track( const ossimDpt& scenePt )
 {
    std::ostringstream os;
-   os << setiosflags(ios::fixed) << setiosflags(ios::left)
-      << setw(12) << "scene:";
+   os << std::setiosflags(std::ios::fixed) << std::setiosflags(std::ios::left)
+      << std::setw(12) << "scene:";
    scenePt.print(os, 2);
 
    if ( m_widget )
@@ -64,7 +64,7 @@ void ossimGui::PositionInformationDialog::track( const ossimDpt& scenePt )
       sceneToImage( scenePt, imagePt );
       if ( !imagePt.hasNans() )
       {
-         os << setw(12) << "\nimage:";
+         os << std::setw(12) << "\nimage:";
          imagePt.print(os, 2);
       }
       
@@ -79,13 +79,13 @@ void ossimGui::PositionInformationDialog::track( const ossimDpt& scenePt )
             ossimDms latDms( worldPt.latd() );
             ossimDms lonDms( worldPt.lond(), false );
             
-            os << setw(12) << "\nLat:"
+            os << std::setw(12) << "\nLat:"
                << latDms.toString("dd@mm'ss.ssss\" C").c_str()
-               << setw(12) << "\nLon:"
+               << std::setw(12) << "\nLon:"
                << lonDms.toString("ddd@mm'ss.ssss\" C").c_str()
-               << setprecision(15) << setw(12)
+               << std::setprecision(15) << std::setw(12)
                << "\nLat:" << worldPt.latd()
-               << setw(12)
+               << std::setw(12)
                << "\nLon:" << worldPt.lond();
                         
             ossimUtmProjection utm( *ossimEllipsoidFactory::instance()->wgs84(),
@@ -94,15 +94,15 @@ void ossimGui::PositionInformationDialog::track( const ossimDpt& scenePt )
             char hemisphere = utm.getHemisphere();
             ossimDpt eastingNorthing = utm.forward( worldPt );
             
-            os << setiosflags(ios::left) << setw(12)
+            os << std::setiosflags(std::ios::left) << std::setw(12)
                << "\nUTM zone:" << utm.getZone();
             
             if(!eastingNorthing.hasNans())
             {
-               os << setprecision(3) << setw(12)
+               os << std::setprecision(3) << std::setw(12)
                   << "\nEasting:"
                   << eastingNorthing.x
-                  << setw(12)
+                  << std::setw(12)
                   << "\nNorthing:"
                   << eastingNorthing.y;
 
@@ -116,7 +116,7 @@ void ossimGui::PositionInformationDialog::track( const ossimDpt& scenePt )
                                                 5, // precision,
                                                 mgrsString ) == OSSIM_MGRS_NO_ERROR ) 
                {
-                  os << setw(12) << "\nMGRS:" << mgrsString;
+                  os << std::setw(12) << "\nMGRS:" << mgrsString;
                }
             }
 
@@ -125,7 +125,7 @@ void ossimGui::PositionInformationDialog::track( const ossimDpt& scenePt )
             
             // os << "\nUSGS Q.Q. name:     " << quadName.quarterQuadSegName();
 
-            // os << setiosflags(ios::left) << setw(20) << "x, y:"
+            // os << setiosflags(std::ios::left) << std::setw(20) << "x, y:"
             //    << rawImgPt.toString() << std::endl;
             
             ossim_float64 hgtAboveMsl =
@@ -135,7 +135,7 @@ void ossimGui::PositionInformationDialog::track( const ossimDpt& scenePt )
             ossim_float64 geoidOffset =
                ossimGeoidManager::instance()->offsetFromEllipsoid(worldPt);
 
-            os << setw(20) << "\nHeight MSL:";
+            os << std::setw(20) << "\nHeight MSL:";
             if ( ossim::isnan( hgtAboveMsl ) )
             {
                os  << "nan";
@@ -145,7 +145,7 @@ void ossimGui::PositionInformationDialog::track( const ossimDpt& scenePt )
                os << hgtAboveMsl;
             }
             
-            os << setw(20) << "\nHeight above ellipsoid:"; 
+            os << std::setw(20) << "\nHeight above ellipsoid:"; 
             if ( ossim::isnan( hgtAboveEllipsoid ) )
             {
                os << "nan";
@@ -155,7 +155,7 @@ void ossimGui::PositionInformationDialog::track( const ossimDpt& scenePt )
                os << hgtAboveEllipsoid;
             }
             
-            os << setw(20) << "\nGeoid offset: "; 
+            os << std::setw(20) << "\nGeoid offset: "; 
             if ( ossim::isnan( geoidOffset ) )
             {
                os << "nan\n";
@@ -187,7 +187,7 @@ void ossimGui::PositionInformationDialog::track( const ossimDpt& scenePt )
          const ossim_uint32 MAX_BANDS_DISPLAYED = ossim::min<ossim_uint32>(BANDS, 16);
          for ( ossim_uint32 band = 0; band < MAX_BANDS_DISPLAYED; ++band )
          {
-            os << setprecision(15) << setw(12)<< "raw_image_pixel_value[ " << band << "]: " << values[band] << "\n";
+            os << std::setprecision(15) << std::setw(12)<< "raw_image_pixel_value[ " << band << "]: " << values[band] << "\n";
          }
          if ( BANDS > MAX_BANDS_DISPLAYED )
          {
