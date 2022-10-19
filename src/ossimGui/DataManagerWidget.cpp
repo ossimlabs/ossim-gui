@@ -57,6 +57,7 @@
 #include <ossimGui/RegPoint.h>
 #include <set>
 
+static const QPoint NULL_DRAG_POINT(-9999999,-9999999);
 
 void ossimGui::DataManagerWidget::RefreshVisitor::visit(ossimObject* obj)
 {
@@ -1924,7 +1925,8 @@ void ossimGui::DataManagerWidget::mousePressEvent(QMouseEvent *e)
    else if ((e->buttons() & Qt::LeftButton)
        && itemSelected) 
    {
-      m_dragStartPosition = e->pos();
+      m_dragStartPosition = NULL_DRAG_POINT;
+      //m_dragStartPosition = e->pos();
    }
    
 }
@@ -1933,10 +1935,14 @@ void ossimGui::DataManagerWidget::mouseMoveEvent(QMouseEvent *e)
 {
    if (e->buttons() == Qt::LeftButton)
    {
+      if(m_dragStartPosition == NULL_DRAG_POINT)
+      {
+         m_dragStartPosition = e->pos();
+      }
       // QPoint pos = e->pos();
       // ossim_int32 len = (pos - m_dragStartPosition).manhattanLength();
       if ((e->pos() - m_dragStartPosition).manhattanLength()
-          < QApplication::startDragDistance())
+          >= QApplication::startDragDistance())
       {
          QDrag *drag = new QDrag(this);
          QMimeData *mimeData = new QMimeData;
@@ -1953,6 +1959,7 @@ void ossimGui::DataManagerWidget::mouseMoveEvent(QMouseEvent *e)
 
 void ossimGui::DataManagerWidget::mouseReleaseEvent(QMouseEvent * e)
 {
+   m_dragStartPosition = NULL_DRAG_POINT;
    QTreeWidget::mouseReleaseEvent(e);
 }
 
