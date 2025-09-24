@@ -9,7 +9,7 @@ namespace ossimGui{
    {
       Q_OBJECT
    public:
-      HsiRemapperEditor(QWidget* parent=0, Qt::WindowFlags f = 0 );
+      HsiRemapperEditor(QWidget* parent=nullptr, Qt::WindowFlags f = Qt::WindowFlags());
       
       void setObject(ossimObject* obj);
 

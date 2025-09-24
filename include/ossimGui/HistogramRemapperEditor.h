@@ -13,7 +13,7 @@ namespace ossimGui
    {
       Q_OBJECT
    public:
-      HistogramRemapperEditor(QWidget* parent=0, Qt::WindowFlags f = 0 );
+      HistogramRemapperEditor(QWidget* parent=nullptr, Qt::WindowFlags f = Qt::WindowFlags() );
       void setObject(ossimObject* obj);
       void setHistogram(const ossimFilename& file);
       

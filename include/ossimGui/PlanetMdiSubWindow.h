@@ -28,7 +28,7 @@ namespace ossimGui {
       Q_OBJECT
    public:
       typedef std::map<ossimRefPtr<ossimObject>, osg::ref_ptr<ossimPlanetTextureLayer> > ChainToTextureType;
-      PlanetMdiSubWindow( QWidget * parent = 0, Qt::WindowFlags flags = 0);
+      PlanetMdiSubWindow( QWidget * parent = nullptr, Qt::WindowFlags flags = Qt::WindowFlags());
       virtual ~PlanetMdiSubWindow();
       
       ossimGui::ImageScrollWidget* scrollWidget();

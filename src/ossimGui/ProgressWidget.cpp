@@ -53,7 +53,7 @@ namespace ossimGui
    {
       switch(e->type())
       {
-         case PROGRESS_EVENT_ID:
+         case static_cast<QEvent::Type>(PROGRESS_EVENT_ID):
          {
             ProgressEvent* evt = dynamic_cast<ProgressEvent*>(e);
             if(evt)

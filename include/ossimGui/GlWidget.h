@@ -39,8 +39,8 @@ namespace ossimGui
    {
       Q_OBJECT
    public:
-      GlWidget( QWidget * parent = 0, const QGLWidget * shareWidget = 0, Qt::WindowFlags f = 0 );
-      GlWidget( const QGLFormat & format, QWidget * parent = 0, const QGLWidget * shareWidget = 0, Qt::WindowFlags f = 0 );
+      GlWidget( QWidget * parent = nullptr, const QGLWidget * shareWidget = nullptr, Qt::WindowFlags f = Qt::WindowFlags() );
+      GlWidget( const QGLFormat & format, QWidget * parent = nullptr, const QGLWidget * shareWidget = nullptr, Qt::WindowFlags f = Qt::WindowFlags() );
       virtual ~GlWidget();
       
       osgViewer::GraphicsWindow* getGraphicsWindow() { return m_graphicsWindow.get(); }
@@ -85,8 +85,8 @@ namespace ossimGui
    class OSSIMGUI_DLL GlViewer : public GlWidget
    {
    public:
-      GlViewer(QWidget * parent = 0, const QGLWidget * shareWidget = 0, Qt::WindowFlags f = 0);
-      GlViewer( const QGLFormat & format, QWidget * parent = 0, const QGLWidget * shareWidget = 0, Qt::WindowFlags f = 0 );
+      GlViewer(QWidget * parent = nullptr, const QGLWidget * shareWidget = nullptr, Qt::WindowFlags f = Qt::WindowFlags());
+      GlViewer( const QGLFormat & format, QWidget * parent = nullptr, const QGLWidget * shareWidget = nullptr, Qt::WindowFlags f = Qt::WindowFlags() );
       virtual ~GlViewer();
       void setViewer(ossimPlanetViewer* viewer);
       virtual void paintGL();

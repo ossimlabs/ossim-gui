@@ -153,5 +153,14 @@ OSSIM_SETUP_APPLICATION(ossim-geocell INSTALL REQUIRE_WINMAIN_FLAG COMPONENT_NAM
 # Use the Widgets module from Qt 5.
 qt5_use_modules(ossim-geocell Widgets)
 
+# Fix RPATH for macOS to find libraries in both build and install directories
+if(APPLE)
+  SET_TARGET_PROPERTIES(ossim-geocell PROPERTIES
+    INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib64;@loader_path/../../../../lib64"
+    BUILD_WITH_INSTALL_RPATH FALSE
+    BUILD_RPATH "${CMAKE_BINARY_DIR}/lib64"
+  )
+endif(APPLE)
+
 ########################### SETUP UNINSTALL ############################
 OSSIM_ADD_COMMON_MAKE_UNINSTALL()

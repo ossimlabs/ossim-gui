@@ -52,7 +52,7 @@ namespace ossimGui
       };
       
       /** @brief default constructor */
-      ChipperDialog( QWidget* parent=0, Qt::WindowFlags f = 0 );
+      ChipperDialog( QWidget* parent=nullptr, Qt::WindowFlags f = Qt::WindowFlags() );
 
       virtual ~ChipperDialog();
 

@@ -134,7 +134,7 @@ void ossimGui::RoiRectAnnotator::mousePress(QMouseEvent* e)
          m_roiLeftPressedFlag = true;
          // m_points[0] = m_roiPressStart;
       }
-      else if (button == Qt::MidButton)
+      else if (button == Qt::MiddleButton)
       {
          // Change the color from white to green.
          m_penColor = Qt::green;
@@ -224,7 +224,7 @@ void ossimGui::RoiRectAnnotator::mouseRelease(QMouseEvent* e)
          }
          m_roiLeftPressedFlag = false;
       }
-      else if (button == Qt::MidButton)
+      else if (button == Qt::MiddleButton)
       {
          // Change the color from green to white.
          m_penColor = Qt::white;

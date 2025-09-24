@@ -6,6 +6,7 @@
 #include <ossimGui/ImageMdiSubWindow.h>
 #include <ossimGui/ImageScrollView.h>
 #include <QMenu>
+#include <QBrush>
 #include <QMainWindow>
 #include <QApplication>
 #include <QFileDialog>
@@ -333,7 +334,7 @@ void ossimGui::MultiImageDialog::addObsPoint()
    for(ossim_int32 row = 0; row<m_pointTable->rowCount(); ++row)
    {
       QTableWidgetItem *cellItem = new QTableWidgetItem();
-      cellItem->setBackgroundColor(Qt::lightGray);
+      cellItem->setBackground(QBrush(Qt::lightGray));
       cellItem->setToolTip("Left click to toggle active/inactive");
       m_pointTable->setItem(row, col, cellItem);
    }
@@ -386,7 +387,7 @@ void ossimGui::MultiImageDialog::setPointColClicked(int col)
 void ossimGui::MultiImageDialog::setPointCellClicked(int row, int col)
 {
    QTableWidgetItem *cellItem = new QTableWidgetItem();
-   cellItem->setBackgroundColor(Qt::red);
+   cellItem->setBackground(QBrush(Qt::red));
    m_pointTable->setItem(row, col, cellItem);
 
    ossimString id = getIdByIndex(col);
@@ -403,7 +404,7 @@ void ossimGui::MultiImageDialog::setImagePointActive(const ossimString& id)
    if (getRowColMeasPoint(id, ov, row, col))
    {
       QTableWidgetItem *cellItem = new QTableWidgetItem();
-      cellItem->setBackgroundColor(Qt::yellow);
+      cellItem->setBackground(QBrush(Qt::yellow));
       m_pointTable->setItem(row, col, cellItem);
    }
 }
@@ -418,7 +419,7 @@ void ossimGui::MultiImageDialog::setImagePointInactive(const ossimString& id)
    if (getRowColMeasPoint(id, ov, row, col))
    {
       QTableWidgetItem *cellItem = new QTableWidgetItem();
-      cellItem->setBackgroundColor(Qt::red);
+      cellItem->setBackground(QBrush(Qt::red));
       m_pointTable->setItem(row, col, cellItem);
    }
 }
@@ -433,7 +434,7 @@ void ossimGui::MultiImageDialog::setImagePointRemoved(const ossimString& id)
    if (getRowColMeasPoint(id, ov, row, col))
    {
       QTableWidgetItem *cellItem = new QTableWidgetItem();
-      cellItem->setBackgroundColor(Qt::lightGray);
+      cellItem->setBackground(QBrush(Qt::lightGray));
       m_pointTable->setItem(row, col, cellItem);
    }
 }

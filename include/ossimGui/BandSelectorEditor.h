@@ -18,7 +18,7 @@ namespace ossimGui {
          THREE_BAND  = 1,
          N_BAND      = 2
       };
-      BandSelectorEditor(QWidget* parent=0, Qt::WindowFlags f = 0 );
+      BandSelectorEditor(QWidget* parent=nullptr, Qt::WindowFlags f = Qt::WindowFlags() );
       void setObject(ossimObject* obj);
 
    protected slots:
