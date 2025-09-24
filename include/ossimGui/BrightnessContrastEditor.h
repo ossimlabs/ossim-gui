@@ -13,7 +13,7 @@ namespace ossimGui
    {
       Q_OBJECT
       public:
-         BrightnessContrastEditor(QWidget* parent=0, Qt::WindowFlags f = 0 );
+         BrightnessContrastEditor(QWidget* parent=nullptr, Qt::WindowFlags f = Qt::WindowFlags() );
       
          void setObject(ossimObject* obj);
       

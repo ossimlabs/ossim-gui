@@ -36,7 +36,7 @@ namespace ossimGui
    public:
       
       /** @brief default constructor */
-      PolygonRemapperDialog( QWidget* parent=0, Qt::WindowFlags f=0 );
+      PolygonRemapperDialog( QWidget* parent=nullptr, Qt::WindowFlags f = Qt::WindowFlags() );
 
       void setWidget( ossimGui::ImageScrollView* widget );
       void setPolyCutter( ossimGeoPolyCutter* polygon );

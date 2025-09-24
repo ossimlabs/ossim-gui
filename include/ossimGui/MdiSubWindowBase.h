@@ -16,7 +16,7 @@ namespace ossimGui{
    class OSSIMGUI_DLL MdiSubWindowBase : public QMdiSubWindow
    {
    public:
-      MdiSubWindowBase( QWidget * parent = 0, Qt::WindowFlags flags = 0);
+      MdiSubWindowBase( QWidget * parent = nullptr, Qt::WindowFlags flags = Qt::WindowFlags());
       virtual ~MdiSubWindowBase();
       QMainWindow* mainWindow();
       

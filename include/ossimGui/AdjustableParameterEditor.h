@@ -40,7 +40,7 @@ namespace ossimGui
    {
       Q_OBJECT
    public:
-      AdjustableParameterEditor(QWidget* parent=0, Qt::WindowFlags f = 0 );
+      AdjustableParameterEditor(QWidget* parent=nullptr, Qt::WindowFlags f = Qt::WindowFlags() );
       
       void setObject(ossimObject* obj);
       void setImageSource();

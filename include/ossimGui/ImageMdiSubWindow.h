@@ -91,7 +91,7 @@ namespace ossimGui {
    {
       Q_OBJECT
    public:
-      ImageMdiSubWindow( QWidget * parent = 0, Qt::WindowFlags flags = 0);
+      ImageMdiSubWindow( QWidget * parent = nullptr, Qt::WindowFlags flags = Qt::WindowFlags());
       virtual ~ImageMdiSubWindow();
       
       ossimGui::ImageScrollView* scrollWidget();

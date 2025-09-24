@@ -27,7 +27,7 @@ namespace ossimGui
    public:
       
       /** @brief default constructor */
-      PositionInformationDialog( QWidget* parent=0, Qt::WindowFlags f = 0 );
+      PositionInformationDialog( QWidget* parent=nullptr, Qt::WindowFlags f = Qt::WindowFlags() );
 
       void setWidget( ossimGui::ImageScrollView* widget );
       

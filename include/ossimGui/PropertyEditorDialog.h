@@ -25,7 +25,7 @@ namespace ossimGui
    public:
       
       /** @brief default constructor */
-      PropertyEditorDialog( QWidget* parent=0, Qt::WindowFlags f = 0 );
+      PropertyEditorDialog( QWidget* parent=nullptr, Qt::WindowFlags f = Qt::WindowFlags() );
 
       void setObject( ossimObject* input );
 

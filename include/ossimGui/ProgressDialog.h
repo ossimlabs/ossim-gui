@@ -23,7 +23,7 @@ namespace ossimGui
    public:
       
       /** @brief default constructor */
-      ProgressDialog( QWidget* parent=0, Qt::WindowFlags f = 0 );
+      ProgressDialog( QWidget* parent=nullptr, Qt::WindowFlags f = Qt::WindowFlags() );
 
       virtual ~ProgressDialog();
 
