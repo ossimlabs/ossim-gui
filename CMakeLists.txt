@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.11)
+cmake_minimum_required(VERSION 3.16...3.26)
 
 PROJECT(ossimGui)
 MESSAGE("**********************Setting up ossimGui********************")
@@ -30,14 +30,10 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 # Qt5OpenGL_DIR=
 #
 
-# Find the QtWidgets library
-find_package(Qt5Widgets)
-
-# Find the QtWidgets library
-find_package(Qt5Core)
-
-# Find the QtOpenGL library
-find_package(Qt5OpenGL)
+# Find Qt5 per-module to force CONFIG mode and avoid custom FindQt5
+find_package(Qt5Core REQUIRED)
+find_package(Qt5Widgets REQUIRED)
+find_package(Qt5OpenGL REQUIRED)
 
 
 
@@ -150,8 +146,10 @@ SET(OSSIM_BUILD_APPLICATION_BUNDLES ON)
 MESSAGE(STATUS "IMAGELINKER SOURCE FILES = ${SOURCE_FILES}")
 OSSIM_SETUP_APPLICATION(ossim-geocell INSTALL REQUIRE_WINMAIN_FLAG COMPONENT_NAME ossim SOURCE_FILES ${SOURCE_FILES} ${OSSIMGUI_RC})
 
-# Use the Widgets module from Qt 5.
-qt5_use_modules(ossim-geocell Widgets)
+# Link Qt5 to the application target using imported targets
+if (TARGET ossim-geocell)
+  target_link_libraries(ossim-geocell Qt5::Widgets Qt5::Core Qt5::OpenGL)
+endif()
 
 # Fix RPATH for macOS to find libraries in both build and install directories
 if(APPLE)
