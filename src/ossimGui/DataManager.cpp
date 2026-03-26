@@ -27,8 +27,6 @@
 #include <ossimGui/PlanetMdiSubWindow.h>
 #endif
 
-#include <iostream>
-
 ossimGui::DataManager::Node::Node(ossimRefPtr<ossimObject> source, const ossimString& /* name */, const ossimString& /* description */)
 :m_object(source.get())
 {
@@ -114,6 +112,7 @@ void ossimGui::DataManager::Node::setId()
 ossimGui::DataManager::DataManager()
 {
    m_mdiArea = 0;
+   m_viewMode = VIEW_MODE_AUTO;
    m_defaultReprojectionChainTemplate = "type:ossimImageChain\n"
    "object0.type:ossimBandSelector\n"
    "object5.type:ossimHistogramRemapper\n"
@@ -129,6 +128,7 @@ ossimGui::DataManager::DataManager()
    "object0.type:ossimBandSelector\n"
    "object5.type:ossimHistogramRemapper\n"
    "object10.type:ossimCacheTileSource\n"
+   "object15.type:ossimRLevelFilter\n"
    "object20.type:ossimImageRenderer\n"
    "object20.max_levels_to_compute:0\n"
    "object20.image_view_trans.type:ossimImageViewAffineTransform\n"
@@ -312,7 +312,11 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createDefaultIma
       if(source)
       {
          ossimRefPtr<ossimImageGeometry> geom = source->getImageGeometry();
-         if(geom.valid()&&geom->getProjection())
+         const bool hasProjection = (geom.valid() && geom->getProjection());
+         const bool useGeoChain =
+            ((m_viewMode == VIEW_MODE_GEO) && hasProjection) ||
+            ((m_viewMode == VIEW_MODE_AUTO) && hasProjection);
+         if(useGeoChain)
          {
             result = createChainFromTemplate(m_defaultReprojectionChainTemplate, input.get(), false);
             result->setName("Reprojection Chain:" + input->name());
@@ -1473,4 +1477,3 @@ ossimGui::MetricOverlay* ossimGui::DataManager::metOverlayForNode(ossimRefPtr<No
 
    return metOverlay;
 }
-
