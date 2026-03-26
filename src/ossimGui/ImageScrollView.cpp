@@ -30,12 +30,8 @@ void ImageViewJob::run()
    {
       std::lock_guard<std::mutex> lock(m_imageViewJobMutex);
       QTime start = QTime::currentTime();
-      ossimDrect cacheRect(m_tileCache->getRect());
-      // ossimDpt ulCachePt = cacheRect.ul();
       ossimIrect rect;
-      //ossimDpt ul;      
-      // Because the cache rect is a sub rect of the scroll we need the upper left which starts at offset 0,0 in scroll space
-      //m_cacheToView.map(0.0, 0.0, &ul.x, &ul.y);
+      int tileCount = 0;
       while(m_tileCache->nextInvalidTile(rect) && (!isCanceled()))
       {
          // shift to zero based rectangle and then set back for opying purposes.
@@ -46,15 +42,16 @@ void ImageViewJob::run()
          {
             m_tileCache->addTile(ossimGui::Image(data.get(), true));
          }
-         else 
+         else
          {
             img = QImage(rect.width(), rect.height(),  QImage::Format_RGB32);
             img.fill(0);
             img.setOffset(QPoint(rect.ul().x, rect.ul().y));
-            
+
             m_tileCache->addTile(img);
          }
-         
+         ++tileCount;
+
          QTime end = QTime::currentTime();
          if(start.msecsTo(end) >= m_maxProcessingTime)
          {
@@ -366,11 +363,10 @@ void ImageScrollView::refreshDisplay()
    m_layers->flushDisplayCaches();
    m_inputBounds = m_connectableObject->getBounds();
    updateSceneRect();
-      
+
    if(m_jobQueue)
    {
       if(!m_imageViewJob->isRunning()) m_imageViewJob->ready();
-
       m_jobQueue->add(m_imageViewJob);
    }
 }
@@ -426,12 +422,12 @@ void ImageScrollView::inputDisconnected(ossim_int32 /* idx */)
 void ImageScrollView::setCacheRect()
 {
    QRectF r = mapToScene(viewport()->rect()).boundingRect();
-   
-   
+
+
    ossimIpt ul(r.x(), r.y());//origin.x(), origin.y());
    ossimIpt lr(r.x()+ r.width()-1,
                r.y()+ r.height()-1);
-   
+
    ossimIrect rect(ul.x, ul.y, lr.x, lr.y);
    m_layers->setCacheRect(rect);
 }

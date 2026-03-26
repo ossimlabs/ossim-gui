@@ -4,7 +4,6 @@
 #include <ossim/imaging/ossimImageGeometry.h>
 #include <ossim/imaging/ossimImageRenderer.h>
 #include <ossim/base/ossimVisitor.h>
-#include <ossim/base/ossimRefreshEvent.h>
 #include <ossim/projection/ossimMapProjection.h>
 #include <ossim/projection/ossimImageViewAffineTransform.h>
 #include <ossim/projection/ossimImageViewProjectionTransform.h>
@@ -48,9 +47,6 @@ namespace ossimGui
    {
       if(m_scrollView)
       {
-         //ossimDpt center  = m_scrollView->getInputBounds().midPoint();
-         //m_centerPoint = center;
-
          m_fullResolutionScale = ossimDpt(1.0,1.0);
 
          ossimTypeNameVisitor visitor("ossimImageRenderer", true);
@@ -106,137 +102,14 @@ namespace ossimGui
 
    void ImageViewManipulator::fit()
    {
-      // Use the input bounds and viewport rect to calculate fit
       ossimDrect inputBounds = m_scrollView->getInputBounds();
       QRect viewportRect = m_scrollView->viewport()->rect();
       ossim_float64 viewportWidth  = viewportRect.width();
       ossim_float64 viewportHeight = viewportRect.height();
-      
-      // Use the existing fit function that takes rectangles
       ossimIrect inputRect(inputBounds);
       ossimIrect targetRect(0, 0, static_cast<ossim_int32>(viewportWidth), static_cast<ossim_int32>(viewportHeight));
-      
+
       fit(inputRect, targetRect);
-      return;
-      
-      // Keep the old complex approach as backup
-      ossimTypeNameVisitor visitor("ossimImageRenderer", true);
-      m_scrollView->connectableObject()->accept(visitor);
-      ossimConnectableObject* connectable = dynamic_cast<ossimConnectableObject*>(visitor.getObject());
-      ossimDpt saveCenter = m_centerPoint;
-      if(connectable)
-      {
-         ossimImageSource* inputSource = dynamic_cast<ossimImageSource*>(connectable->getInput());
-         ossimImageRenderer* renderer  = dynamic_cast<ossimImageRenderer*>(connectable);
-
-         ossimImageViewAffineTransform* ivat = dynamic_cast<ossimImageViewAffineTransform*>(renderer->getImageViewTransform());
-         ossimImageViewProjectionTransform* ivpt = dynamic_cast<ossimImageViewProjectionTransform*>(renderer->getImageViewTransform());
-
-         if(ivpt)
-         {
-            std::cout << "DEBUG: Using projection transform path" << std::endl;
-            ossimImageGeometry* iGeom = ivpt->getImageGeometry();
-            ossimImageGeometry* vGeom = asGeometry();
-            if(iGeom&&vGeom)
-            {
-
-               ossimMapProjection* mapProj = dynamic_cast<ossimMapProjection*>(vGeom->getProjection());
-
-               if(mapProj)
-               {
-                  // ossimDpt savedMpp = mapProj->getMetersPerPixel();
-                  ossimDpt mpp = m_fullResolutionScale;
-                  mapProj->setMetersPerPixel(m_fullResolutionScale);
-                  ossimDrect rect = inputSource->getBoundingRect();
-                  std::vector<ossimGpt> gpoints(4);
-                  std::vector<ossimDpt> ipoints(4);
-                  iGeom->localToWorld(rect.ul(), gpoints[0]);
-                  iGeom->localToWorld(rect.ur(), gpoints[1]);
-                  iGeom->localToWorld(rect.lr(), gpoints[2]);
-                  iGeom->localToWorld(rect.ll(), gpoints[3]);
-
-                  vGeom->worldToLocal(gpoints[0], ipoints[0]);
-                  vGeom->worldToLocal(gpoints[1], ipoints[1]);
-                  vGeom->worldToLocal(gpoints[2], ipoints[2]);
-                  vGeom->worldToLocal(gpoints[3], ipoints[3]);
-
-                  ossimDrect fullBounds = ossimDrect(ipoints);
-                  std::cout << "DEBUG: fullBounds = " << fullBounds << std::endl;
-
-                  double scaleX = static_cast<double>(fullBounds.width())/static_cast<double>(viewportWidth);
-                  double scaleY = static_cast<double>(fullBounds.height())/static_cast<double>(viewportHeight);
-                  double largestScale = ossim::max(scaleX, scaleY);
-                  std::cout << "DEBUG: scaleX = " << scaleX << ", scaleY = " << scaleY << ", largestScale = " << largestScale << std::endl;
-                  std::cout << "DEBUG: original mpp = " << mpp << std::endl;
-                  
-                  // Add some bounds checking to avoid extreme scaling
-                  if(largestScale > 0.001 && largestScale < 10000.0)
-                  {
-                     mpp.x*=largestScale;
-                     mpp.y*=largestScale;
-                     std::cout << "DEBUG: new mpp = " << mpp << std::endl;
-                     mapProj->setMetersPerPixel(mpp);
-                     std::cout << "DEBUG: Scale applied successfully" << std::endl;
-                  }
-                  else
-                  {
-                     std::cout << "DEBUG: Scale " << largestScale << " out of bounds [0.001, 10000.0] - not applied" << std::endl;
-                  }						
-               }
-            }
-         }
-         else if(ivat)
-         {
-            std::cout << "DEBUG: Using affine transform path" << std::endl;
-            ossimImageViewAffineTransform* ivat = getObjectAs<ossimImageViewAffineTransform>();
-            ossimDrect inputBounds = m_scrollView->getInputBounds();
-            std::cout << "DEBUG: input bounds = " << inputBounds << std::endl;
-            double scaleX = static_cast<double>(inputBounds.width())/static_cast<double>(viewportWidth);
-            double scaleY = static_cast<double>(inputBounds.height())/static_cast<double>(viewportHeight);
-            double largestScale = ossim::max(scaleX, scaleY);
-            if(ivat && largestScale > 0.001 && largestScale < 10000.0)
-            {
-               ossimDpt tempCenter;
-
-               double x = 1.0/largestScale;
-               double y = x;
-               ivat->scale(x,y);
-            }
-
-         }
-      }
-
-      m_centerPoint = saveCenter;
-      std::cout << "DEBUG: About to call setViewToChains()" << std::endl;
-      setViewToChains();
-      std::cout << "DEBUG: setViewToChains() completed" << std::endl;
-      
-      // Force viewport update after fit operation
-      if(m_scrollView)
-      {
-         std::cout << "DEBUG: Forcing view updates" << std::endl;
-         
-         // Try to invalidate any caches and force a complete refresh
-         if(m_scrollView->connectableObject())
-         {
-            ossimRefreshEvent refreshEvent(static_cast<ossimRefreshEvent::RefreshType>(ossimRefreshEvent::REFRESH_PIXELS|ossimRefreshEvent::REFRESH_GEOMETRY));
-            m_scrollView->connectableObject()->fireEvent(refreshEvent);
-         }
-         
-         m_scrollView->updateSceneRect();
-         m_scrollView->viewport()->update();
-         m_scrollView->update();
-         m_scrollView->refreshDisplay();
-         std::cout << "DEBUG: View updates completed" << std::endl;
-      }
-      
-      // Call zoomAnnotation like the working zoom functions do
-      if(m_scrollView)
-      {
-         std::cout << "DEBUG: Calling zoomAnnotation()" << std::endl;
-         m_scrollView->zoomAnnotation();
-         std::cout << "DEBUG: zoomAnnotation() completed" << std::endl;
-      }
    }
    void ImageViewManipulator::setFullResScale(const ossimDpt& scale)
    {
@@ -246,10 +119,8 @@ namespace ossimGui
    void ImageViewManipulator::fullRes()
    {
       ossimImageGeometry* geom = asGeometry();
-	   
       if(geom)
       {
-         ossimGpt tempCenter;
          if(geom->getProjection())
          {
             ossimMapProjection* mapProj = dynamic_cast<ossimMapProjection*>(geom->getProjection());
@@ -259,17 +130,16 @@ namespace ossimGui
             }
          }
       }
-      else 
+      else
       {
          ossimImageViewAffineTransform* ivat = getObjectAs<ossimImageViewAffineTransform>();
          if(ivat)
          {
-            ossimDpt tempCenter;
             ivat->scale(m_fullResolutionScale.x, m_fullResolutionScale.y);
          }
       }
       setViewToChains();
-
+      m_scrollView->refreshDisplay();
       m_scrollView->zoomAnnotation();
    }
 
@@ -280,7 +150,7 @@ namespace ossimGui
       ossimImageGeometry* geom = asGeometry();
       ossimDpt saveCenter = m_centerPoint;
       if(geom)
-      {      
+      {
          if(geom->getProjection())
          {
             ossimDpt mpp = geom->getProjection()->getMetersPerPixel();
@@ -293,22 +163,19 @@ namespace ossimGui
                {
                   if(mpp.y>m_scaleRange.m_min)
                   {
-                     if(mapProj)
-                     {
-                        mapProj->setMetersPerPixel(mpp);
-                        modified = true;
-                     }
+                     mapProj->setMetersPerPixel(mpp);
+                     modified = true;
                   }
                }
                else
                {
                   mapProj->setMetersPerPixel(mpp);
-                  modified = false;
+                  modified = true;
                }
             }
          }
       }
-      else 
+      else
       {
          ossimImageViewAffineTransform* ivat = getObjectAs<ossimImageViewAffineTransform>();
          if(ivat)
@@ -335,8 +202,8 @@ namespace ossimGui
       if(modified)
       {
          setViewToChains();
+         m_scrollView->refreshDisplay();
       }
-
       m_scrollView->zoomAnnotation();
    }
 
@@ -347,7 +214,7 @@ namespace ossimGui
       ossimImageGeometry* geom = asGeometry();
       ossimDpt saveCenter = m_centerPoint;
       if(geom)
-      {      
+      {
          if(geom->getProjection())
          {
             ossimDpt mpp = geom->getProjection()->getMetersPerPixel();
@@ -372,13 +239,12 @@ namespace ossimGui
             }
          }
       }
-      else 
+      else
       {
          ossimImageViewAffineTransform* ivat = getObjectAs<ossimImageViewAffineTransform>();
          if(ivat)
          {
             ossimDpt scale = ivat->getScale();
-	         
             ossimDpt factorScale(scale.x/factor,scale.y/factor);
             if(m_scaleRange.isValid())
             {
@@ -400,8 +266,8 @@ namespace ossimGui
       if(modified)
       {
          setViewToChains();
+         m_scrollView->refreshDisplay();
       }
-
       m_scrollView->zoomAnnotation();
    }
 
@@ -413,55 +279,32 @@ namespace ossimGui
       double scaleY = static_cast<double>(inputRect.height())/static_cast<double>(targetRect.height());
       double largestScale = ossim::max(scaleX, scaleY);
       ossimDpt saveCenter = m_centerPoint;
-
       if(geom)
       {
          if(geom->getProjection())
          {
             ossimDpt mpp = geom->getProjection()->getMetersPerPixel();
-            ossimDpt originalMpp = mpp;
-	         
-            mpp.x*=largestScale;
-            mpp.y*=largestScale;
+            mpp.x *= largestScale;
+            mpp.y *= largestScale;
             ossimMapProjection* mapProj = dynamic_cast<ossimMapProjection*>(geom->getProjection());
             if(mapProj)
             {
-               // Try direct approach first
                mapProj->setMetersPerPixel(mpp);
-               
-               // Verify the change took effect and try alternative if needed
-               ossimDpt verifyMpp = mapProj->getMetersPerPixel();
-               if(verifyMpp == originalMpp)
-               {
-                  // Try alternative scaling method
-                  ossim_float64 scale = largestScale;
-                  mapProj->applyScale(ossimDpt(1.0/scale, 1.0/scale), true);
-                  ossimDpt verifyMpp2 = mapProj->getMetersPerPixel();
-                  
-                  // If both methods failed, this projection type doesn't support scaling
-                  if(verifyMpp2 == originalMpp)
-                  {
-                     std::cout << "Note: Fit-to-viewport not supported for " << mapProj->getClassName() 
-                               << " projection type" << std::endl;
-                  }
-               }
             }
          }
       }
-      else 
+      else
       {
          ossimImageViewAffineTransform* ivat = getObjectAs<ossimImageViewAffineTransform>();
          if(ivat)
          {
-            ossimDpt tempCenter;
             double x = 1.0/largestScale;
-            double y = x;
-            ivat->scale(x,y);
+            ivat->scale(x, x);
          }
       }
       m_centerPoint = saveCenter;
       setViewToChains();
-		      
+      m_scrollView->refreshDisplay();
       m_scrollView->zoomAnnotation();
    }
 
@@ -633,7 +476,6 @@ namespace ossimGui
       if(m_scrollView&&m_scrollView->connectableObject())
       {
          ossimDpt center;
-
          ossimImageGeometry* geom = asGeometry();
          if(geom)
          {
@@ -654,8 +496,7 @@ namespace ossimGui
          viewVisitor.setViewPoint(center);
          m_scrollView->connectableObject()->accept(viewVisitor);
 
-         // just in case if an update causes a change in center let's keep our locked 
-         // center point for zooming in and out.
+         // keep our locked center point for zooming in and out.
          ossimDpt saveCenter = m_centerPoint;
          viewVisitor.setView();
          m_centerPoint = saveCenter;
