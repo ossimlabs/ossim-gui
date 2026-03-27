@@ -514,28 +514,41 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createDefault2dI
                      if ( hr.valid() )
                      {
                         // Check for histogram file:
-                        ossimFilename f = input->getFilenameWithThisExtension(
+                        ossimFilename histoFile = input->getFilenameWithThisExtension(
                            ossimString("his") );
-                        if ( hr->openHistogram( f ) == true )
+                        bool openedHistogram = hr->openHistogram( histoFile );
+                        if ( !openedHistogram && (input->getNumberOfEntries() > 1) &&
+                             ( input->getCurrentEntry() == 0 ) )
                         {
-                           // Enable:
+                           //---
+                           // Check for filename with no entry("e0") in the name if current entry
+                           // is 0 and we're multi entry. This handles the case of NITF with
+                           // an image and cloud entry, assuming an existing dot histogram
+                           // belongs to entry zero. Example:
+                           // NITF file:      5V090205P0001912264B220000100282M_001508507.ntf
+                           // Histogram file: 5V090205P0001912264B220000100282M_001508507.his
+                           //---
+                           input->getFilenameWithThisExt( ossimString(".his"), histoFile );
+                           openedHistogram = hr->openHistogram( histoFile );
+                        }
+                        
+                        if ( openedHistogram )
+                        {
                            hr->setEnableFlag(true);
-                           
-                           // Set the mode:
                            hr->setStretchMode( ossimHistogramRemapper::LINEAR_AUTO_MIN_MAX );
                         }
                      }
                   }
                }
             }
-          }
+         }
       }
       else
       {
          display->setWindowTitle(result->name());
       }
    }
-
+   
    // Set the current mode for the new display
    display->scrollWidget()->setExploitationMode(m_exploitationMode);
    
