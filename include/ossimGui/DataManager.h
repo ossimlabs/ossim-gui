@@ -109,6 +109,13 @@ namespace ossimGui{
          MENSURATION_MODE
       };
 
+      enum ViewModeType
+      {
+         VIEW_MODE_AUTO = 0,
+         VIEW_MODE_GEO,
+         VIEW_MODE_IMAGE
+      };
+
       DataManager();
       ossimRefPtr<ossimGui::DataManager::Node> findNode(ossimObject* obj);
       bool remove(ossimRefPtr<Node> obj, bool notifyFlag=true);
@@ -143,6 +150,8 @@ namespace ossimGui{
       
       const ossimString& defaultReprojectionChain()const{return m_defaultReprojectionChainTemplate;}
       const ossimString& defaultAffineChain()const{return m_defaultAffineChainTemplate;}
+      void setViewMode(ViewModeType mode) { m_viewMode = mode; }
+      ViewModeType viewMode() const { return m_viewMode; }
 
       void setExploitationMode(int expMode);
       void setAutoMeasActive(const bool state);
@@ -183,6 +192,7 @@ namespace ossimGui{
       ossimString m_defaultReprojectionChainTemplate;
       ossimString m_defaultAffineChainTemplate;
       QMdiArea*   m_mdiArea; 
+      ViewModeType m_viewMode;
 
       ossimSensorModelTuple* m_imgSet;
       ExploitationModeType m_exploitationMode;

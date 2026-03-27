@@ -11,6 +11,8 @@
 #include <QtGui/QKeyEvent>
 #include <QtGui/QResizeEvent>
 
+class ossimImageHandler;
+class ossimRLevelFilter;
 
 namespace ossimGui
 {
@@ -86,6 +88,13 @@ namespace ossimGui
 		void setViewToChains();
 		void setCommonCenter();
 		ossimDpt sceneToLocal(const ossimDpt& scenePoint);
+      bool isImageMode() const;
+      ossimImageHandler* findImageHandler() const;
+      ossimRLevelFilter* findRLevelFilter() const;
+      ossim_uint32 maxImageRLevel() const;
+      ossimDpt imageDecimation(ossim_uint32 rlevel) const;
+      void normalizeImageModeTransform();
+      void setImageRLevel(ossim_uint32 rlevel);
 
 		virtual void fit(const ossimIrect& input, const ossimIrect& target);
       ossimImageGeometry*      asGeometry();

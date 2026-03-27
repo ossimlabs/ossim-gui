@@ -33,6 +33,8 @@ namespace ossimGui
 
       virtual bool loadProjectFile(const ossimString& projFile);
       virtual bool loadImageFileList(std::vector<ossimString>& ilist);
+      void setViewMode(DataManager::ViewModeType mode);
+      DataManager::ViewModeType viewMode() const;
    
    public slots:
       void saveProject(bool checked = false);

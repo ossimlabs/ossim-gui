@@ -2,7 +2,9 @@
 #include <ossimGui/ImageScrollView.h>
 #include <ossimGui/SetViewVisitor.h>
 #include <ossim/imaging/ossimImageGeometry.h>
+#include <ossim/imaging/ossimImageHandler.h>
 #include <ossim/imaging/ossimImageRenderer.h>
+#include <ossim/imaging/ossimRLevelFilter.h>
 #include <ossim/base/ossimVisitor.h>
 #include <ossim/projection/ossimMapProjection.h>
 #include <ossim/projection/ossimImageViewAffineTransform.h>
@@ -118,6 +120,14 @@ namespace ossimGui
    
    void ImageViewManipulator::fullRes()
    {
+      ossimRLevelFilter* rlevelFilter = findRLevelFilter();
+      if(isImageMode())
+      {
+         setImageRLevel(0);
+         m_scrollView->zoomAnnotation();
+         return;
+      }
+
       ossimImageGeometry* geom = asGeometry();
       if(geom)
       {
@@ -145,8 +155,23 @@ namespace ossimGui
 
    void ImageViewManipulator::zoomIn(double factor)
    {
+      ossimRLevelFilter* rlevelFilter = findRLevelFilter();
       bool modified = false;
       if(!m_scrollView) return;
+      if(isImageMode())
+      {
+         if(rlevelFilter)
+         {
+            ossim_uint32 current = rlevelFilter->getCurrentRLevel();
+            if(current > 0)
+            {
+               setImageRLevel(current-1);
+            }
+         }
+         m_scrollView->zoomAnnotation();
+         return;
+      }
+
       ossimImageGeometry* geom = asGeometry();
       ossimDpt saveCenter = m_centerPoint;
       if(geom)
@@ -209,7 +234,23 @@ namespace ossimGui
 
    void ImageViewManipulator::zoomOut(double factor)
    {
+      ossimRLevelFilter* rlevelFilter = findRLevelFilter();
       if(!m_scrollView) return;
+      if(isImageMode())
+      {
+         if(rlevelFilter)
+         {
+            ossim_uint32 current = rlevelFilter->getCurrentRLevel();
+            ossim_uint32 maximum = maxImageRLevel();
+            if(current < maximum)
+            {
+               setImageRLevel(current+1);
+            }
+         }
+         m_scrollView->zoomAnnotation();
+         return;
+      }
+
       bool modified = false;
       ossimImageGeometry* geom = asGeometry();
       ossimDpt saveCenter = m_centerPoint;
@@ -274,13 +315,48 @@ namespace ossimGui
    void ImageViewManipulator::fit(const ossimIrect& inputRect,
                                   const ossimIrect& targetRect)
    {
+      if(isImageMode())
+      {
+         ossimImageHandler* handler = findImageHandler();
+         ossimRLevelFilter* rlevelFilter = findRLevelFilter();
+         if(handler && rlevelFilter)
+         {
+            const ossimIrect fullResRect = handler->getBoundingRect(0);
+            ossim_uint32 fitRLevel = 0;
+            const ossim_uint32 maximum = maxImageRLevel();
+            for(ossim_uint32 level = 0; level <= maximum; ++level)
+            {
+               ossimIrect levelRect = handler->getBoundingRect(level);
+               if(levelRect.hasNans())
+               {
+                  continue;
+               }
+
+               if((levelRect.width() <= targetRect.width()) &&
+                  (levelRect.height() <= targetRect.height()))
+               {
+                  fitRLevel = level;
+                  break;
+               }
+
+               fitRLevel = level;
+            }
+
+            m_centerPoint = fullResRect.midPoint();
+            setImageRLevel(fitRLevel);
+            m_scrollView->zoomAnnotation();
+            return;
+         }
+      }
+
       ossimImageGeometry* geom = asGeometry();
       double scaleX = static_cast<double>(inputRect.width())/static_cast<double>(targetRect.width());
       double scaleY = static_cast<double>(inputRect.height())/static_cast<double>(targetRect.height());
       double largestScale = ossim::max(scaleX, scaleY);
-      ossimDpt saveCenter = m_centerPoint;
       if(geom)
       {
+         ossimGpt imageCenterGround;
+         geom->localToWorld(inputRect.midPoint(), imageCenterGround);
          if(geom->getProjection())
          {
             ossimDpt mpp = geom->getProjection()->getMetersPerPixel();
@@ -292,6 +368,7 @@ namespace ossimGui
                mapProj->setMetersPerPixel(mpp);
             }
          }
+         m_centerPoint = imageCenterGround;
       }
       else
       {
@@ -301,8 +378,8 @@ namespace ossimGui
             double x = 1.0/largestScale;
             ivat->scale(x, x);
          }
+         m_centerPoint = inputRect.midPoint();
       }
-      m_centerPoint = saveCenter;
       setViewToChains();
       m_scrollView->refreshDisplay();
       m_scrollView->zoomAnnotation();
@@ -468,9 +545,130 @@ namespace ossimGui
       {
          return dynamic_cast<ossimImageGeometry*>(ivpt->getView());
       }
-	      
+      
       return getObjectAs<ossimImageGeometry>();
    }
+
+   bool ImageViewManipulator::isImageMode() const
+   {
+      return (getObjectAs<const ossimImageViewAffineTransform>() != 0) &&
+             (findRLevelFilter() != 0);
+   }
+
+   ossimImageHandler* ImageViewManipulator::findImageHandler() const
+   {
+      if(!m_scrollView || !m_scrollView->connectableObject())
+      {
+         return 0;
+      }
+
+      ossimConnectableObject* input =
+         dynamic_cast<ossimConnectableObject*>(m_scrollView->connectableObject()->getInput());
+      if(!input)
+      {
+         return 0;
+      }
+
+      ossimTypeNameVisitor visitor("ossimImageHandler",
+                                   true,
+                                   ossimVisitor::VISIT_CHILDREN|ossimVisitor::VISIT_INPUTS);
+      input->accept(visitor);
+
+      return visitor.getObjectAs<ossimImageHandler>(0);
+   }
+
+   ossimRLevelFilter* ImageViewManipulator::findRLevelFilter() const
+   {
+      if(!m_scrollView || !m_scrollView->connectableObject())
+      {
+         return 0;
+      }
+
+      ossimConnectableObject* input =
+         dynamic_cast<ossimConnectableObject*>(m_scrollView->connectableObject()->getInput());
+      if(!input)
+      {
+         return 0;
+      }
+
+      ossimTypeNameVisitor visitor("ossimRLevelFilter",
+                                   true,
+                                   ossimVisitor::VISIT_CHILDREN|ossimVisitor::VISIT_INPUTS);
+      input->accept(visitor);
+
+      return visitor.getObjectAs<ossimRLevelFilter>(0);
+   }
+
+   ossim_uint32 ImageViewManipulator::maxImageRLevel() const
+   {
+      ossimImageHandler* handler = findImageHandler();
+      if(!handler)
+      {
+         return 0;
+      }
+
+      const ossim_uint32 levelCount = handler->getNumberOfDecimationLevels();
+      return levelCount ? (levelCount-1) : 0;
+   }
+
+   ossimDpt ImageViewManipulator::imageDecimation(ossim_uint32 rlevel) const
+   {
+      ossimDpt result(1.0, 1.0);
+      ossimImageHandler* handler = findImageHandler();
+      if(handler)
+      {
+         handler->getDecimationFactor(rlevel, result);
+      }
+
+      if(result.hasNans() || (result.x == 0.0) || (result.y == 0.0))
+      {
+         result = ossimDpt(1.0, 1.0);
+      }
+
+      return result;
+   }
+
+   void ImageViewManipulator::normalizeImageModeTransform()
+   {
+      ossimImageViewAffineTransform* ivat = getObjectAs<ossimImageViewAffineTransform>();
+      if(!ivat)
+      {
+         return;
+      }
+
+      ossimDpt scale = ivat->getScale();
+      if(scale.hasNans() || (scale.x == 0.0) || (scale.y == 0.0))
+      {
+         return;
+      }
+
+      if((scale.x != 1.0) || (scale.y != 1.0))
+      {
+         ivat->scale(1.0, 1.0);
+      }
+   }
+
+   void ImageViewManipulator::setImageRLevel(ossim_uint32 rlevel)
+   {
+      ossimRLevelFilter* rlevelFilter = findRLevelFilter();
+      if(!rlevelFilter)
+      {
+         return;
+      }
+
+      normalizeImageModeTransform();
+      const ossim_uint32 maximum = maxImageRLevel();
+      if(rlevel > maximum)
+      {
+         rlevel = maximum;
+      }
+
+      const ossim_uint32 previous = rlevelFilter->getCurrentRLevel();
+      rlevelFilter->setCurrentRLevel(rlevel);
+      setViewToChains();
+      m_scrollView->refreshDisplay();
+   }
+
    void ImageViewManipulator::setViewToChains()
    {
       if(m_scrollView&&m_scrollView->connectableObject())
@@ -488,7 +686,18 @@ namespace ossimGui
             {
                if(!m_centerPoint.hasNans())
                {
-                  ivat->imageToView(m_centerPoint,center);
+                  ossimDpt imagePoint = m_centerPoint;
+                  if(isImageMode())
+                  {
+                     ossimRLevelFilter* rlevelFilter = findRLevelFilter();
+                     if(rlevelFilter)
+                     {
+                        ossimDpt decimation = imageDecimation(rlevelFilter->getCurrentRLevel());
+                        imagePoint.x *= decimation.x;
+                        imagePoint.y *= decimation.y;
+                     }
+                  }
+                  ivat->imageToView(imagePoint,center);
                }
             }
          }
@@ -529,6 +738,19 @@ namespace ossimGui
             if(!scenePoint.hasNans())
             {
                ivat->viewToImage(scenePoint, result);
+               if(isImageMode())
+               {
+                  ossimRLevelFilter* rlevelFilter = findRLevelFilter();
+                  if(rlevelFilter)
+                  {
+                     ossimDpt decimation = imageDecimation(rlevelFilter->getCurrentRLevel());
+                     if((decimation.x != 0.0) && (decimation.y != 0.0))
+                     {
+                        result.x /= decimation.x;
+                        result.y /= decimation.y;
+                     }
+                  }
+               }
             }
          }
       }

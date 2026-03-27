@@ -67,7 +67,20 @@ ossimGui::MainWindow::MainWindow(QWidget* parent)
    m_dataManager  = m_dataManagerWidget->dataManager();
    m_dataManager->setMdiArea(m_mdiArea);
    m_dataManagerWidget->setJobQueue(m_stagerQueue->getJobQueue());
-  // createModeSelector(toolbar);
+   // createModeSelector(toolbar);
+}
+
+void ossimGui::MainWindow::setViewMode(DataManager::ViewModeType mode)
+{
+   if(m_dataManager.valid())
+   {
+      m_dataManager->setViewMode(mode);
+   }
+}
+
+ossimGui::DataManager::ViewModeType ossimGui::MainWindow::viewMode() const
+{
+   return m_dataManager.valid() ? m_dataManager->viewMode() : DataManager::VIEW_MODE_AUTO;
 }
 
 bool	ossimGui::MainWindow::event ( QEvent * e )
