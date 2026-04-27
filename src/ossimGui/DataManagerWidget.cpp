@@ -58,6 +58,7 @@
 #include <set>
 
 #ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#include <ossim/registration/ossimBundleAdjustmentRegistrationSource.h>
 #include <ossim/registration/ossimFixedRegistrationSource.h>
 #include <ossim/registration/ossimRegistrationSourceFactory.h>
 #endif
@@ -391,6 +392,234 @@ namespace ossimGui
       bool m_success;
    };
 
+   class BundleRegistrationSourceJob : public ossimJob
+   {
+   public:
+      BundleRegistrationSourceJob(
+         ossimBundleAdjustmentRegistrationSource* registrationSource,
+         const ossimString& label)
+      :m_registrationSource(registrationSource),
+       m_label(label),
+       m_success(false)
+      {
+         setId("ossimGui::BundleRegistrationSourceJob");
+         setName("Bundle adjust: " + m_label);
+      }
+
+      bool success()const{return m_success;}
+      const ossimString& resultSummary()const{return m_resultSummary;}
+      const DataManagerWidgetEvent::HandlerListType& sourceHandlersToReload()const
+      {
+         return m_sourceHandlersToReload;
+      }
+
+      virtual void start()
+      {
+         if(isCanceled())
+         {
+            m_success = false;
+            m_resultSummary = "Bundle adjustment canceled before it started.";
+            setDescription(m_resultSummary);
+            setName("Bundle adjustment canceled: " + m_label);
+            finished();
+            return;
+         }
+
+         setState(ossimJob_RUNNING);
+         run();
+         finished();
+      }
+
+   protected:
+      void updateProgressName(
+         const ossimBundleAdjustmentRegistrationSource::ProgressInfo& progress)
+      {
+         ossimString name = "Bundle adjust";
+         if(!progress.message.empty())
+         {
+            name += " ";
+            name += progress.message.c_str();
+         }
+         name += ": ";
+         name += m_label;
+         setName(name);
+         if(!progress.message.empty())
+         {
+            setDescription(progress.message.c_str());
+         }
+         setPercentComplete(progress.percentComplete);
+      }
+
+      ossimFilename defaultGeometryOutput(
+         const ossimBundleAdjustmentRegistrationSource::InputWrapper& input)
+         const
+      {
+         ossimFilename result;
+         ossimImageHandler* handler = input.sourceHandler();
+         if(handler)
+         {
+            result = handler->getFilename().expand();
+         }
+         if(result.empty())
+         {
+            result = ossimString("bundle_") +
+                     ossimString::toString(input.inputIndex()) +
+                     ".geom";
+         }
+         else
+         {
+            result.setExtension("geom");
+         }
+         return result;
+      }
+
+      virtual void run()
+      {
+         setPercentComplete(0.0);
+         m_sourceHandlersToReload.clear();
+         if(m_registrationSource.valid())
+         {
+            m_registrationSource->setCancelCallback([this]() {
+               return this->isCanceled();
+            });
+            m_registrationSource->setProgressCallback(
+               [this](const ossimBundleAdjustmentRegistrationSource::
+                         ProgressInfo& progress) {
+                  updateProgressName(progress);
+               });
+            m_success = m_registrationSource->executeRegistration();
+            m_registrationSource->setCancelCallback(
+               std::function<bool()>());
+            m_registrationSource->setProgressCallback(
+               std::function<void(
+                  const ossimBundleAdjustmentRegistrationSource::
+                     ProgressInfo&)>());
+
+            const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
+               result = m_registrationSource->registrationResult();
+            ossim_uint32 tiePointCount = 0;
+            ossim_uint32 pairCount =
+               static_cast<ossim_uint32>(result.pairResults.size());
+            ossim_uint32 idx = 0;
+            for(idx = 0; idx < result.pairResults.size(); ++idx)
+            {
+               tiePointCount += static_cast<ossim_uint32>(
+                  result.pairResults[idx].tiePoints.size());
+            }
+
+            m_resultSummary =
+               ossimString::toString(pairCount) + " pair(s), " +
+               ossimString::toString(tiePointCount) + " tie point(s)";
+
+            if(result.optimization.ran)
+            {
+               m_resultSummary += ", RMSE ";
+               m_resultSummary += ossimString::toString(
+                  result.optimization.finalRmsPixels);
+            }
+
+            std::vector<ossimFilename> writtenGeometryFiles;
+            std::vector<ossimFilename> outputGeometryFiles;
+            if(m_success && !isCanceled() &&
+               m_registrationSource->optimizeEnabled())
+            {
+               const std::vector<ossim_uint32>& inputIndexes =
+                  m_registrationSource->bundleInputIndexes();
+               for(idx = 0; idx < inputIndexes.size(); ++idx)
+               {
+                  const ossimBundleAdjustmentRegistrationSource::InputWrapper*
+                     input =
+                        m_registrationSource->inputWrapper(inputIndexes[idx]);
+                  if(input)
+                  {
+                     outputGeometryFiles.push_back(
+                        defaultGeometryOutput(*input));
+                  }
+               }
+
+               if(outputGeometryFiles.size() == inputIndexes.size() &&
+                  m_registrationSource->saveGeometries(outputGeometryFiles))
+               {
+                  writtenGeometryFiles = outputGeometryFiles;
+                  for(idx = 0; idx < inputIndexes.size(); ++idx)
+                  {
+                     const ossimBundleAdjustmentRegistrationSource::
+                        InputWrapper* input =
+                           m_registrationSource->inputWrapper(
+                              inputIndexes[idx]);
+                     if(input)
+                     {
+                        ossimImageHandler* sourceHandler =
+                           input->sourceHandler();
+                        if(sourceHandler)
+                        {
+                           m_sourceHandlersToReload.push_back(sourceHandler);
+                        }
+                     }
+                  }
+               }
+               else
+               {
+                  m_success = false;
+                  m_resultSummary +=
+                     ", failed to write bundle geometry file(s)";
+               }
+            }
+
+            if(isCanceled())
+            {
+               m_resultSummary = "Bundle adjustment canceled.";
+               m_success = false;
+            }
+            if(!writtenGeometryFiles.empty())
+            {
+               m_resultSummary += ", wrote ";
+               m_resultSummary += ossimString::toString(
+                  static_cast<ossim_uint32>(writtenGeometryFiles.size()));
+               m_resultSummary += " geometry file(s)";
+               for(idx = 0; idx < writtenGeometryFiles.size(); ++idx)
+               {
+                  m_resultSummary += (idx == 0) ? ": " : ", ";
+                  m_resultSummary += writtenGeometryFiles[idx];
+               }
+            }
+            if(!result.message.empty())
+            {
+               m_resultSummary += " - ";
+               m_resultSummary += result.message.c_str();
+            }
+
+            setDescription(m_resultSummary);
+            if(isCanceled())
+            {
+               setName("Bundle adjustment canceled: " + m_label);
+            }
+            else
+            {
+               setName((m_success ? "Bundle adjusted: " :
+                                    "Bundle adjustment failed: ") +
+                       m_label);
+            }
+         }
+         else
+         {
+            m_success = false;
+            m_resultSummary =
+               "Bundle adjustment source is no longer available.";
+            setDescription(m_resultSummary);
+            setName("Bundle adjustment failed: " + m_label);
+         }
+         setPercentComplete(100.0);
+      }
+
+      ossimRefPtr<ossimBundleAdjustmentRegistrationSource>
+         m_registrationSource;
+      ossimString m_label;
+      ossimString m_resultSummary;
+      DataManagerWidgetEvent::HandlerListType m_sourceHandlersToReload;
+      bool m_success;
+   };
+
    class RegistrationSourceJobCallback : public ossimJobCallback
    {
    public:
@@ -413,6 +642,12 @@ namespace ossimGui
             if(registrationJob)
             {
                evt->setHandlerList(registrationJob->sourceHandlersToReload());
+            }
+            std::shared_ptr<BundleRegistrationSourceJob> bundleJob =
+               std::dynamic_pointer_cast<BundleRegistrationSourceJob>(job);
+            if(bundleJob)
+            {
+               evt->setHandlerList(bundleJob->sourceHandlersToReload());
             }
             QCoreApplication::postEvent(m_dataManagerWidget, evt);
          }
@@ -974,7 +1209,9 @@ void ossimGui::DataManagerRegistrationItem::execute()
 
    ossimFixedRegistrationSource* registration =
       objectAsNode()->getObjectAs<ossimFixedRegistrationSource>();
-   if(!registration)
+   ossimBundleAdjustmentRegistrationSource* bundleRegistration =
+      objectAsNode()->getObjectAs<ossimBundleAdjustmentRegistrationSource>();
+   if(!registration && !bundleRegistration)
    {
       QMessageBox::warning(treeWidget(),
                            "Registration",
@@ -987,16 +1224,32 @@ void ossimGui::DataManagerRegistrationItem::execute()
       std::shared_ptr<ossimJobQueue> q = dataManagerWidget()->jobQueue();
       if(q)
       {
-         std::shared_ptr<RegistrationSourceJob> job =
-            std::make_shared<RegistrationSourceJob>(
-               registration,
-               ossimString(text(0).toStdString()));
-         job->setCallback(
-            std::make_shared<RegistrationSourceJobCallback>(
-               dataManagerWidget(),
-               this));
-         job->ready();
-         q->add(job);
+         if(registration)
+         {
+            std::shared_ptr<RegistrationSourceJob> job =
+               std::make_shared<RegistrationSourceJob>(
+                  registration,
+                  ossimString(text(0).toStdString()));
+            job->setCallback(
+               std::make_shared<RegistrationSourceJobCallback>(
+                  dataManagerWidget(),
+                  this));
+            job->ready();
+            q->add(job);
+         }
+         else if(bundleRegistration)
+         {
+            std::shared_ptr<BundleRegistrationSourceJob> job =
+               std::make_shared<BundleRegistrationSourceJob>(
+                  bundleRegistration,
+                  ossimString(text(0).toStdString()));
+            job->setCallback(
+               std::make_shared<RegistrationSourceJobCallback>(
+                  dataManagerWidget(),
+                  this));
+            job->ready();
+            q->add(job);
+         }
       }
       else
       {
@@ -3213,9 +3466,29 @@ void ossimGui::DataManagerWidget::createFixedRegistration()
 
 void ossimGui::DataManagerWidget::createBundleFloatingRegistration()
 {
+#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+   ossimRefPtr<ossimObject> obj =
+      new ossimBundleAdjustmentRegistrationSource();
+   if(obj.valid())
+   {
+      std::lock_guard<std::mutex> lock(m_activeItemsMutex);
+      ossimRefPtr<DataManager::Node> node =
+         m_dataManager->addSource(obj.get(), false);
+      if(node.valid())
+      {
+         node->setName("Bundle/Floating Registration");
+         DataManagerRegistrationItem* item =
+            new DataManagerRegistrationItem(node.get());
+         item->setFlags(item->flags()|Qt::ItemIsEditable);
+         m_registrationSources->addChild(item);
+         m_activeItems.insert(item);
+      }
+   }
+#else
    QMessageBox::information(this,
                             "Registration",
-                            "Bundle/Floating registration is not available yet.");
+                            "ossim-registration-source is not enabled in this build.");
+#endif
 }
 
 void ossimGui::DataManagerWidget::registerSelected()
@@ -3979,7 +4252,8 @@ void ossimGui::DataManagerWidget::populateTreeWithNodes(DataManager::NodeListTyp
          m_activeItemsMutex.unlock();
       }
 #ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
-      else if(node->getObjectAs<ossimFixedRegistrationSource>())
+      else if(node->getObjectAs<ossimFixedRegistrationSource>() ||
+              node->getObjectAs<ossimBundleAdjustmentRegistrationSource>())
       {
          DataManagerRegistrationItem* item =
             new DataManagerRegistrationItem(node.get());
@@ -4055,6 +4329,7 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
          registrationMenu->addAction("Bundle/Floating");
 #ifndef OSSIM_REGISTRATION_SOURCE_ENABLED
       fixedAction->setEnabled(false);
+      bundleFloatingAction->setEnabled(false);
 #endif
       menu->addMenu(registrationMenu);
       connect(fixedAction, SIGNAL(triggered(bool)), this, SLOT(createFixedRegistration()));

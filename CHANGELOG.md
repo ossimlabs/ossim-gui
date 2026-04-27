@@ -2,6 +2,17 @@
 
 All notable changes to `ossim-gui` are documented here.
 
+## [Unreleased]
+
+> **TL;DR:** The Registration folder can now create and run Bundle/Floating
+> registration jobs, not just fixed registration jobs.
+
+### Added
+- Add Bundle/Floating registration object creation when
+  `ossim-registration-source` is enabled.
+- Add a bundle-adjustment background job with progress updates, cancellation,
+  geometry sidecar writes, and geometry reload propagation.
+
 ## [2026-04-27]
 
 > **TL;DR:** Add optional support for the standalone registration-source
