@@ -347,6 +347,20 @@ namespace ossimGui{
    public:
       DataManagerDisplayFolder();
    };
+
+   class OSSIMGUI_DLL DataManagerRegistrationItem : public DataManagerNodeItem
+   {
+   public:
+      DataManagerRegistrationItem(DataManager::Node* node=0);
+      virtual ~DataManagerRegistrationItem();
+      virtual void execute();
+   };
+
+   class OSSIMGUI_DLL DataManagerRegistrationFolder : public DataManagerFolder
+   {
+   public:
+      DataManagerRegistrationFolder();
+   };
    
    class OSSIMGUI_DLL DataManagerImageWriterItem : public DataManagerNodeItem
    {
@@ -632,6 +646,10 @@ namespace ossimGui{
       virtual void createTiffWriter();
       virtual void createJpegWriter();
       virtual void createWriterFromFactory();
+
+      virtual void createFixedRegistration();
+      virtual void createBundleFloatingRegistration();
+      virtual void registerSelected();
       
       virtual void executeSelected();
       
@@ -753,6 +771,7 @@ namespace ossimGui{
       DataManagerImageChainFolder*     m_imageChains;
      // DataManagerImageOutputFolder*    m_imageOutput;
       DataManagerDisplayFolder*        m_imageDisplays;
+      DataManagerRegistrationFolder*   m_registrationSources;
       DataManagerImageWriterFolder*    m_imageWriters;
       
       QPoint m_dragStartPosition;

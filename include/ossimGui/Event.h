@@ -70,6 +70,7 @@ namespace ossimGui{
    {
    public:
       typedef std::vector<DataManagerNodeItem*> ItemListType;
+      typedef std::vector<ossimRefPtr<ossimImageHandler> > HandlerListType;
       enum CommandType
       {
          COMMAND_NONE = 0,
@@ -90,9 +91,13 @@ namespace ossimGui{
       void setItemList(const ItemListType& items){m_itemList = items;}
       ItemListType& itemList(){return m_itemList;}
       const ItemListType& itemList()const{return m_itemList;}
+      void setHandlerList(const HandlerListType& handlers){m_handlerList = handlers;}
+      HandlerListType& handlerList(){return m_handlerList;}
+      const HandlerListType& handlerList()const{return m_handlerList;}
       
    protected:
       ItemListType m_itemList;
+      HandlerListType m_handlerList;
       CommandType m_commandType;
    };
    class OSSIMGUI_DLL DataManagerWidgetJobEvent : public QEvent

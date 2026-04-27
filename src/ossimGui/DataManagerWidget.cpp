@@ -57,6 +57,22 @@
 #include <ossimGui/RegPoint.h>
 #include <set>
 
+#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#include <ossim/registration/ossimFixedRegistrationSource.h>
+#include <ossim/registration/ossimRegistrationSourceFactory.h>
+#endif
+
+#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+namespace
+{
+   void ensureRegistrationSourceFactoryRegistered()
+   {
+      ossimObjectFactoryRegistry::instance()->registerFactory(
+         ossimRegistrationSourceFactory::instance());
+   }
+}
+#endif
+
 void ossimGui::DataManagerWidget::RefreshVisitor::visit(ossimObject* obj)
 {
    if(!hasVisited(obj))
@@ -173,6 +189,241 @@ namespace ossimGui
       DataManagerNodeItem* m_item;
       
    };
+
+#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+   class RegistrationSourceJob : public ossimJob
+   {
+   public:
+      RegistrationSourceJob(ossimFixedRegistrationSource* registrationSource,
+                            const ossimString& label)
+      :m_registrationSource(registrationSource),
+       m_label(label),
+       m_success(false)
+      {
+         setId("ossimGui::RegistrationSourceJob");
+         setName("Register: " + m_label);
+      }
+
+      bool success()const{return m_success;}
+      const ossimString& resultSummary()const{return m_resultSummary;}
+      const DataManagerWidgetEvent::HandlerListType& sourceHandlersToReload()const
+      {
+         return m_sourceHandlersToReload;
+      }
+
+      virtual void start()
+      {
+         if(isCanceled())
+         {
+            m_success = false;
+            m_resultSummary = "Registration canceled before it started.";
+            setDescription(m_resultSummary);
+            setName("Registration canceled: " + m_label);
+            finished();
+            return;
+         }
+
+         setState(ossimJob_RUNNING);
+         run();
+         finished();
+      }
+
+   protected:
+      void updateProgressName(
+         const ossimFixedRegistrationSource::ProgressInfo& progress)
+      {
+         ossimString name = "Register";
+         if(!progress.message.empty())
+         {
+            name += " ";
+            name += progress.message.c_str();
+         }
+         name += ": ";
+         name += m_label;
+         setName(name);
+         if(!progress.message.empty())
+         {
+            setDescription(progress.message.c_str());
+         }
+         setPercentComplete(progress.percentComplete);
+      }
+
+      ossimFilename defaultGeometryOutput(
+         const ossimFixedRegistrationSource::InputWrapper& input) const
+      {
+         ossimFilename result;
+         ossimImageHandler* handler = input.sourceHandler();
+         if(handler)
+         {
+            result = handler->getFilename().expand();
+         }
+         if(result.empty())
+         {
+            result = ossimString("floating_") +
+                     ossimString::toString(input.inputIndex()) +
+                     ".geom";
+         }
+         else
+         {
+            result.setExtension("geom");
+         }
+         return result;
+      }
+
+      virtual void run()
+      {
+         setPercentComplete(0.0);
+         m_sourceHandlersToReload.clear();
+         if(m_registrationSource.valid())
+         {
+            m_registrationSource->setCancelCallback([this]() {
+               return this->isCanceled();
+            });
+            m_registrationSource->setProgressCallback(
+               [this](
+                  const ossimFixedRegistrationSource::ProgressInfo& progress) {
+                  updateProgressName(progress);
+               });
+            m_success = m_registrationSource->executeRegistration();
+            m_registrationSource->setCancelCallback(
+               std::function<bool()>());
+            m_registrationSource->setProgressCallback(
+               std::function<void(
+                  const ossimFixedRegistrationSource::ProgressInfo&)>());
+
+            const std::vector<ossimFixedRegistrationSource::RegistrationResult>& results =
+               m_registrationSource->registrationResults();
+            ossim_uint32 tiePointCount = 0;
+            ossim_uint32 successfulPairs = 0;
+            std::vector<ossimFilename> writtenGeometryFiles;
+            std::vector<ossimFilename> failedGeometryFiles;
+            ossim_uint32 idx = 0;
+            for(idx = 0; idx < results.size(); ++idx)
+            {
+               tiePointCount += static_cast<ossim_uint32>(results[idx].tiePoints.size());
+               if(results[idx].success && !isCanceled())
+               {
+                  ++successfulPairs;
+                  const ossimFixedRegistrationSource::InputWrapper* input =
+                     m_registrationSource->inputWrapper(results[idx].inputIndex);
+                  if(input && m_registrationSource->optimizeEnabled())
+                  {
+                     const ossimFilename outputFile = defaultGeometryOutput(*input);
+                     const ossim_autoreg::RegistrationSession* session =
+                        m_registrationSource->registrationSession(
+                           results[idx].floatingInputIndex);
+                     if(session && session->saveMovingGeometry(outputFile))
+                     {
+                        writtenGeometryFiles.push_back(outputFile);
+                        ossimImageHandler* sourceHandler = input->sourceHandler();
+                        if(sourceHandler)
+                        {
+                           m_sourceHandlersToReload.push_back(sourceHandler);
+                        }
+                     }
+                     else
+                     {
+                        failedGeometryFiles.push_back(outputFile);
+                     }
+                  }
+               }
+            }
+
+            m_resultSummary =
+               ossimString::toString(successfulPairs) + "/" +
+               ossimString::toString(static_cast<ossim_uint32>(results.size())) +
+               " pair(s), " + ossimString::toString(tiePointCount) +
+               " tie point(s)";
+            if(isCanceled())
+            {
+               m_resultSummary = "Registration canceled.";
+               m_success = false;
+            }
+            if(!writtenGeometryFiles.empty())
+            {
+               m_resultSummary += ", wrote ";
+               m_resultSummary += ossimString::toString(
+                  static_cast<ossim_uint32>(writtenGeometryFiles.size()));
+               m_resultSummary += " geometry file(s)";
+               for(idx = 0; idx < writtenGeometryFiles.size(); ++idx)
+               {
+                  m_resultSummary += (idx == 0) ? ": " : ", ";
+                  m_resultSummary += writtenGeometryFiles[idx];
+               }
+            }
+            if(!failedGeometryFiles.empty())
+            {
+               m_resultSummary += ", failed to write ";
+               m_resultSummary += ossimString::toString(
+                  static_cast<ossim_uint32>(failedGeometryFiles.size()));
+               m_resultSummary += " geometry file(s)";
+               for(idx = 0; idx < failedGeometryFiles.size(); ++idx)
+               {
+                  m_resultSummary += (idx == 0) ? ": " : ", ";
+                  m_resultSummary += failedGeometryFiles[idx];
+               }
+               m_success = false;
+            }
+            setDescription(m_resultSummary);
+            if(isCanceled())
+            {
+               setName("Registration canceled: " + m_label);
+            }
+            else
+            {
+               setName((m_success ? "Registered: " : "Registration failed: ") + m_label);
+            }
+         }
+         else
+         {
+            m_success = false;
+            m_resultSummary = "Registration source is no longer available.";
+            setDescription(m_resultSummary);
+            setName("Registration failed: " + m_label);
+         }
+         setPercentComplete(100.0);
+      }
+
+      ossimRefPtr<ossimFixedRegistrationSource> m_registrationSource;
+      ossimString m_label;
+      ossimString m_resultSummary;
+      DataManagerWidgetEvent::HandlerListType m_sourceHandlersToReload;
+      bool m_success;
+   };
+
+   class RegistrationSourceJobCallback : public ossimJobCallback
+   {
+   public:
+      RegistrationSourceJobCallback(DataManagerWidget* widget,
+                                    DataManagerNodeItem* item)
+      :m_dataManagerWidget(widget),
+       m_item(item)
+      {
+      }
+
+      virtual void finished(std::shared_ptr<ossimJob> job)
+      {
+         if(m_dataManagerWidget&&m_item)
+         {
+            DataManagerWidgetEvent* evt =
+               new DataManagerWidgetEvent(DataManagerWidgetEvent::COMMAND_REFRESH);
+            evt->setItemList(m_item);
+            std::shared_ptr<RegistrationSourceJob> registrationJob =
+               std::dynamic_pointer_cast<RegistrationSourceJob>(job);
+            if(registrationJob)
+            {
+               evt->setHandlerList(registrationJob->sourceHandlersToReload());
+            }
+            QCoreApplication::postEvent(m_dataManagerWidget, evt);
+         }
+         ossimJobCallback::finished(job);
+      }
+
+   protected:
+      DataManagerWidget* m_dataManagerWidget;
+      DataManagerNodeItem* m_item;
+   };
+#endif
 }
 
 class TestCycleVisitor :public ossimVisitor
@@ -694,6 +945,71 @@ ossimGui::DataManagerDisplayFolder::DataManagerDisplayFolder()
 :DataManagerFolder()
 {
    setText(0, "Displays");
+}
+
+ossimGui::DataManagerRegistrationFolder::DataManagerRegistrationFolder()
+:DataManagerFolder()
+{
+   setText(0, "Registration");
+}
+
+ossimGui::DataManagerRegistrationItem::DataManagerRegistrationItem(
+   DataManager::Node* node)
+:DataManagerNodeItem(node)
+{
+   m_autoDelete = false;
+}
+
+ossimGui::DataManagerRegistrationItem::~DataManagerRegistrationItem()
+{
+}
+
+void ossimGui::DataManagerRegistrationItem::execute()
+{
+#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+   if(!objectAsNode())
+   {
+      return;
+   }
+
+   ossimFixedRegistrationSource* registration =
+      objectAsNode()->getObjectAs<ossimFixedRegistrationSource>();
+   if(!registration)
+   {
+      QMessageBox::warning(treeWidget(),
+                           "Registration",
+                           "Selected registration object is not supported.");
+      return;
+   }
+
+   if(dataManagerWidget())
+   {
+      std::shared_ptr<ossimJobQueue> q = dataManagerWidget()->jobQueue();
+      if(q)
+      {
+         std::shared_ptr<RegistrationSourceJob> job =
+            std::make_shared<RegistrationSourceJob>(
+               registration,
+               ossimString(text(0).toStdString()));
+         job->setCallback(
+            std::make_shared<RegistrationSourceJobCallback>(
+               dataManagerWidget(),
+               this));
+         job->ready();
+         q->add(job);
+      }
+      else
+      {
+         QMessageBox::warning(treeWidget(),
+                              "Registration",
+                              "No job queue is available for registration.");
+      }
+   }
+#else
+   QMessageBox::warning(treeWidget(),
+                        "Registration",
+                        "ossim-registration-source is not enabled in this build.");
+#endif
 }
 
 ossimGui::DataManagerImageWriterFolder::DataManagerImageWriterFolder()
@@ -1536,6 +1852,7 @@ ossimGui::DataManagerWidget::DataManagerWidget(QWidget* parent)
      m_rawImageSources(0),
      m_imageChains(0),
      m_imageDisplays(0),
+     m_registrationSources(0),
      m_imageWriters(0),
      m_dragStartPosition(),
      m_activeItems(),
@@ -1551,6 +1868,10 @@ ossimGui::DataManagerWidget::DataManagerWidget(QWidget* parent)
      m_planetaryDisplayNode(),
      m_lastOpenedDirectory()
 {
+#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+   ensureRegistrationSourceFactoryRegistered();
+#endif
+
    setAcceptDrops(true);
    
    m_dataManager->setCallback(m_dataManagerCallback);
@@ -1622,6 +1943,7 @@ void ossimGui::DataManagerWidget::refresh()
    m_rawImageSources->clearChildren();
    m_imageChains->clearChildren();
    m_imageDisplays->clearChildren();
+   m_registrationSources->clearChildren();
    m_imageWriters->clearChildren();
    RefreshVisitor visitor(this);
    
@@ -1651,6 +1973,7 @@ void ossimGui::DataManagerWidget::initialize()
    m_rawImageSources   = new DataManagerRawImageSourceFolder();
    m_imageChains       = new DataManagerImageChainFolder();
    m_imageDisplays = new DataManagerDisplayFolder();
+   m_registrationSources = new DataManagerRegistrationFolder();
    m_imageWriters  = new DataManagerImageWriterFolder();
    m_rootImageFolder->setText(0, "Image Folder");
    m_rawImageSources->setText(0, "Sources");
@@ -1660,6 +1983,7 @@ void ossimGui::DataManagerWidget::initialize()
    m_rootImageFolder->addChild(m_rawImageSources);
    m_rootImageFolder->addChild(m_imageChains);
    m_rootImageFolder->addChild(m_imageDisplays);
+   m_rootImageFolder->addChild(m_registrationSources);
    m_rootImageFolder->addChild(m_imageWriters);
    
    std::vector<ossimString> objects;
@@ -2863,6 +3187,52 @@ void ossimGui::DataManagerWidget::createWriterFromType(const QString& type)
    m_activeItemsMutex.unlock();
 }
 
+void ossimGui::DataManagerWidget::createFixedRegistration()
+{
+#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+   ossimRefPtr<ossimObject> obj = new ossimFixedRegistrationSource();
+   if(obj.valid())
+   {
+      std::lock_guard<std::mutex> lock(m_activeItemsMutex);
+      ossimRefPtr<DataManager::Node> node = m_dataManager->addSource(obj.get(), false);
+      if(node.valid())
+      {
+         node->setName("Fixed Registration");
+         DataManagerRegistrationItem* item = new DataManagerRegistrationItem(node.get());
+         item->setFlags(item->flags()|Qt::ItemIsEditable);
+         m_registrationSources->addChild(item);
+         m_activeItems.insert(item);
+      }
+   }
+#else
+   QMessageBox::warning(this,
+                        "Registration",
+                        "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
+void ossimGui::DataManagerWidget::createBundleFloatingRegistration()
+{
+   QMessageBox::information(this,
+                            "Registration",
+                            "Bundle/Floating registration is not available yet.");
+}
+
+void ossimGui::DataManagerWidget::registerSelected()
+{
+   QList<DataManagerRegistrationItem*> result =
+      grabSelectedChildItemsOfType<DataManagerRegistrationItem>();
+   if(!result.empty())
+   {
+      QList<DataManagerRegistrationItem*>::iterator iter = result.begin();
+      while(iter != result.end())
+      {
+         (*iter)->execute();
+         ++iter;
+      }
+   }
+}
+
 void ossimGui::DataManagerWidget::executeSelected()
 {
    QList<DataManagerImageWriterItem*> result = grabSelectedChildItemsOfType<DataManagerImageWriterItem>();
@@ -3415,6 +3785,20 @@ bool	ossimGui::DataManagerWidget::event( QEvent * e )
                }
                case DataManagerWidgetEvent::COMMAND_REFRESH:
                {
+                  DataManagerWidgetEvent::HandlerListType& handlerList =
+                     wEvent->handlerList();
+                  DataManagerWidgetEvent::HandlerListType::iterator handlerIter =
+                     handlerList.begin();
+                  while(handlerIter != handlerList.end())
+                  {
+                     if((*handlerIter).valid())
+                     {
+                        (*handlerIter)->setImageGeometry(0);
+                        (*handlerIter)->getImageGeometry();
+                     }
+                     ++handlerIter;
+                  }
+
                   m_activeItemsMutex.lock();
                   DataManagerWidgetEvent::ItemListType& itemList = wEvent->itemList();
                   DataManagerWidgetEvent::ItemListType::iterator iter = itemList.begin();
@@ -3426,8 +3810,23 @@ bool	ossimGui::DataManagerWidget::event( QEvent * e )
                         if(connectable)
                         {
                            ossimRefPtr<ossimRefreshEvent> refreshEvent = new ossimRefreshEvent(ossimRefreshEvent::REFRESH_GEOMETRY);
-                           ossimEventVisitor visitor(refreshEvent.get());
+                           ossimEventVisitor visitor(refreshEvent.get(),
+                                                     ossimVisitor::VISIT_ALL);
                            connectable->accept(visitor);
+
+                           ossimConnectableObject::ConnectableObjectList& inputList =
+                              connectable->getInputList();
+                           ossim_uint32 inputIdx = 0;
+                           for(inputIdx = 0; inputIdx < inputList.size(); ++inputIdx)
+                           {
+                              if(inputList[inputIdx].valid())
+                              {
+                                 ossimEventVisitor inputVisitor(
+                                    refreshEvent.get(),
+                                    ossimVisitor::VISIT_ALL);
+                                 inputList[inputIdx]->accept(inputVisitor);
+                              }
+                           }
                         }
                      }
                      ++iter;
@@ -3579,6 +3978,19 @@ void ossimGui::DataManagerWidget::populateTreeWithNodes(DataManager::NodeListTyp
          m_activeItems.insert(item);
          m_activeItemsMutex.unlock();
       }
+#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+      else if(node->getObjectAs<ossimFixedRegistrationSource>())
+      {
+         DataManagerRegistrationItem* item =
+            new DataManagerRegistrationItem(node.get());
+         item->setFlags(item->flags()|Qt::ItemIsEditable);
+         m_registrationSources->addChild(item);
+         item->refreshChildConnections();
+         m_activeItemsMutex.lock();
+         m_activeItems.insert(item);
+         m_activeItemsMutex.unlock();
+      }
+#endif
       else if(node->getObjectAs<ossimImageSource>()) // we will default to a raw source for now
       {
          DataManagerRawImageSourceItem* source = new DataManagerRawImageSourceItem(node.get());
@@ -3634,6 +4046,30 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
       connect(geotiffImageAction, SIGNAL(triggered(bool)), this, SLOT(createTiffWriter()));
       connect(jpegImageAction, SIGNAL(triggered(bool)), this, SLOT(createJpegWriter()));
       connect(factoryImageAction, SIGNAL(triggered(bool)), this, SLOT(createWriterFromFactory()));
+   }
+   else if(dynamic_cast<DataManagerRegistrationFolder*> (activeItem))
+   {
+      QMenu* registrationMenu = new QMenu("Registration");
+      QAction* fixedAction = registrationMenu->addAction("Fixed");
+      QAction* bundleFloatingAction =
+         registrationMenu->addAction("Bundle/Floating");
+#ifndef OSSIM_REGISTRATION_SOURCE_ENABLED
+      fixedAction->setEnabled(false);
+#endif
+      menu->addMenu(registrationMenu);
+      connect(fixedAction, SIGNAL(triggered(bool)), this, SLOT(createFixedRegistration()));
+      connect(bundleFloatingAction,
+              SIGNAL(triggered(bool)),
+              this,
+              SLOT(createBundleFloatingRegistration()));
+   }
+   else if(dynamic_cast<DataManagerRegistrationItem*> (activeItem))
+   {
+      QAction* registerAction = menu->addAction("Register");
+      connect(registerAction, SIGNAL(triggered(bool)), this, SLOT(registerSelected()));
+      activeItem->setSelected(true);
+      QAction* deleteAction = menu->addAction("Delete");
+      connect(deleteAction, SIGNAL(triggered(bool)), this, SLOT(deleteSelected()));
    }
    else if(dynamic_cast<DataManagerImageWriterItem*> (activeItem))
    {
