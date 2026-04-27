@@ -9,9 +9,9 @@ All notable changes to `ossim-gui` are documented here.
 
 ### Added
 - Add Bundle/Floating registration object creation when
-  `ossim-registration-source` is enabled.
+  `ossim-registration-source` is enabled (b09aaf4).
 - Add a bundle-adjustment background job with progress updates, cancellation,
-  geometry sidecar writes, and geometry reload propagation.
+  geometry sidecar writes, and geometry reload propagation (b09aaf4).
 
 ## [2026-04-27]
 
