@@ -403,7 +403,15 @@ namespace ossimGui
        m_success(false)
       {
          setId("ossimGui::BundleRegistrationSourceJob");
-         setName("Bundle adjust: " + m_label);
+         if(m_registrationSource.valid() &&
+            m_registrationSource->allInputsFloating())
+         {
+            setName("Bundle adjust all-floating: " + m_label);
+         }
+         else
+         {
+            setName("Bundle adjust anchored: " + m_label);
+         }
       }
 
       bool success()const{return m_success;}
@@ -507,7 +515,17 @@ namespace ossimGui
                   result.pairResults[idx].tiePoints.size());
             }
 
-            m_resultSummary =
+            if(m_registrationSource->allInputsFloating())
+            {
+               m_resultSummary = "all-floating, ";
+            }
+            else
+            {
+               m_resultSummary = "anchored input ";
+               m_resultSummary += ossimString::toString(
+                  m_registrationSource->anchorInputIndex()) + ", ";
+            }
+            m_resultSummary +=
                ossimString::toString(pairCount) + " pair(s), " +
                ossimString::toString(tiePointCount) + " tie point(s)";
 
@@ -3467,8 +3485,10 @@ void ossimGui::DataManagerWidget::createFixedRegistration()
 void ossimGui::DataManagerWidget::createBundleFloatingRegistration()
 {
 #ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
-   ossimRefPtr<ossimObject> obj =
+   ossimRefPtr<ossimBundleAdjustmentRegistrationSource> bundle =
       new ossimBundleAdjustmentRegistrationSource();
+   bundle->setAllInputsFloating(true);
+   ossimRefPtr<ossimObject> obj = bundle.get();
    if(obj.valid())
    {
       std::lock_guard<std::mutex> lock(m_activeItemsMutex);
@@ -3476,7 +3496,7 @@ void ossimGui::DataManagerWidget::createBundleFloatingRegistration()
          m_dataManager->addSource(obj.get(), false);
       if(node.valid())
       {
-         node->setName("Bundle/Floating Registration");
+         node->setName("Bundle All-Floating Registration");
          DataManagerRegistrationItem* item =
             new DataManagerRegistrationItem(node.get());
          item->setFlags(item->flags()|Qt::ItemIsEditable);
@@ -3488,6 +3508,39 @@ void ossimGui::DataManagerWidget::createBundleFloatingRegistration()
    QMessageBox::information(this,
                             "Registration",
                             "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
+void ossimGui::DataManagerWidget::setSelectedBundleAllFloating(bool enabled)
+{
+#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+   QList<DataManagerRegistrationItem*> result =
+      grabSelectedChildItemsOfType<DataManagerRegistrationItem>();
+   QList<DataManagerRegistrationItem*>::iterator iter = result.begin();
+   while(iter != result.end())
+   {
+      DataManagerRegistrationItem* item = *iter;
+      if(item && item->objectAsNode())
+      {
+         ossimBundleAdjustmentRegistrationSource* bundle =
+            item->objectAsNode()->
+               getObjectAs<ossimBundleAdjustmentRegistrationSource>();
+         if(bundle)
+         {
+            bundle->setAllInputsFloating(enabled);
+            if(enabled)
+               item->setToolTip(0, "All bundle inputs participate in adjustment.");
+            else
+               item->setToolTip(0, "Input 0 is held as the bundle anchor.");
+         }
+      }
+      ++iter;
+   }
+#else
+   (void)enabled;
+   QMessageBox::warning(this,
+                        "Registration",
+                        "ossim-registration-source is not enabled in this build.");
 #endif
 }
 
@@ -4343,6 +4396,27 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
       QAction* registerAction = menu->addAction("Register");
       connect(registerAction, SIGNAL(triggered(bool)), this, SLOT(registerSelected()));
       activeItem->setSelected(true);
+#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+      DataManagerRegistrationItem* registrationItem =
+         dynamic_cast<DataManagerRegistrationItem*> (activeItem);
+      ossimBundleAdjustmentRegistrationSource* bundleRegistration = 0;
+      if(registrationItem && registrationItem->objectAsNode())
+      {
+         bundleRegistration = registrationItem->objectAsNode()->
+            getObjectAs<ossimBundleAdjustmentRegistrationSource>();
+      }
+      if(bundleRegistration)
+      {
+         QAction* allFloatingAction = menu->addAction("All Images Float");
+         allFloatingAction->setCheckable(true);
+         allFloatingAction->setChecked(
+            bundleRegistration->allInputsFloating());
+         connect(allFloatingAction,
+                 SIGNAL(triggered(bool)),
+                 this,
+                 SLOT(setSelectedBundleAllFloating(bool)));
+      }
+#endif
       QAction* deleteAction = menu->addAction("Delete");
       connect(deleteAction, SIGNAL(triggered(bool)), this, SLOT(deleteSelected()));
    }

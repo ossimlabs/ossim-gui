@@ -649,6 +649,7 @@ namespace ossimGui{
 
       virtual void createFixedRegistration();
       virtual void createBundleFloatingRegistration();
+      virtual void setSelectedBundleAllFloating(bool enabled);
       virtual void registerSelected();
       
       virtual void executeSelected();

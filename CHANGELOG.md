@@ -5,13 +5,23 @@ All notable changes to `ossim-gui` are documented here.
 ## [Unreleased]
 
 > **TL;DR:** The Registration folder can now create and run Bundle/Floating
-> registration jobs, not just fixed registration jobs.
+> registration jobs, default them to all-floating mode, and toggle whether
+> input 0 is used as a convergence anchor. The optional registration UI now
+> consumes the bridge from `ossim-autoreg`.
 
 ### Added
 - Add Bundle/Floating registration object creation when
   `ossim-registration-source` is enabled (b09aaf4).
 - Add a bundle-adjustment background job with progress updates, cancellation,
   geometry sidecar writes, and geometry reload propagation (b09aaf4).
+- Default new Bundle/Floating registration objects to all-floating mode and add
+  an item context-menu toggle for switching between all-floating and input-0
+  anchored bundle adjustment.
+
+### Changed
+- Resolve the optional registration-source bridge from `ossim-autoreg` while
+  preserving the existing `ossim-registration-source` target name used by the
+  GUI link path.
 
 ## [2026-04-27]
 

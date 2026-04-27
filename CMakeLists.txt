@@ -53,24 +53,19 @@ IF(BUILD_OSSIM_PLANET)
 ENDIF(BUILD_OSSIM_PLANET)
 
 OPTION(BUILD_OSSIM_REGISTRATION_SOURCE
-       "Set to ON to link ossimGui with ossim-registration-source." OFF)
+       "Set to ON to link ossimGui with the ossim-autoreg registration source bridge." OFF)
 
 SET(OSSIM_REGISTRATION_SOURCE_LIB "")
 IF(BUILD_OSSIM_REGISTRATION_SOURCE)
-   IF(NOT DEFINED OSSIM_REGISTRATION_SOURCE_ROOT AND
-      EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../ossim-registration-source")
-      SET(OSSIM_REGISTRATION_SOURCE_ROOT
-          "${CMAKE_CURRENT_SOURCE_DIR}/../ossim-registration-source"
-          CACHE PATH "ossim-registration-source source or install root")
+   IF(NOT DEFINED OSSIM_AUTOREG_ROOT AND
+      EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../ossim-autoreg")
+      SET(OSSIM_AUTOREG_ROOT
+          "${CMAKE_CURRENT_SOURCE_DIR}/../ossim-autoreg"
+          CACHE PATH "ossim-autoreg source or install root")
    ENDIF()
 
    IF(TARGET ossim_registration_source::ossim-registration-source)
-      IF(NOT OSSIM_REGISTRATION_SOURCE_INCLUDE_DIR AND
-         DEFINED OSSIM_REGISTRATION_SOURCE_ROOT)
-         SET(OSSIM_REGISTRATION_SOURCE_INCLUDE_DIR
-             "${OSSIM_REGISTRATION_SOURCE_ROOT}/include"
-             CACHE PATH "ossim-registration-source include directory")
-      ENDIF()
+      SET(OSSIM_REGISTRATION_SOURCE_FOUND TRUE)
    ELSE()
       find_package(ossim-registration-source REQUIRED)
    ENDIF()
