@@ -16,12 +16,12 @@ All notable changes to `ossim-gui` are documented here.
   geometry sidecar writes, and geometry reload propagation (b09aaf4).
 - Default new Bundle/Floating registration objects to all-floating mode and add
   an item context-menu toggle for switching between all-floating and input-0
-  anchored bundle adjustment.
+  anchored bundle adjustment (f77f01f).
 
 ### Changed
 - Resolve the optional registration-source bridge from `ossim-autoreg` while
   preserving the existing `ossim-registration-source` target name used by the
-  GUI link path.
+  GUI link path (f77f01f).
 
 ## [2026-04-27]
 
