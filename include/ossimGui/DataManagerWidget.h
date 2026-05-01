@@ -353,6 +353,7 @@ namespace ossimGui{
    public:
       DataManagerRegistrationItem(DataManager::Node* node=0);
       virtual ~DataManagerRegistrationItem();
+      virtual void dropItems(QList<DataManagerItem*>& chainItemList);
       virtual void execute();
    };
 
@@ -648,6 +649,7 @@ namespace ossimGui{
       virtual void createWriterFromFactory();
 
       virtual void createFixedRegistration();
+      virtual void createFixedOpenCvAutoRegistration();
       virtual void createBundleFloatingRegistration();
       virtual void setSelectedBundleAllFloating(bool enabled);
       virtual void registerSelected();

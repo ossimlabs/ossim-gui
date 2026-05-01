@@ -4,6 +4,7 @@
 #include <ossim/imaging/ossimImageHandler.h>
 #include <ossim/parallel/ossimJob.h>
 #include <ossimGui/DataManager.h>
+#include <string>
 namespace ossimGui{
    enum EventId
    {
@@ -94,10 +95,20 @@ namespace ossimGui{
       void setHandlerList(const HandlerListType& handlers){m_handlerList = handlers;}
       HandlerListType& handlerList(){return m_handlerList;}
       const HandlerListType& handlerList()const{return m_handlerList;}
+      void setWarningMessage(const std::string& title,
+                             const std::string& message)
+      {
+         m_warningTitle = title;
+         m_warningMessage = message;
+      }
+      const std::string& warningTitle()const{return m_warningTitle;}
+      const std::string& warningMessage()const{return m_warningMessage;}
       
    protected:
       ItemListType m_itemList;
       HandlerListType m_handlerList;
+      std::string m_warningTitle;
+      std::string m_warningMessage;
       CommandType m_commandType;
    };
    class OSSIMGUI_DLL DataManagerWidgetJobEvent : public QEvent
