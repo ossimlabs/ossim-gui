@@ -7,7 +7,9 @@ All notable changes to `ossim-gui` are documented here.
 > **TL;DR:** The Registration folder can now create and run Bundle/Floating
 > registration jobs, default them to all-floating mode, and toggle whether
 > input 0 is used as a convergence anchor. The optional registration UI now
-> consumes the bridge from `ossim-autoreg`.
+> consumes the bridge from `ossim-autoreg`, and fixed OpenCV auto registration
+> can be created, populated by drag-and-drop, validated against the tie-point
+> generator factory, and reported with clearer job feedback.
 
 ### Added
 - Add Bundle/Floating registration object creation when
@@ -17,11 +19,18 @@ All notable changes to `ossim-gui` are documented here.
 - Default new Bundle/Floating registration objects to all-floating mode and add
   an item context-menu toggle for switching between all-floating and input-0
   anchored bundle adjustment (f77f01f).
+- Add Fixed OpenCV Auto registration creation, direct drag-and-drop input
+  wiring for registration items, registration job warning propagation, and
+  tooltip reporting for factory-registered tie-point generators (7582c48).
 
 ### Changed
 - Resolve the optional registration-source bridge from `ossim-autoreg` while
   preserving the existing `ossim-registration-source` target name used by the
   GUI link path (f77f01f).
+- Validate the OpenCV phase tie-point generator through
+  `TiePointGeneratorFactory` and propagate optimized fixed-registration
+  parameters back to connected live source geometry before writing sidecars
+  (7582c48).
 
 ## [2026-04-27]
 
