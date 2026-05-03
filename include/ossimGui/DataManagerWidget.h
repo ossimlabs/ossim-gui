@@ -651,6 +651,7 @@ namespace ossimGui{
       virtual void createFixedRegistration();
       virtual void createFixedOpenCvAutoRegistration();
       virtual void createBundleFloatingRegistration();
+      virtual void createRegistrationFromDialog();
       virtual void setSelectedBundleAllFloating(bool enabled);
       virtual void registerSelected();
       

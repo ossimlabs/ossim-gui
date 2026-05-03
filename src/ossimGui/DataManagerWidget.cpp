@@ -29,13 +29,20 @@
 #include <QScrollBar>
 #include <QMenu>
 #include <QAction>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QFileDialog>
+#include <QFormLayout>
+#include <QGroupBox>
 #include <QToolBar>
 #include <QItemDelegate>
 #include <QComboBox>
+#include <QDoubleSpinBox>
+#include <QSpinBox>
 #include <QTableWidget>
 #include <QMessageBox>
 #include <QUrl>
+#include <QVBoxLayout>
 #include <QStandardItemModel>
 #include <ossimGui/Common.h>
 #include <ossimGui/Event.h>
@@ -55,6 +62,7 @@
 #include <ossimGui/AutoMeasurementDialog.h>
 #include <ossimGui/RegistrationOverlay.h>
 #include <ossimGui/RegPoint.h>
+#include <algorithm>
 #include <set>
 
 #ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
@@ -83,6 +91,398 @@ namespace
          names << QString::fromStdString(typeName);
       }
       return names.join(", ");
+   }
+
+   bool registrationTieGeneratorAvailable(const std::string& method)
+   {
+      return static_cast<bool>(
+         ossim_autoreg::TiePointGeneratorFactory::instance()->create(method));
+   }
+
+   std::string preferredRegistrationMatchMethod()
+   {
+      const char* orderedMethods[] = {
+         "mixed-phase-orb",
+         "opencv-sift",
+         "opencv-orb",
+         "opencv-phase-correlation",
+         "phase-correlation",
+         "hybrid-phase-ncc",
+         "spatial-ncc"
+      };
+      for(const char* method : orderedMethods)
+      {
+         if(registrationTieGeneratorAvailable(method))
+            return method;
+      }
+      return "hybrid-phase-ncc";
+   }
+
+   std::string preferredFixedAutoMatchMethod()
+   {
+      if(registrationTieGeneratorAvailable("phase-correlation"))
+         return "phase-correlation";
+      if(registrationTieGeneratorAvailable("opencv-phase-correlation"))
+         return "opencv-phase-correlation";
+      if(registrationTieGeneratorAvailable("hybrid-phase-ncc"))
+         return "hybrid-phase-ncc";
+      return preferredRegistrationMatchMethod();
+   }
+
+   enum RegistrationSetupApproach
+   {
+      REGISTRATION_SETUP_FIXED_AUTO = 0,
+      REGISTRATION_SETUP_FIXED_MANUAL = 1,
+      REGISTRATION_SETUP_BUNDLE_ALL_FLOATING = 2,
+      REGISTRATION_SETUP_BUNDLE_ANCHORED = 3
+   };
+
+   struct RegistrationSetupOptions
+   {
+      RegistrationSetupApproach approach;
+      std::string matchMethod;
+      std::string resamplerType;
+      int chipSize;
+      int searchRadius;
+      int gridSpacing;
+      double minScore;
+      double viewGsd;
+      std::size_t maxTiePoints;
+
+      RegistrationSetupOptions()
+      : approach(REGISTRATION_SETUP_FIXED_AUTO),
+        matchMethod(preferredRegistrationMatchMethod()),
+        resamplerType("cubic"),
+        chipSize(31),
+        searchRadius(64),
+        gridSpacing(128),
+        minScore(0.6),
+        viewGsd(0.0),
+        maxTiePoints(300)
+      {
+      }
+   };
+
+   RegistrationSetupOptions registrationSetupDefaults(
+      RegistrationSetupApproach approach,
+      const std::string& matchMethod)
+   {
+      RegistrationSetupOptions result;
+      result.approach = approach;
+      result.matchMethod = matchMethod.empty() ?
+         (approach == REGISTRATION_SETUP_FIXED_AUTO ?
+             preferredFixedAutoMatchMethod() :
+             preferredRegistrationMatchMethod()) :
+         matchMethod;
+      result.resamplerType = "cubic";
+      result.chipSize = 31;
+      result.searchRadius = 36;
+      result.gridSpacing = 96;
+      result.minScore = 0.6;
+      result.viewGsd = 0.0;
+      result.maxTiePoints = 300;
+
+      const bool bundle =
+         approach == REGISTRATION_SETUP_BUNDLE_ALL_FLOATING ||
+         approach == REGISTRATION_SETUP_BUNDLE_ANCHORED;
+
+      if(result.matchMethod == "mixed-phase-orb" ||
+         result.matchMethod == "mixed-hybrid-orb")
+      {
+         result.searchRadius = 96;
+         result.gridSpacing = 128;
+         result.maxTiePoints = bundle ? 200 : 300;
+      }
+      else if(result.matchMethod == "phase-correlation" ||
+              result.matchMethod == "opencv-phase-correlation")
+      {
+         result.searchRadius = 36;
+         result.gridSpacing = 96;
+         result.maxTiePoints = bundle ? 200 : 300;
+      }
+      else if(result.matchMethod == "hybrid-phase-ncc")
+      {
+         result.searchRadius = 64;
+         result.gridSpacing = 128;
+         result.maxTiePoints = bundle ? 200 : 300;
+      }
+      else if(result.matchMethod == "spatial-ncc")
+      {
+         result.searchRadius = 96;
+         result.gridSpacing = 192;
+         result.minScore = 0.65;
+         result.maxTiePoints = bundle ? 150 : 250;
+      }
+      else if(result.matchMethod == "opencv-sift")
+      {
+         result.searchRadius = 128;
+         result.gridSpacing = 128;
+         result.minScore = 0.6;
+         result.maxTiePoints = bundle ? 250 : 500;
+      }
+      else if(result.matchMethod == "opencv-orb")
+      {
+         result.searchRadius = 128;
+         result.gridSpacing = 128;
+         result.minScore = 0.55;
+         result.maxTiePoints = bundle ? 300 : 750;
+      }
+      else if(result.matchMethod == "opencv-akaze")
+      {
+         result.searchRadius = 128;
+         result.gridSpacing = 128;
+         result.minScore = 0.55;
+         result.maxTiePoints = bundle ? 250 : 500;
+      }
+      else if(result.matchMethod == "opencv-brisk")
+      {
+         result.searchRadius = 128;
+         result.gridSpacing = 128;
+         result.minScore = 0.55;
+         result.maxTiePoints = bundle ? 250 : 500;
+      }
+      else if(result.matchMethod == "opencv-gftt-lk")
+      {
+         result.searchRadius = 96;
+         result.gridSpacing = 96;
+         result.minScore = 0.55;
+         result.maxTiePoints = bundle ? 250 : 500;
+      }
+
+      if(approach == REGISTRATION_SETUP_FIXED_MANUAL)
+      {
+         result.searchRadius = std::max(result.searchRadius, 128);
+         result.maxTiePoints = 0;
+      }
+      return result;
+   }
+
+   class RegistrationSetupDialog : public QDialog
+   {
+   public:
+      RegistrationSetupDialog(QWidget* parent = 0)
+      : QDialog(parent),
+        m_approach(0),
+        m_matchMethod(0),
+        m_resampler(0),
+        m_chipSize(0),
+        m_searchRadius(0),
+        m_gridSpacing(0),
+        m_minScore(0),
+        m_viewGsd(0),
+        m_maxTiePoints(0)
+      {
+         setWindowTitle("Registration Setup");
+
+         m_approach = new QComboBox(this);
+         m_approach->addItem(
+            "Fixed to Floating Auto",
+            REGISTRATION_SETUP_FIXED_AUTO);
+         m_approach->addItem(
+            "Fixed Manual",
+            REGISTRATION_SETUP_FIXED_MANUAL);
+         m_approach->addItem(
+            "Bundle All-Floating",
+            REGISTRATION_SETUP_BUNDLE_ALL_FLOATING);
+         m_approach->addItem(
+            "Bundle Anchored",
+            REGISTRATION_SETUP_BUNDLE_ANCHORED);
+
+         m_matchMethod = new QComboBox(this);
+         addAvailableMatchMethod("Adaptive Mixed Phase/ORB", "mixed-phase-orb");
+         addAvailableMatchMethod("Adaptive Mixed Hybrid/ORB", "mixed-hybrid-orb");
+         addAvailableMatchMethod("OpenCV SIFT", "opencv-sift");
+         addAvailableMatchMethod("OpenCV ORB", "opencv-orb");
+         addAvailableMatchMethod("OpenCV AKAZE", "opencv-akaze");
+         addAvailableMatchMethod("OpenCV BRISK", "opencv-brisk");
+         addAvailableMatchMethod("OpenCV GFTT/LK", "opencv-gftt-lk");
+         addAvailableMatchMethod("OpenCV Phase", "opencv-phase-correlation");
+         addMatchMethod("Phase Correlation", "phase-correlation");
+         addMatchMethod("Hybrid Phase/NCC", "hybrid-phase-ncc");
+         addMatchMethod("Spatial NCC", "spatial-ncc");
+
+         std::vector<std::string> typeNames =
+            ossim_autoreg::TiePointGeneratorFactory::instance()->typeNames();
+         for(const std::string& typeName : typeNames)
+         {
+            if(m_matchMethod->findData(
+                  QString::fromStdString(typeName)) < 0)
+            {
+               addMatchMethod(QString::fromStdString(typeName),
+                              typeName.c_str());
+            }
+         }
+         const int preferredIndex =
+            m_matchMethod->findData(
+               QString::fromStdString(preferredFixedAutoMatchMethod()));
+         if(preferredIndex >= 0)
+            m_matchMethod->setCurrentIndex(preferredIndex);
+
+         m_resampler = new QComboBox(this);
+         m_resampler->addItem("cubic", "cubic");
+         m_resampler->addItem("bilinear", "bilinear");
+         m_resampler->addItem("nearest", "nearest_neighbor");
+         m_resampler->addItem("sinc", "sinc");
+
+         m_chipSize = new QSpinBox(this);
+         m_chipSize->setRange(5, 255);
+         m_chipSize->setSingleStep(2);
+         m_chipSize->setValue(31);
+
+         m_searchRadius = new QSpinBox(this);
+         m_searchRadius->setRange(1, 4096);
+         m_searchRadius->setValue(64);
+
+         m_gridSpacing = new QSpinBox(this);
+         m_gridSpacing->setRange(16, 8192);
+         m_gridSpacing->setValue(128);
+
+         m_minScore = new QDoubleSpinBox(this);
+         m_minScore->setRange(0.0, 1.0);
+         m_minScore->setDecimals(3);
+         m_minScore->setSingleStep(0.05);
+         m_minScore->setValue(0.6);
+
+         m_viewGsd = new QDoubleSpinBox(this);
+         m_viewGsd->setRange(-100.0, 1000000.0);
+         m_viewGsd->setDecimals(3);
+         m_viewGsd->setSingleStep(0.25);
+         m_viewGsd->setValue(0.0);
+
+         m_maxTiePoints = new QSpinBox(this);
+         m_maxTiePoints->setRange(0, 100000);
+         m_maxTiePoints->setValue(300);
+
+         connect(m_approach,
+                 static_cast<void (QComboBox::*)(int)>(
+                    &QComboBox::currentIndexChanged),
+                 [this](int) { applySelectedDefaults(); });
+         connect(m_matchMethod,
+                 static_cast<void (QComboBox::*)(int)>(
+                    &QComboBox::currentIndexChanged),
+                 [this](int) { applySelectedDefaults(); });
+
+         QFormLayout* form = new QFormLayout();
+         form->addRow("Approach", m_approach);
+         form->addRow("Matcher", m_matchMethod);
+         form->addRow("Resampler", m_resampler);
+         form->addRow("Chip size", m_chipSize);
+         form->addRow("Search radius", m_searchRadius);
+         form->addRow("Grid spacing", m_gridSpacing);
+         form->addRow("Minimum score", m_minScore);
+         form->addRow("View GSD", m_viewGsd);
+         form->addRow("Max ties", m_maxTiePoints);
+
+         QGroupBox* optionsBox = new QGroupBox("Options", this);
+         optionsBox->setLayout(form);
+
+         QDialogButtonBox* buttons =
+            new QDialogButtonBox(QDialogButtonBox::Ok |
+                                 QDialogButtonBox::Cancel,
+                                 Qt::Horizontal,
+                                 this);
+         connect(buttons, SIGNAL(accepted()), this, SLOT(accept()));
+         connect(buttons, SIGNAL(rejected()), this, SLOT(reject()));
+
+         QVBoxLayout* layout = new QVBoxLayout();
+         layout->addWidget(optionsBox);
+         layout->addWidget(buttons);
+         setLayout(layout);
+         applySelectedDefaults();
+      }
+
+      RegistrationSetupOptions options() const
+      {
+         RegistrationSetupOptions result;
+         result.approach =
+            static_cast<RegistrationSetupApproach>(
+               m_approach->itemData(m_approach->currentIndex()).toInt());
+         result.matchMethod =
+            m_matchMethod->itemData(m_matchMethod->currentIndex()).
+               toString().toStdString();
+         result.resamplerType =
+            m_resampler->itemData(m_resampler->currentIndex()).
+               toString().toStdString();
+         result.chipSize = m_chipSize->value();
+         if((result.chipSize % 2) == 0)
+            ++result.chipSize;
+         result.searchRadius = m_searchRadius->value();
+         result.gridSpacing = m_gridSpacing->value();
+         result.minScore = m_minScore->value();
+         result.viewGsd = m_viewGsd->value();
+         result.maxTiePoints =
+            static_cast<std::size_t>(m_maxTiePoints->value());
+         return result;
+      }
+
+   private:
+      void applySelectedDefaults()
+      {
+         const RegistrationSetupApproach approach =
+            static_cast<RegistrationSetupApproach>(
+               m_approach->itemData(m_approach->currentIndex()).toInt());
+         const std::string matchMethod =
+            m_matchMethod->itemData(m_matchMethod->currentIndex()).
+               toString().toStdString();
+         const RegistrationSetupOptions defaults =
+            registrationSetupDefaults(approach, matchMethod);
+
+         const int resamplerIndex =
+            m_resampler->findData(QString::fromStdString(
+               defaults.resamplerType));
+         if(resamplerIndex >= 0)
+            m_resampler->setCurrentIndex(resamplerIndex);
+         m_chipSize->setValue(defaults.chipSize);
+         m_searchRadius->setValue(defaults.searchRadius);
+         m_gridSpacing->setValue(defaults.gridSpacing);
+         m_minScore->setValue(defaults.minScore);
+         m_viewGsd->setValue(defaults.viewGsd);
+         m_maxTiePoints->setValue(
+            static_cast<int>(defaults.maxTiePoints));
+      }
+
+      void addMatchMethod(const QString& label, const QString& method)
+      {
+         m_matchMethod->addItem(label, method);
+      }
+
+      void addAvailableMatchMethod(const QString& label, const QString& method)
+      {
+         if(registrationTieGeneratorAvailable(method.toStdString()))
+            addMatchMethod(label, method);
+      }
+
+      QComboBox* m_approach;
+      QComboBox* m_matchMethod;
+      QComboBox* m_resampler;
+      QSpinBox* m_chipSize;
+      QSpinBox* m_searchRadius;
+      QSpinBox* m_gridSpacing;
+      QDoubleSpinBox* m_minScore;
+      QDoubleSpinBox* m_viewGsd;
+      QSpinBox* m_maxTiePoints;
+   };
+
+   void applyRegistrationSetupTieOptions(
+      ossim_autoreg::TiePointGenerationOptions& tiePointOptions,
+      const RegistrationSetupOptions& setupOptions)
+   {
+      tiePointOptions.matchMethod() = setupOptions.matchMethod;
+      tiePointOptions.resamplerType() = setupOptions.resamplerType;
+      tiePointOptions.chipSize() = setupOptions.chipSize;
+      tiePointOptions.searchRadius() = setupOptions.searchRadius;
+      tiePointOptions.gridSpacing() = setupOptions.gridSpacing;
+      tiePointOptions.minScore() = setupOptions.minScore;
+      tiePointOptions.viewGsd() = setupOptions.viewGsd;
+      tiePointOptions.maxTiePoints() = setupOptions.maxTiePoints;
+   }
+
+   QString registeredNodeName(const std::string& matchMethod)
+   {
+      return QString("Registered: %1")
+         .arg(QString::fromStdString(
+            matchMethod.empty() ? std::string("hybrid-phase-ncc") :
+                                  matchMethod));
    }
 }
 #endif
@@ -330,7 +730,8 @@ namespace ossimGui
                      if(session &&
                         input->applyAdjustableParametersToSource(
                            session->movingAdjustableParameters(),
-                           m_registrationSource->adjustmentDescription()))
+                           m_registrationSource->adjustmentDescription(),
+                           results[idx].adjustmentIndex()))
                      {
                         ++propagatedGeometries;
                      }
@@ -3574,7 +3975,8 @@ void ossimGui::DataManagerWidget::createFixedRegistration()
       ossimRefPtr<DataManager::Node> node = m_dataManager->addSource(obj.get(), false);
       if(node.valid())
       {
-         node->setName("Fixed Registration");
+         node->setName(
+            registeredNodeName("hybrid-phase-ncc").toStdString().c_str());
          DataManagerRegistrationItem* item = new DataManagerRegistrationItem(node.get());
          item->setFlags(item->flags()|Qt::ItemIsEditable);
          m_registrationSources->addChild(item);
@@ -3611,7 +4013,9 @@ void ossimGui::DataManagerWidget::createFixedOpenCvAutoRegistration()
       ossimRefPtr<DataManager::Node> node = m_dataManager->addSource(obj.get(), false);
       if(node.valid())
       {
-         node->setName("Fixed Registration OpenCV");
+         node->setName(
+            registeredNodeName("opencv-phase-correlation").
+               toStdString().c_str());
          DataManagerRegistrationItem* item = new DataManagerRegistrationItem(node.get());
          item->setFlags(item->flags()|Qt::ItemIsEditable);
          item->setToolTip(
@@ -3661,6 +4065,111 @@ void ossimGui::DataManagerWidget::createBundleFloatingRegistration()
    QMessageBox::information(this,
                             "Registration",
                             "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
+void ossimGui::DataManagerWidget::createRegistrationFromDialog()
+{
+#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+   RegistrationSetupDialog dialog(this);
+   if(dialog.exec() != QDialog::Accepted)
+      return;
+
+   const RegistrationSetupOptions setupOptions = dialog.options();
+   if(!setupOptions.matchMethod.empty() &&
+      !ossim_autoreg::TiePointGeneratorFactory::instance()->
+         create(setupOptions.matchMethod))
+   {
+      QMessageBox::warning(
+         this,
+         "Registration",
+         QString("The selected tie-point generator is not available: %1\n\n"
+                 "Available generators: %2")
+            .arg(QString::fromStdString(setupOptions.matchMethod))
+            .arg(tiePointGeneratorSummary()));
+      return;
+   }
+
+   ossimRefPtr<ossimObject> obj;
+   QString nodeName;
+   QString toolTip;
+
+   if(setupOptions.approach == REGISTRATION_SETUP_BUNDLE_ALL_FLOATING ||
+      setupOptions.approach == REGISTRATION_SETUP_BUNDLE_ANCHORED)
+   {
+      ossimRefPtr<ossimBundleAdjustmentRegistrationSource> bundle =
+         new ossimBundleAdjustmentRegistrationSource();
+      bundle->setAllInputsFloating(
+         setupOptions.approach == REGISTRATION_SETUP_BUNDLE_ALL_FLOATING);
+      ossim_autoreg::TiePointGenerationOptions tiePointOptions =
+         bundle->tiePointGenerationOptions();
+      applyRegistrationSetupTieOptions(tiePointOptions, setupOptions);
+      bundle->setTiePointGenerationOptions(tiePointOptions);
+      obj = bundle.get();
+      nodeName = bundle->allInputsFloating() ?
+         "Bundle All-Floating Registration" :
+         "Bundle Anchored Registration";
+      toolTip =
+         QString("Matcher: %1\nResampler: %2\nView GSD: %3")
+            .arg(QString::fromStdString(setupOptions.matchMethod))
+            .arg(QString::fromStdString(setupOptions.resamplerType))
+            .arg(setupOptions.viewGsd);
+   }
+   else
+   {
+      ossimRefPtr<ossimFixedRegistrationSource> registration =
+         new ossimFixedRegistrationSource();
+      if(setupOptions.approach == REGISTRATION_SETUP_FIXED_AUTO)
+      {
+         if(setupOptions.matchMethod == "opencv-phase-correlation")
+            registration->applyAutoRegistrationPreset(
+               "fixed:opencv-phase-ransac");
+         else if(setupOptions.matchMethod == "spatial-ncc")
+            registration->applyAutoRegistrationPreset("fixed:spatial-ncc");
+         else if(setupOptions.matchMethod == "hybrid-phase-ncc")
+            registration->applyAutoRegistrationPreset("fixed:hybrid");
+         else
+            registration->applyAutoRegistrationPreset("fixed:phase");
+         registration->setAutoRegistrationEnabled(true);
+         registration->setRegistrationPasses(4);
+         registration->setTargetRmsePixels(4.0);
+         registration->setRmseImprovementTolerance(0.01);
+      }
+
+      ossim_autoreg::TiePointGenerationOptions tiePointOptions =
+         registration->tiePointGenerationOptions();
+      applyRegistrationSetupTieOptions(tiePointOptions, setupOptions);
+      registration->setTiePointGenerationOptions(tiePointOptions);
+      obj = registration.get();
+      nodeName = registeredNodeName(setupOptions.matchMethod);
+      toolTip =
+         QString("%1\nMatcher: %2\nResampler: %3\nView GSD: %4")
+            .arg(registration->autoRegistrationSettingsSummary().c_str())
+            .arg(QString::fromStdString(setupOptions.matchMethod))
+            .arg(QString::fromStdString(setupOptions.resamplerType))
+            .arg(setupOptions.viewGsd);
+   }
+
+   if(obj.valid())
+   {
+      std::lock_guard<std::mutex> lock(m_activeItemsMutex);
+      ossimRefPtr<DataManager::Node> node =
+         m_dataManager->addSource(obj.get(), false);
+      if(node.valid())
+      {
+         node->setName(nodeName.toStdString().c_str());
+         DataManagerRegistrationItem* item =
+            new DataManagerRegistrationItem(node.get());
+         item->setFlags(item->flags()|Qt::ItemIsEditable);
+         item->setToolTip(0, toolTip);
+         m_registrationSources->addChild(item);
+         m_activeItems.insert(item);
+      }
+   }
+#else
+   QMessageBox::warning(this,
+                        "Registration",
+                        "ossim-registration-source is not enabled in this build.");
 #endif
 }
 
@@ -4281,6 +4790,12 @@ bool	ossimGui::DataManagerWidget::event( QEvent * e )
                      {
                         (*handlerIter)->setImageGeometry(0);
                         (*handlerIter)->getImageGeometry();
+                        ossimRefPtr<ossimRefreshEvent> refreshEvent =
+                           new ossimRefreshEvent(
+                              ossimRefreshEvent::REFRESH_GEOMETRY);
+                        ossimEventVisitor visitor(refreshEvent.get(),
+                                                  ossimVisitor::VISIT_ALL);
+                        (*handlerIter)->accept(visitor);
                      }
                      ++handlerIter;
                   }
@@ -4537,17 +5052,24 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
    else if(dynamic_cast<DataManagerRegistrationFolder*> (activeItem))
    {
       QMenu* registrationMenu = new QMenu("Registration");
+      QAction* setupAction = registrationMenu->addAction("Setup...");
+      registrationMenu->addSeparator();
       QAction* fixedAction = registrationMenu->addAction("Fixed");
       QAction* fixedOpenCvAction =
          registrationMenu->addAction("Fixed OpenCV Auto");
       QAction* bundleFloatingAction =
          registrationMenu->addAction("Bundle/Floating");
 #ifndef OSSIM_REGISTRATION_SOURCE_ENABLED
+      setupAction->setEnabled(false);
       fixedAction->setEnabled(false);
       fixedOpenCvAction->setEnabled(false);
       bundleFloatingAction->setEnabled(false);
 #endif
       menu->addMenu(registrationMenu);
+      connect(setupAction,
+              SIGNAL(triggered(bool)),
+              this,
+              SLOT(createRegistrationFromDialog()));
       connect(fixedAction, SIGNAL(triggered(bool)), this, SLOT(createFixedRegistration()));
       connect(fixedOpenCvAction,
               SIGNAL(triggered(bool)),
