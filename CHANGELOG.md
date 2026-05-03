@@ -32,6 +32,16 @@ All notable changes to `ossim-gui` are documented here.
   parameters back to connected live source geometry before writing sidecars
   (7582c48).
 
+## [2026-05-03]
+
+> **TL;DR:** Bundle/Floating registration now starts with explicit tie-point
+> generation defaults so new jobs use the tested phase-correlation path with
+> cubic resampling.
+
+### Changed
+- Default new Bundle/Floating registration objects to phase-correlation tie
+  generation with cubic resampling (51dcdb1).
+
 ## [2026-04-27]
 
 > **TL;DR:** Add optional support for the standalone registration-source
