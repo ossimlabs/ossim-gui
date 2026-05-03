@@ -3636,6 +3636,11 @@ void ossimGui::DataManagerWidget::createBundleFloatingRegistration()
    ossimRefPtr<ossimBundleAdjustmentRegistrationSource> bundle =
       new ossimBundleAdjustmentRegistrationSource();
    bundle->setAllInputsFloating(true);
+   ossim_autoreg::TiePointGenerationOptions tiePointOptions =
+      bundle->tiePointGenerationOptions();
+   tiePointOptions.matchMethod() = "phase-correlation";
+   tiePointOptions.resamplerType() = "cubic";
+   bundle->setTiePointGenerationOptions(tiePointOptions);
    ossimRefPtr<ossimObject> obj = bundle.get();
    if(obj.valid())
    {
