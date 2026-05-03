@@ -10,6 +10,9 @@ All notable changes to `ossim-gui` are documented here.
 > consumes the bridge from `ossim-autoreg`, and fixed OpenCV auto registration
 > can be created, populated by drag-and-drop, validated against the tie-point
 > generator factory, and reported with clearer job feedback.
+> Registration creation now has a setup dialog with matcher-aware defaults, and
+> fixed registration nodes use the same `Registered: <matcher>` label as the
+> geometry adjustments they write.
 
 ### Added
 - Add Bundle/Floating registration object creation when
@@ -22,6 +25,9 @@ All notable changes to `ossim-gui` are documented here.
 - Add Fixed OpenCV Auto registration creation, direct drag-and-drop input
   wiring for registration items, registration job warning propagation, and
   tooltip reporting for factory-registered tie-point generators (7582c48).
+- Add a Registration Setup dialog for fixed auto, fixed manual, bundle
+  all-floating, and bundle anchored workflows with matcher-aware defaults and
+  availability-checked OpenCV options (69a28cd).
 
 ### Changed
 - Resolve the optional registration-source bridge from `ossim-autoreg` while
@@ -31,6 +37,9 @@ All notable changes to `ossim-gui` are documented here.
   `TiePointGeneratorFactory` and propagate optimized fixed-registration
   parameters back to connected live source geometry before writing sidecars
   (7582c48).
+- Name fixed registration tree nodes as `Registered: <matcher>` and propagate
+  completed fixed-registration parameters by the adjustment index reported by
+  `ossim-autoreg` (69a28cd).
 
 ## [2026-05-03]
 
