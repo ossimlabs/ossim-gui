@@ -276,17 +276,17 @@ namespace
 
          m_approach = new QComboBox(this);
          m_approach->addItem(
-            "Fixed to Floating Auto",
+            "Fixed to Floating Auto (Recommended)",
             REGISTRATION_SETUP_FIXED_AUTO);
          m_approach->addItem(
-            "Fixed Manual",
-            REGISTRATION_SETUP_FIXED_MANUAL);
+            "Bundle Anchored (Recommended)",
+            REGISTRATION_SETUP_BUNDLE_ANCHORED);
          m_approach->addItem(
             "Bundle All-Floating",
             REGISTRATION_SETUP_BUNDLE_ALL_FLOATING);
          m_approach->addItem(
-            "Bundle Anchored",
-            REGISTRATION_SETUP_BUNDLE_ANCHORED);
+            "Fixed Manual",
+            REGISTRATION_SETUP_FIXED_MANUAL);
 
          m_matchMethod = new QComboBox(this);
          addAvailableMatchMethod("Adaptive Mixed Phase/ORB", "mixed-phase-orb");

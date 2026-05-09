@@ -30,6 +30,9 @@ All notable changes to `ossim-gui` are documented here.
   availability-checked OpenCV options (69a28cd).
 
 ### Changed
+- Put the recommended Fixed Auto and Bundle Anchored registration approaches
+  at the top of the Registration Setup selection list so new registrations
+  start from the strongest default workflows.
 - Resolve the optional registration-source bridge from `ossim-autoreg` while
   preserving the existing `ossim-registration-source` target name used by the
   GUI link path (f77f01f).
