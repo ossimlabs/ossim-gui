@@ -69,6 +69,7 @@
 #include <ossim/registration/ossimBundleAdjustmentRegistrationSource.h>
 #include <ossim/registration/ossimFixedRegistrationSource.h>
 #include <ossim/registration/ossimRegistrationSourceFactory.h>
+#include <ossim_autoreg/AutoRegistration.h>
 #include <ossim_autoreg/TiePointGenerator.h>
 #endif
 
@@ -129,6 +130,30 @@ namespace
       return preferredRegistrationMatchMethod();
    }
 
+   std::string preferredBundleMatchMethod()
+   {
+      const std::string method =
+         ossim_autoreg::defaultRegistrationMatchMethod();
+      if(registrationTieGeneratorAvailable(method))
+         return method;
+      return preferredRegistrationMatchMethod();
+   }
+
+   void applyBundleDefaultsToSource(
+      ossimBundleAdjustmentRegistrationSource* bundle,
+      bool anchorEnabled)
+   {
+      if(!bundle)
+         return;
+
+      ossim_autoreg::AutoRegistrationOptions options;
+      options.setGenerator(bundle->tiePointGenerationOptions());
+      options.setOptimizer(bundle->optimizationOptions());
+      ossim_autoreg::applyBundleRegistrationDefaults(options, anchorEnabled);
+      bundle->setTiePointGenerationOptions(options.generator());
+      bundle->setOptimizationOptions(options.optimizer());
+   }
+
    enum RegistrationSetupApproach
    {
       REGISTRATION_SETUP_FIXED_AUTO = 0,
@@ -169,10 +194,14 @@ namespace
    {
       RegistrationSetupOptions result;
       result.approach = approach;
+      const bool bundle =
+         approach == REGISTRATION_SETUP_BUNDLE_ALL_FLOATING ||
+         approach == REGISTRATION_SETUP_BUNDLE_ANCHORED;
       result.matchMethod = matchMethod.empty() ?
-         (approach == REGISTRATION_SETUP_FIXED_AUTO ?
-             preferredFixedAutoMatchMethod() :
-             preferredRegistrationMatchMethod()) :
+         (bundle ? preferredBundleMatchMethod() :
+          (approach == REGISTRATION_SETUP_FIXED_AUTO ?
+              preferredFixedAutoMatchMethod() :
+              preferredRegistrationMatchMethod())) :
          matchMethod;
       result.resamplerType = "cubic";
       result.chipSize = 31;
@@ -182,9 +211,23 @@ namespace
       result.viewGsd = 0.0;
       result.maxTiePoints = 300;
 
-      const bool bundle =
-         approach == REGISTRATION_SETUP_BUNDLE_ALL_FLOATING ||
-         approach == REGISTRATION_SETUP_BUNDLE_ANCHORED;
+      if(bundle)
+      {
+         ossim_autoreg::AutoRegistrationOptions defaults;
+         defaults.generator().setMatchMethod(result.matchMethod);
+         ossim_autoreg::applyBundleRegistrationDefaults(
+            defaults,
+            approach == REGISTRATION_SETUP_BUNDLE_ANCHORED);
+
+         result.resamplerType = defaults.generator().resamplerType();
+         result.chipSize = defaults.generator().chipSize();
+         result.searchRadius = defaults.generator().searchRadius();
+         result.gridSpacing = defaults.generator().gridSpacing();
+         result.minScore = defaults.generator().minScore();
+         result.viewGsd = defaults.generator().viewGsd();
+         result.maxTiePoints = defaults.generator().maxTiePoints();
+         return result;
+      }
 
       if(result.matchMethod == "mixed-phase-orb" ||
          result.matchMethod == "mixed-hybrid-orb")
@@ -4040,11 +4083,7 @@ void ossimGui::DataManagerWidget::createBundleFloatingRegistration()
    ossimRefPtr<ossimBundleAdjustmentRegistrationSource> bundle =
       new ossimBundleAdjustmentRegistrationSource();
    bundle->setAllInputsFloating(true);
-   ossim_autoreg::TiePointGenerationOptions tiePointOptions =
-      bundle->tiePointGenerationOptions();
-   tiePointOptions.matchMethod() = "phase-correlation";
-   tiePointOptions.resamplerType() = "cubic";
-   bundle->setTiePointGenerationOptions(tiePointOptions);
+   applyBundleDefaultsToSource(bundle.get(), false);
    ossimRefPtr<ossimObject> obj = bundle.get();
    if(obj.valid())
    {
@@ -4101,6 +4140,9 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
          new ossimBundleAdjustmentRegistrationSource();
       bundle->setAllInputsFloating(
          setupOptions.approach == REGISTRATION_SETUP_BUNDLE_ALL_FLOATING);
+      applyBundleDefaultsToSource(
+         bundle.get(),
+         setupOptions.approach == REGISTRATION_SETUP_BUNDLE_ANCHORED);
       ossim_autoreg::TiePointGenerationOptions tiePointOptions =
          bundle->tiePointGenerationOptions();
       applyRegistrationSetupTieOptions(tiePointOptions, setupOptions);

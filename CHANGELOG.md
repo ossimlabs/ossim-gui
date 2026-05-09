@@ -30,6 +30,9 @@ All notable changes to `ossim-gui` are documented here.
   availability-checked OpenCV options (69a28cd).
 
 ### Changed
+- Use `ossim-autoreg`'s shared bundle defaults when
+  `ossim-registration-source` is enabled, keeping GeoCell bundle setup aligned
+  with the CLI default configuration model.
 - Put the recommended Fixed Auto and Bundle Anchored registration approaches
   at the top of the Registration Setup selection list so new registrations
   start from the strongest default workflows.
