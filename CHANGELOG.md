@@ -12,7 +12,9 @@ All notable changes to `ossim-gui` are documented here.
 > generator factory, and reported with clearer job feedback.
 > Registration creation now has a setup dialog with matcher-aware defaults, and
 > fixed registration nodes use the same `Registered: <matcher>` label as the
-> geometry adjustments they write.
+> geometry adjustments they write. The direct Fixed registration menu and setup
+> dialog now expose the same adaptive fixed-auto default, so users can choose
+> the intended no-knob path without remembering which matcher currently wins.
 
 ### Added
 - Add Bundle/Floating registration object creation when
@@ -31,6 +33,9 @@ All notable changes to `ossim-gui` are documented here.
 - Add a Registration Setup dialog for fixed auto, fixed manual, bundle
   all-floating, and bundle anchored workflows with matcher-aware defaults and
   availability-checked OpenCV options (69a28cd).
+- Add an explicit `Adaptive Auto (Recommended)` matcher choice to Registration
+  Setup and make the direct Registration > Fixed menu create an adaptive
+  fixed-auto source without requiring the setup dialog.
 
 ### Changed
 - Use `ossim-autoreg`'s shared bundle defaults when
@@ -52,6 +57,10 @@ All notable changes to `ossim-gui` are documented here.
 - Name fixed registration tree nodes as `Registered: <matcher>` and propagate
   completed fixed-registration parameters by the adjustment index reported by
   `ossim-autoreg` (69a28cd).
+- Drive fixed and bundle registration setup through the shared
+  `AutoRegistrationOptions` bridge from `ossim-autoreg`, preserving explicit
+  matcher overrides while leaving the recommended fixed-auto path untuned so
+  the shared selector can choose.
 
 ## [2026-05-03]
 

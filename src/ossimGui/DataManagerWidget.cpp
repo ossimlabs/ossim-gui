@@ -446,7 +446,7 @@ namespace
       result.matchMethod = matchMethod.empty() ?
          (bundle ? preferredBundleMatchMethod() :
           (approach == REGISTRATION_SETUP_FIXED_AUTO ?
-              preferredFixedAutoMatchMethod() :
+              std::string() :
               preferredRegistrationMatchMethod())) :
          matchMethod;
       result.resamplerType = "cubic";
@@ -578,7 +578,8 @@ namespace
             REGISTRATION_SETUP_FIXED_MANUAL);
 
          m_matchMethod = new QComboBox(this);
-         addAvailableMatchMethod("Adaptive Mixed Phase/ORB (Recommended)", "mixed-phase-orb");
+         addMatchMethod("Adaptive Auto (Recommended)", "");
+         addAvailableMatchMethod("Adaptive Mixed Phase/ORB", "mixed-phase-orb");
          addAvailableMatchMethod("Adaptive Mixed Hybrid/ORB", "mixed-hybrid-orb");
          addAvailableMatchMethod("OpenCV SIFT", "opencv-sift");
          addAvailableMatchMethod("OpenCV ORB", "opencv-orb");
@@ -601,9 +602,7 @@ namespace
                               typeName.c_str());
             }
          }
-         const int preferredIndex =
-            m_matchMethod->findData(
-               QString::fromStdString(preferredFixedAutoMatchMethod()));
+         const int preferredIndex = m_matchMethod->findData(QString());
          if(preferredIndex >= 0)
             m_matchMethod->setCurrentIndex(preferredIndex);
 
@@ -4294,15 +4293,34 @@ void ossimGui::DataManagerWidget::createWriterFromType(const QString& type)
 void ossimGui::DataManagerWidget::createFixedRegistration()
 {
 #ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
-   ossimRefPtr<ossimObject> obj = new ossimFixedRegistrationSource();
+   ossimRefPtr<ossimFixedRegistrationSource> registration =
+      new ossimFixedRegistrationSource();
+   ossim_autoreg::AutoRegistrationOptions registrationOptions =
+      registration->autoRegistrationOptions();
+   RegistrationSetupOptions setupOptions =
+      registrationSetupDefaults(REGISTRATION_SETUP_FIXED_AUTO,
+                                preferredFixedAutoMatchMethod());
+   ossim_autoreg::TiePointGenerationOptions tiePointOptions =
+      registrationOptions.generator();
+   applyRegistrationSetupTieOptions(tiePointOptions, setupOptions);
+   tiePointOptions.setMatchMethod(std::string());
+   registrationOptions.setAutoRegister(true);
+   registrationOptions.setGenerateTiePoints(true);
+   registrationOptions.setSkipOptimization(false);
+   registrationOptions.setRegistrationPasses(4);
+   registrationOptions.setTargetRmsePixels(4.0);
+   registrationOptions.setRmseImprovementTolerance(0.01);
+   registrationOptions.setGenerator(tiePointOptions);
+   registration->setAutoRegistrationOptions(registrationOptions);
+
+   ossimRefPtr<ossimObject> obj = registration.get();
    if(obj.valid())
    {
       std::lock_guard<std::mutex> lock(m_activeItemsMutex);
       ossimRefPtr<DataManager::Node> node = m_dataManager->addSource(obj.get(), false);
       if(node.valid())
       {
-         node->setName(
-            registeredNodeName("hybrid-phase-ncc").toStdString().c_str());
+         node->setName("Registered: adaptive fixed auto");
          DataManagerRegistrationItem* item = new DataManagerRegistrationItem(node.get());
          item->setFlags(item->flags()|Qt::ItemIsEditable);
          m_registrationSources->addChild(item);
@@ -4426,10 +4444,13 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
       applyBundleDefaultsToSource(
          bundle.get(),
          setupOptions.approach == REGISTRATION_SETUP_BUNDLE_ANCHORED);
+      ossim_autoreg::AutoRegistrationOptions registrationOptions =
+         bundle->autoRegistrationOptions();
       ossim_autoreg::TiePointGenerationOptions tiePointOptions =
-         bundle->tiePointGenerationOptions();
+         registrationOptions.generator();
       applyRegistrationSetupTieOptions(tiePointOptions, setupOptions);
-      bundle->setTiePointGenerationOptions(tiePointOptions);
+      registrationOptions.setGenerator(tiePointOptions);
+      bundle->setAutoRegistrationOptions(registrationOptions);
       obj = bundle.get();
       nodeName = bundle->allInputsFloating() ?
          "Bundle All-Floating Registration" :
@@ -4444,6 +4465,8 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
    {
       ossimRefPtr<ossimFixedRegistrationSource> registration =
          new ossimFixedRegistrationSource();
+      ossim_autoreg::AutoRegistrationOptions registrationOptions =
+         registration->autoRegistrationOptions();
       if(setupOptions.approach == REGISTRATION_SETUP_FIXED_AUTO)
       {
          if(setupOptions.matchMethod == "opencv-phase-correlation")
@@ -4459,18 +4482,30 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
          registration->setRegistrationPasses(4);
          registration->setTargetRmsePixels(4.0);
          registration->setRmseImprovementTolerance(0.01);
+         registrationOptions = registration->autoRegistrationOptions();
       }
 
       ossim_autoreg::TiePointGenerationOptions tiePointOptions =
-         registration->tiePointGenerationOptions();
+         registrationOptions.generator();
       applyRegistrationSetupTieOptions(tiePointOptions, setupOptions);
-      registration->setTiePointGenerationOptions(tiePointOptions);
+      if(setupOptions.approach == REGISTRATION_SETUP_FIXED_AUTO &&
+         setupOptions.matchMethod.empty())
+      {
+         tiePointOptions.setMatchMethod(std::string());
+      }
+      registrationOptions.setGenerator(tiePointOptions);
+      registration->setAutoRegistrationOptions(registrationOptions);
       obj = registration.get();
-      nodeName = registeredNodeName(setupOptions.matchMethod);
+      nodeName = setupOptions.matchMethod.empty() ?
+         QString("Registered: adaptive fixed auto") :
+         registeredNodeName(setupOptions.matchMethod);
       toolTip =
          QString("%1\nMatcher: %2\nResampler: %3\nView GSD: %4")
             .arg(registration->autoRegistrationSettingsSummary().c_str())
-            .arg(QString::fromStdString(setupOptions.matchMethod))
+            .arg(QString::fromStdString(
+               setupOptions.matchMethod.empty() ?
+                  std::string("adaptive auto") :
+                  setupOptions.matchMethod))
             .arg(QString::fromStdString(setupOptions.resamplerType))
             .arg(setupOptions.viewGsd);
    }
