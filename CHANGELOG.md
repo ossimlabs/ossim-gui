@@ -33,6 +33,9 @@ All notable changes to `ossim-gui` are documented here.
 - Use `ossim-autoreg`'s shared bundle defaults when
   `ossim-registration-source` is enabled, keeping GeoCell bundle setup aligned
   with the CLI default configuration model.
+- Show bundle connectivity, solver backend, active parameter/image-block
+  counts, normal block pairs, and residual counts in GeoCell bundle job
+  summaries when `ossim-registration-source` is enabled (83090e9).
 - Put the recommended Fixed Auto and Bundle Anchored registration approaches
   at the top of the Registration Setup selection list so new registrations
   start from the strongest default workflows.
