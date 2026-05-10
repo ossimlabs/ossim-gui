@@ -64,6 +64,7 @@
 #include <ossimGui/RegPoint.h>
 #include <algorithm>
 #include <set>
+#include <sstream>
 
 #ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
 #include <ossim/registration/ossimBundleAdjustmentRegistrationSource.h>
@@ -152,6 +153,41 @@ namespace
       ossim_autoreg::applyBundleRegistrationDefaults(options, anchorEnabled);
       bundle->setTiePointGenerationOptions(options.generator());
       bundle->setOptimizationOptions(options.optimizer());
+   }
+
+   ossimString bundleRegistrationDiagnosticsSummary(
+      const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
+         result)
+   {
+      std::ostringstream out;
+      const ossim_autoreg::BundleAdjustmentResult& optimization =
+         result.optimization();
+      const ossim_autoreg::BundleConnectivityDiagnostics& connectivity =
+         result.connectivity();
+
+      out << "connectivity "
+          << connectivity.getEdges().size() << " edge(s)/"
+          << connectivity.getComponents().size() << " component(s)";
+      if(!connectivity.getConnected())
+      {
+         out << ", disconnected";
+      }
+
+      if(optimization.ran())
+      {
+         const std::string solverBackend =
+            optimization.solverBackendName().empty()
+               ? std::string("unknown")
+               : optimization.solverBackendName();
+         out << ", solver " << solverBackend
+             << ", active params " << optimization.activeParameterCount()
+             << ", image blocks " << optimization.activeImageBlockCount()
+             << ", normal blocks "
+             << optimization.normalEquationBlockPairCount()
+             << ", residuals " << optimization.validResidualCount();
+      }
+
+      return out.str().c_str();
    }
 
    enum RegistrationSetupApproach
@@ -1042,6 +1078,13 @@ namespace ossimGui
                m_resultSummary += ", RMSE ";
                m_resultSummary += ossimString::toString(
                   result.optimization().finalRmsPixels());
+            }
+            const ossimString diagnosticsSummary =
+               bundleRegistrationDiagnosticsSummary(result);
+            if(!diagnosticsSummary.empty())
+            {
+               m_resultSummary += ", ";
+               m_resultSummary += diagnosticsSummary;
             }
 
             std::vector<ossimFilename> writtenGeometryFiles;
