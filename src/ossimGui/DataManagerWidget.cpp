@@ -125,12 +125,6 @@ namespace
 
    std::string preferredFixedAutoMatchMethod()
    {
-      if(registrationTieGeneratorAvailable("phase-correlation"))
-         return "phase-correlation";
-      if(registrationTieGeneratorAvailable("opencv-phase-correlation"))
-         return "opencv-phase-correlation";
-      if(registrationTieGeneratorAvailable("hybrid-phase-ncc"))
-         return "hybrid-phase-ncc";
       return preferredRegistrationMatchMethod();
    }
 
@@ -150,12 +144,7 @@ namespace
       if(!bundle)
          return;
 
-      ossim_autoreg::AutoRegistrationOptions options;
-      options.setGenerator(bundle->tiePointGenerationOptions());
-      options.setOptimizer(bundle->optimizationOptions());
-      ossim_autoreg::applyBundleRegistrationDefaults(options, anchorEnabled);
-      bundle->setTiePointGenerationOptions(options.generator());
-      bundle->setOptimizationOptions(options.optimizer());
+      bundle->applyBundleRegistrationDefaults(anchorEnabled);
    }
 
    ossimString bundleRegistrationDiagnosticsSummary(
@@ -579,7 +568,7 @@ namespace
             "Fixed to Floating Auto (Recommended)",
             REGISTRATION_SETUP_FIXED_AUTO);
          m_approach->addItem(
-            "Bundle Anchored (Recommended)",
+            "Bundle Anchored",
             REGISTRATION_SETUP_BUNDLE_ANCHORED);
          m_approach->addItem(
             "Bundle All-Floating",
@@ -589,7 +578,7 @@ namespace
             REGISTRATION_SETUP_FIXED_MANUAL);
 
          m_matchMethod = new QComboBox(this);
-         addAvailableMatchMethod("Adaptive Mixed Phase/ORB", "mixed-phase-orb");
+         addAvailableMatchMethod("Adaptive Mixed Phase/ORB (Recommended)", "mixed-phase-orb");
          addAvailableMatchMethod("Adaptive Mixed Hybrid/ORB", "mixed-hybrid-orb");
          addAvailableMatchMethod("OpenCV SIFT", "opencv-sift");
          addAvailableMatchMethod("OpenCV ORB", "opencv-orb");
@@ -4464,7 +4453,7 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
             registration->applyAutoRegistrationPreset("fixed:spatial-ncc");
          else if(setupOptions.matchMethod == "hybrid-phase-ncc")
             registration->applyAutoRegistrationPreset("fixed:hybrid");
-         else
+         else if(setupOptions.matchMethod == "phase-correlation")
             registration->applyAutoRegistrationPreset("fixed:phase");
          registration->setAutoRegistrationEnabled(true);
          registration->setRegistrationPasses(4);
