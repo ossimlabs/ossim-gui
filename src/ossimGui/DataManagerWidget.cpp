@@ -37,6 +37,7 @@
 #include <QToolBar>
 #include <QItemDelegate>
 #include <QComboBox>
+#include <QDateTime>
 #include <QDoubleSpinBox>
 #include <QSpinBox>
 #include <QTableWidget>
@@ -44,6 +45,7 @@
 #include <QUrl>
 #include <QVBoxLayout>
 #include <QStandardItemModel>
+#include <QDir>
 #include <ossimGui/Common.h>
 #include <ossimGui/Event.h>
 #include <ossimGui/OpenImageDialog.h>
@@ -63,6 +65,7 @@
 #include <ossimGui/RegistrationOverlay.h>
 #include <ossimGui/RegPoint.h>
 #include <algorithm>
+#include <fstream>
 #include <set>
 #include <sstream>
 
@@ -188,6 +191,224 @@ namespace
       }
 
       return out.str().c_str();
+   }
+
+   QString registrationReportSafeLabel(const ossimString& label)
+   {
+      QString result = QString::fromStdString(label.string()).trimmed();
+      if(result.isEmpty())
+      {
+         result = "registration";
+      }
+      for(int idx = 0; idx < result.size(); ++idx)
+      {
+         const QChar ch = result.at(idx);
+         if(!ch.isLetterOrNumber() && ch != '_' && ch != '-')
+         {
+            result[idx] = '_';
+         }
+      }
+      return result.left(80);
+   }
+
+   ossimFilename registrationQualityReportPath(const ossimString& label,
+                                               const QString& prefix)
+   {
+      QDir reportDir(QDir::temp().filePath(
+         "ossim-geocell-registration-reports"));
+      if(!reportDir.exists())
+      {
+         reportDir.mkpath(".");
+      }
+      const QString timestamp =
+         QDateTime::currentDateTimeUtc().toString("yyyyMMddTHHmmsszzzZ");
+      const QString filename =
+         prefix + "-" + registrationReportSafeLabel(label) + "-" +
+         timestamp + ".txt";
+      return ossimFilename(reportDir.filePath(filename).toStdString());
+   }
+
+   bool writeRegistrationQualityReport(const ossimFilename& path,
+                                       const std::string& text)
+   {
+      if(path.empty())
+      {
+         return false;
+      }
+      std::ofstream out(path.c_str());
+      if(!out)
+      {
+         return false;
+      }
+      out << text;
+      return static_cast<bool>(out);
+   }
+
+   void appendRegistrationQualityReportStatus(ossimString& summary,
+                                              const ossimFilename& path,
+                                              bool wroteReport)
+   {
+      summary += wroteReport ? ", quality report: " :
+                               ", failed to write quality report: ";
+      summary += path;
+   }
+
+   std::string fixedRegistrationQualityReportText(
+      const ossimString& label,
+      const ossimString& summary,
+      bool success,
+      const std::vector<ossimFixedRegistrationSource::RegistrationResult>&
+         results,
+      const std::vector<ossimFilename>& writtenGeometryFiles,
+      const std::vector<ossimFilename>& failedGeometryFiles)
+   {
+      std::ostringstream out;
+      out << "registration_type: fixed\n";
+      out << "label: " << label << "\n";
+      out << "success: " << (success ? "true" : "false") << "\n";
+      out << "summary: " << summary << "\n";
+      out << "result_count: " << results.size() << "\n";
+      out << "written_geometry_count: " << writtenGeometryFiles.size()
+          << "\n";
+      for(std::size_t idx = 0; idx < writtenGeometryFiles.size(); ++idx)
+      {
+         out << "written_geometry[" << idx << "]: "
+             << writtenGeometryFiles[idx] << "\n";
+      }
+      out << "failed_geometry_count: " << failedGeometryFiles.size() << "\n";
+      for(std::size_t idx = 0; idx < failedGeometryFiles.size(); ++idx)
+      {
+         out << "failed_geometry[" << idx << "]: "
+             << failedGeometryFiles[idx] << "\n";
+      }
+      for(std::size_t idx = 0; idx < results.size(); ++idx)
+      {
+         const ossimFixedRegistrationSource::RegistrationResult& result =
+            results[idx];
+         const ossim_autoreg::OptimizationResult& optimization =
+            result.optimization();
+         out << "result[" << idx << "].input_index: "
+             << result.inputIndex() << "\n";
+         out << "result[" << idx << "].floating_input_index: "
+             << result.floatingInputIndex() << "\n";
+         out << "result[" << idx << "].success: "
+             << (result.success() ? "true" : "false") << "\n";
+         out << "result[" << idx << "].session_open: "
+             << (result.sessionOpen() ? "true" : "false") << "\n";
+         out << "result[" << idx << "].ran: "
+             << (result.ran() ? "true" : "false") << "\n";
+         out << "result[" << idx << "].tie_points: "
+             << result.tiePoints().size() << "\n";
+         out << "result[" << idx << "].message: "
+             << result.message() << "\n";
+         out << "result[" << idx << "].optimization.ran: "
+             << (optimization.ran() ? "true" : "false") << "\n";
+         if(optimization.ran())
+         {
+            out << "result[" << idx
+                << "].optimization.converged: "
+                << (optimization.converged() ? "true" : "false") << "\n";
+            out << "result[" << idx
+                << "].optimization.iterations: "
+                << optimization.iterations() << "\n";
+            out << "result[" << idx
+                << "].optimization.final_rmse_pixels: "
+                << optimization.finalRmsPixels() << "\n";
+            out << "result[" << idx
+                << "].optimization.active_parameters: "
+                << optimization.activeParameterCount() << "\n";
+         }
+      }
+      return out.str();
+   }
+
+   std::string bundleRegistrationQualityReportText(
+      const ossimString& label,
+      const ossimString& summary,
+      bool success,
+      const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
+         result,
+      const std::vector<ossimFilename>& writtenGeometryFiles)
+   {
+      std::ostringstream out;
+      const ossim_autoreg::BundleAdjustmentResult& optimization =
+         result.optimization();
+      const ossim_autoreg::BundleConnectivityDiagnostics& connectivity =
+         result.connectivity();
+
+      out << "registration_type: bundle\n";
+      out << "label: " << label << "\n";
+      out << "success: " << (success ? "true" : "false") << "\n";
+      out << "summary: " << summary << "\n";
+      out << "session_open: "
+          << (result.sessionOpen() ? "true" : "false") << "\n";
+      out << "ran: " << (result.ran() ? "true" : "false") << "\n";
+      out << "message: " << result.message() << "\n";
+      out << "pair_count: " << result.pairResults().size() << "\n";
+      for(std::size_t idx = 0; idx < result.pairResults().size(); ++idx)
+      {
+         const ossimBundleAdjustmentRegistrationSource::PairResult& pair =
+            result.pairResults()[idx];
+         out << "pair[" << idx << "].first_input_index: "
+             << pair.firstInputIndex() << "\n";
+         out << "pair[" << idx << "].second_input_index: "
+             << pair.secondInputIndex() << "\n";
+         out << "pair[" << idx << "].tie_points: "
+             << pair.tiePoints().size() << "\n";
+         out << "pair[" << idx << "].added_tie_points: "
+             << pair.addedTiePointCount() << "\n";
+      }
+      out << "connectivity.image_count: "
+          << connectivity.getImageCount() << "\n";
+      out << "connectivity.anchor_enabled: "
+          << (connectivity.getAnchorEnabled() ? "true" : "false") << "\n";
+      out << "connectivity.connected: "
+          << (connectivity.getConnected() ? "true" : "false") << "\n";
+      out << "connectivity.edge_count: "
+          << connectivity.getEdges().size() << "\n";
+      for(std::size_t idx = 0; idx < connectivity.getEdges().size(); ++idx)
+      {
+         const ossim_autoreg::BundleConnectivityEdge& edge =
+            connectivity.getEdges()[idx];
+         out << "connectivity.edge[" << idx << "]: image["
+             << edge.getFirstImageIndex() << "] -> image["
+             << edge.getSecondImageIndex() << "], tie_points="
+             << edge.getTiePointCount() << "\n";
+      }
+      out << "connectivity.component_count: "
+          << connectivity.getComponents().size() << "\n";
+      if(optimization.ran())
+      {
+         out << "optimization.ran: true\n";
+         out << "optimization.converged: "
+             << (optimization.converged() ? "true" : "false") << "\n";
+         out << "optimization.iterations: "
+             << optimization.iterations() << "\n";
+         out << "optimization.final_rmse_pixels: "
+             << optimization.finalRmsPixels() << "\n";
+         out << "optimization.valid_residuals: "
+             << optimization.validResidualCount() << "\n";
+         out << "optimization.active_parameters: "
+             << optimization.activeParameterCount() << "\n";
+         out << "optimization.active_image_blocks: "
+             << optimization.activeImageBlockCount() << "\n";
+         out << "optimization.normal_equation_block_pairs: "
+             << optimization.normalEquationBlockPairCount() << "\n";
+         out << "optimization.solver_backend: "
+             << optimization.solverBackendName() << "\n";
+      }
+      else
+      {
+         out << "optimization.ran: false\n";
+      }
+      out << "written_geometry_count: " << writtenGeometryFiles.size()
+          << "\n";
+      for(std::size_t idx = 0; idx < writtenGeometryFiles.size(); ++idx)
+      {
+         out << "written_geometry[" << idx << "]: "
+             << writtenGeometryFiles[idx] << "\n";
+      }
+      return out.str();
    }
 
    enum RegistrationSetupApproach
@@ -909,6 +1130,21 @@ namespace ossimGui
                   m_resultSummary += autoStatus.c_str();
                }
             }
+            const ossimFilename reportPath =
+               registrationQualityReportPath(m_label, "fixed-registration");
+            const bool wroteReport = writeRegistrationQualityReport(
+               reportPath,
+               fixedRegistrationQualityReportText(
+                  m_label,
+                  m_resultSummary,
+                  m_success,
+                  results,
+                  writtenGeometryFiles,
+                  failedGeometryFiles));
+            appendRegistrationQualityReportStatus(
+               m_resultSummary,
+               reportPath,
+               wroteReport);
             setDescription(m_resultSummary);
             if(isCanceled())
             {
@@ -1157,6 +1393,21 @@ namespace ossimGui
                m_resultSummary += " - ";
                m_resultSummary += result.message().c_str();
             }
+
+            const ossimFilename reportPath =
+               registrationQualityReportPath(m_label, "bundle-registration");
+            const bool wroteReport = writeRegistrationQualityReport(
+               reportPath,
+               bundleRegistrationQualityReportText(
+                  m_label,
+                  m_resultSummary,
+                  m_success,
+                  result,
+                  writtenGeometryFiles));
+            appendRegistrationQualityReportStatus(
+               m_resultSummary,
+               reportPath,
+               wroteReport);
 
             setDescription(m_resultSummary);
             if(isCanceled())

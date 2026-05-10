@@ -17,6 +17,9 @@ All notable changes to `ossim-gui` are documented here.
 ### Added
 - Add Bundle/Floating registration object creation when
   `ossim-registration-source` is enabled (b09aaf4).
+- Add GeoCell registration quality report artifacts for fixed and bundle
+  registration jobs, with the generated report path appended to each job
+  summary when `ossim-registration-source` is enabled.
 - Add a bundle-adjustment background job with progress updates, cancellation,
   geometry sidecar writes, and geometry reload propagation (b09aaf4).
 - Default new Bundle/Floating registration objects to all-floating mode and add
