@@ -52,6 +52,8 @@ All notable changes to `ossim-gui` are documented here.
   spread, translation-consistency, and score evidence.
 - Show shared bundle normal-equation block-pair capacity and density in GeoCell
   quality reports so sparse/Schur solver readiness is visible from GUI runs.
+- Show the shared two-image bundle model-freedom advisory in
+  GeoCell bundle quality reports when `ossim-registration-source` is enabled.
 - Put the recommended Fixed Auto and Bundle Anchored registration approaches
   at the top of the Registration Setup selection list so new registrations
   start from the strongest default workflows.

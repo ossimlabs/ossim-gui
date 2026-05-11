@@ -499,6 +499,10 @@ namespace
           << (result.sessionOpen() ? "true" : "false") << "\n";
       out << "ran: " << (result.ran() ? "true" : "false") << "\n";
       out << "message: " << result.message() << "\n";
+      out << "model_freedom_advisory: "
+          << (result.modelFreedomAdvisory().empty()
+                 ? std::string("ok")
+                 : result.modelFreedomAdvisory()) << "\n";
       out << "pair_count: " << result.pairResults().size() << "\n";
       for(std::size_t idx = 0; idx < result.pairResults().size(); ++idx)
       {
