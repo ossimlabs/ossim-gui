@@ -555,6 +555,10 @@ namespace
              << optimization.activeImageBlockCount() << "\n";
          out << "optimization.normal_equation_block_pairs: "
              << optimization.normalEquationBlockPairCount() << "\n";
+         out << "optimization.normal_equation_block_pair_capacity: "
+             << optimization.normalEquationBlockPairCapacity() << "\n";
+         out << "optimization.normal_equation_block_pair_density: "
+             << optimization.normalEquationBlockPairDensity() << "\n";
          out << "optimization.solver_backend: "
              << optimization.solverBackendName() << "\n";
       }

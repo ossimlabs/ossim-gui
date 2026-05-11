@@ -50,6 +50,8 @@ All notable changes to `ossim-gui` are documented here.
 - Show shared dense-alternate bundle tie diagnostics in GeoCell bundle job
   summaries and generated quality reports, including acceptance reason,
   spread, translation-consistency, and score evidence.
+- Show shared bundle normal-equation block-pair capacity and density in GeoCell
+  quality reports so sparse/Schur solver readiness is visible from GUI runs.
 - Put the recommended Fixed Auto and Bundle Anchored registration approaches
   at the top of the Registration Setup selection list so new registrations
   start from the strongest default workflows.
