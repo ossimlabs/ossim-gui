@@ -147,6 +147,43 @@ namespace
       bundle->applyBundleRegistrationDefaults(anchorEnabled);
    }
 
+   std::string bundleRegistrationDenseAlternateSummary(
+      const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
+         result)
+   {
+      std::size_t evaluatedCount = 0;
+      std::size_t usedCount = 0;
+      std::string lastReason;
+      for(std::size_t idx = 0; idx < result.pairResults().size(); ++idx)
+      {
+         const ossimBundleAdjustmentRegistrationSource::PairResult& pair =
+            result.pairResults()[idx];
+         if(pair.denseAlternateEvaluated())
+         {
+            ++evaluatedCount;
+            if(pair.denseAlternateUsed())
+            {
+               ++usedCount;
+            }
+            lastReason = pair.denseAlternateAcceptance().reason();
+         }
+      }
+
+      if(!evaluatedCount)
+      {
+         return std::string();
+      }
+
+      std::ostringstream out;
+      out << "dense alternates " << usedCount << "/" << evaluatedCount
+          << " used";
+      if(!lastReason.empty())
+      {
+         out << ", last reason " << lastReason;
+      }
+      return out.str();
+   }
+
    ossimString bundleRegistrationDiagnosticsSummary(
       const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
          result)
@@ -177,6 +214,13 @@ namespace
              << ", normal blocks "
              << optimization.normalEquationBlockPairCount()
              << ", residuals " << optimization.validResidualCount();
+      }
+
+      const std::string denseAlternateSummary =
+         bundleRegistrationDenseAlternateSummary(result);
+      if(!denseAlternateSummary.empty())
+      {
+         out << ", " << denseAlternateSummary;
       }
 
       return out.str().c_str();
@@ -240,6 +284,111 @@ namespace
       summary += wroteReport ? ", quality report: " :
                                ", failed to write quality report: ";
       summary += path;
+   }
+
+   void appendTiePointSpreadQualityReport(
+      std::ostringstream& out,
+      const std::string& prefix,
+      const ossim_autoreg::TiePointSpreadQuality& quality)
+   {
+      out << prefix << ".valid: "
+          << (quality.valid() ? "true" : "false") << "\n";
+      if(!quality.valid())
+      {
+         return;
+      }
+      out << prefix << ".weak: "
+          << (quality.weak() ? "true" : "false") << "\n";
+      out << prefix << ".area_ratio: " << quality.areaRatio() << "\n";
+      out << prefix << ".fixed_aspect_ratio: "
+          << quality.fixedAspectRatio() << "\n";
+      out << prefix << ".moving_aspect_ratio: "
+          << quality.movingAspectRatio() << "\n";
+      out << prefix << ".reason: " << quality.reason() << "\n";
+   }
+
+   void appendTiePointTranslationConsistencyReport(
+      std::ostringstream& out,
+      const std::string& prefix,
+      const ossim_autoreg::TiePointTranslationConsistency& consistency)
+   {
+      out << prefix << ".valid: "
+          << (consistency.valid() ? "true" : "false") << "\n";
+      if(!consistency.valid())
+      {
+         return;
+      }
+      out << prefix << ".count: " << consistency.count() << "\n";
+      out << prefix << ".median_residual_pixels: "
+          << consistency.medianResidualPixels() << "\n";
+      out << prefix << ".rms_residual_pixels: "
+          << consistency.rmsResidualPixels() << "\n";
+      out << prefix << ".max_residual_pixels: "
+          << consistency.maxResidualPixels() << "\n";
+   }
+
+   void appendTiePointScoreQualityReport(
+      std::ostringstream& out,
+      const std::string& prefix,
+      const ossim_autoreg::TiePointScoreQuality& quality)
+   {
+      out << prefix << ".valid: "
+          << (quality.valid() ? "true" : "false") << "\n";
+      if(!quality.valid())
+      {
+         return;
+      }
+      out << prefix << ".count: " << quality.count() << "\n";
+      out << prefix << ".min_score: " << quality.minScore() << "\n";
+      out << prefix << ".mean_score: " << quality.meanScore() << "\n";
+      out << prefix << ".median_score: " << quality.medianScore() << "\n";
+      out << prefix << ".max_score: " << quality.maxScore() << "\n";
+   }
+
+   void appendDenseAlternateReport(
+      std::ostringstream& out,
+      const std::string& prefix,
+      const ossimBundleAdjustmentRegistrationSource::PairResult& pair)
+   {
+      out << prefix << ".dense_alternate_evaluated: "
+          << (pair.denseAlternateEvaluated() ? "true" : "false") << "\n";
+      if(!pair.denseAlternateEvaluated())
+      {
+         return;
+      }
+
+      const ossim_autoreg::TiePointAlternateAcceptance& acceptance =
+         pair.denseAlternateAcceptance();
+      out << prefix << ".dense_alternate_used: "
+          << (pair.denseAlternateUsed() ? "true" : "false") << "\n";
+      out << prefix << ".dense_alternate_accepted: "
+          << (acceptance.accepted() ? "true" : "false") << "\n";
+      out << prefix << ".dense_alternate_reason: "
+          << acceptance.reason() << "\n";
+      appendTiePointSpreadQualityReport(
+         out,
+         prefix + ".dense_base_spread",
+         acceptance.baseSpread());
+      appendTiePointSpreadQualityReport(
+         out,
+         prefix + ".dense_candidate_spread",
+         acceptance.candidateSpread());
+      appendTiePointTranslationConsistencyReport(
+         out,
+         prefix + ".dense_base_translation",
+         acceptance.baseConsistency());
+      appendTiePointTranslationConsistencyReport(
+         out,
+         prefix + ".dense_candidate_translation",
+         acceptance.candidateConsistency());
+      appendTiePointScoreQualityReport(
+         out,
+         prefix + ".dense_base_score",
+         acceptance.baseScoreQuality());
+      appendTiePointScoreQualityReport(
+         out,
+         prefix + ".dense_candidate_score",
+         acceptance.candidateScoreQuality());
    }
 
    std::string fixedRegistrationQualityReportText(
@@ -346,6 +495,12 @@ namespace
              << pair.tiePoints().size() << "\n";
          out << "pair[" << idx << "].added_tie_points: "
              << pair.addedTiePointCount() << "\n";
+         appendDenseAlternateReport(
+            out,
+            std::string("pair[") +
+               ossimString::toString(static_cast<ossim_uint32>(idx)).string()
+               + "]",
+            pair);
       }
       out << "connectivity.image_count: "
           << connectivity.getImageCount() << "\n";
