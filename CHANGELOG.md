@@ -36,6 +36,9 @@ All notable changes to `ossim-gui` are documented here.
 - Add an explicit `Adaptive Auto (Recommended)` matcher choice to Registration
   Setup and make the direct Registration > Fixed menu create an adaptive
   fixed-auto source without requiring the setup dialog.
+- Add fixed-registration effective target/search span and fixed scene/search
+  span policy fields to GeoCell generated quality reports when
+  `ossim-registration-source` is enabled.
 
 ### Changed
 - Use `ossim-autoreg`'s shared bundle defaults when

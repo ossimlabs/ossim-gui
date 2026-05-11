@@ -65,6 +65,7 @@
 #include <ossimGui/RegistrationOverlay.h>
 #include <ossimGui/RegPoint.h>
 #include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <set>
 #include <sstream>
@@ -439,6 +440,22 @@ namespace
              << result.tiePoints().size() << "\n";
          out << "result[" << idx << "].message: "
              << result.message() << "\n";
+         if(std::isfinite(result.effectiveTargetRmsePixels()))
+         {
+            out << "result[" << idx
+                << "].effective_target_rmse_pixels: "
+                << result.effectiveTargetRmsePixels() << "\n";
+         }
+         if(std::isfinite(result.effectiveSearchSpan()))
+         {
+            out << "result[" << idx
+                << "].effective_search_span: "
+                << result.effectiveSearchSpan() << "\n";
+         }
+         out << "result[" << idx << "].fixed_scene_policy: "
+             << result.fixedScenePolicy() << "\n";
+         out << "result[" << idx << "].search_span_policy: "
+             << result.searchSpanPolicy() << "\n";
          out << "result[" << idx << "].optimization.ran: "
              << (optimization.ran() ? "true" : "false") << "\n";
          if(optimization.ran())
