@@ -51,6 +51,7 @@ namespace ossimGui
    public slots:
       void valueChanged(int row, int col);
       void resetTable();
+      void reloadModelDefaults();
       void keepAdjustment();
       void saveAdjustment();
       void copyAdjustment();

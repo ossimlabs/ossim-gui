@@ -15,6 +15,8 @@ All notable changes to `ossim-gui` are documented here.
 > geometry adjustments they write. The direct Fixed registration menu and setup
 > dialog now expose the same adaptive fixed-auto default, so users can choose
 > the intended no-knob path without remembering which matcher currently wins.
+> The adjustable-parameter editor can now explicitly rebuild adjustment 0 from
+> the model defaults, which makes revised sensor-model sigmas easier to reload.
 
 ### Added
 - Add Bundle/Floating registration object creation when
@@ -42,6 +44,9 @@ All notable changes to `ossim-gui` are documented here.
 - Add Source/Chain popup registration actions so selected image items can
   launch the default Fixed or Bundle All-Floating registration directly,
   including automatic input connection and job start.
+- Add a Model Defaults button to the adjustable-parameter editor that clears
+  all adjustment history, calls the model's `initAdjustableParameters()`, and
+  reloads a fresh adjustment 0 from the current model defaults.
 
 ### Changed
 - Use `ossim-autoreg`'s shared bundle defaults when
@@ -76,6 +81,9 @@ All notable changes to `ossim-gui` are documented here.
   `AutoRegistrationOptions` bridge from `ossim-autoreg`, preserving explicit
   matcher overrides while leaving the recommended fixed-auto path untuned so
   the shared selector can choose.
+- Make deleting the final adjustable-parameter entry use the same model-default
+  reload path as the new button instead of leaving stale adjustment state in
+  the editor.
 
 ## [2026-05-03]
 

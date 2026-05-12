@@ -12,6 +12,23 @@ static const int PARAMETER_INDEX  = 2;
 static const int SLIDER_INDEX     = 3;
 static const int VALUE_INDEX      = 4;
 
+namespace
+{
+void ensureEditableAdjustment(ossimAdjustableParameterInterface* interface)
+{
+   if(!interface)
+   {
+      return;
+   }
+
+   if((interface->getNumberOfAdjustments() < 1) ||
+      (interface->getNumberOfAdjustableParameters() < 1))
+   {
+      interface->initAdjustableParameters();
+   }
+}
+}
+
 ossimGui::AdjustableParameterEditor::AdjustableParameterEditor(QWidget* parent, Qt::WindowFlags f)
 :QDialog(parent, f),
 m_interface(0)
@@ -20,6 +37,7 @@ m_interface(0)
    setAttribute(Qt::WA_DeleteOnClose);
    connect(m_adjustableParameterTable, SIGNAL(cellChanged(int, int)), this, SLOT(valueChanged(int, int)));
    connect(m_resetButton, SIGNAL(clicked()), this, SLOT(resetTable()));
+   connect(m_modelDefaultsButton, SIGNAL(clicked()), this, SLOT(reloadModelDefaults()));
    connect(m_keepAdjustmentButton, SIGNAL(clicked()), this, SLOT(keepAdjustment()));
    connect(m_saveButton, SIGNAL(clicked()), this, SLOT(saveAdjustment()));
    connect(m_closeButton, SIGNAL(clicked()), this,SLOT(close()));
@@ -50,6 +68,7 @@ void ossimGui::AdjustableParameterEditor::setObject(ossimObject* obj)
       }
    }
 
+   ensureEditableAdjustment(m_interface);
    setImageSource();
 
    transferToDialog();
@@ -132,6 +151,7 @@ void ossimGui::AdjustableParameterEditor::transferToTable()
    if(!m_interface)
    {
       m_adjustableParameterTable->clearContents();
+      m_adjustableParameterTable->setRowCount(0);
       return;
    }
    if(m_interface)
@@ -221,6 +241,7 @@ void ossimGui::AdjustableParameterEditor::transferToTable()
       else 
       {
          m_adjustableParameterTable->clearContents();
+         m_adjustableParameterTable->setRowCount(0);
       }
 
       m_adjustableParameterTable->blockSignals(false);
@@ -239,6 +260,18 @@ void ossimGui::AdjustableParameterEditor::resetTable()
       transferToTable();
       fireRefreshEvent();
    }
+}
+
+void ossimGui::AdjustableParameterEditor::reloadModelDefaults()
+{
+   if(!m_interface) return;
+
+   m_interface->removeAllAdjustments();
+   m_interface->initAdjustableParameters();
+   ensureEditableAdjustment(m_interface);
+   m_interface->setDirtyFlag(true);
+   transferToDialog();
+   fireRefreshEvent();
 }
 
 void ossimGui::AdjustableParameterEditor::keepAdjustment()
@@ -289,11 +322,17 @@ void ossimGui::AdjustableParameterEditor::deleteAdjustment()
    if(m_interface)
    {
       m_interface->setDirtyFlag(true);
-      m_interface->eraseAdjustment(true);
-      if(m_interface->getNumberOfAdjustments() < 1)
+      if(m_interface->getNumberOfAdjustments() <= 1)
       {
-         m_interface->initAdjustableParameters();
+         reloadModelDefaults();
+         return;
       }
+      else
+      {
+         m_interface->eraseAdjustment(true);
+      }
+      ensureEditableAdjustment(m_interface);
+      m_interface->setDirtyFlag(true);
       transferToDialog();
       fireRefreshEvent();
    }   

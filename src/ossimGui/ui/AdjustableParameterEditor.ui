@@ -142,6 +142,16 @@
       </widget>
      </item>
      <item>
+      <widget class="QPushButton" name="m_modelDefaultsButton">
+       <property name="text">
+        <string>Model Defaults</string>
+       </property>
+       <property name="autoDefault">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QPushButton" name="m_saveButton">
        <property name="text">
         <string>Save...</string>
