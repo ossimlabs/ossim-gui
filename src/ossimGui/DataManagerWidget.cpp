@@ -440,6 +440,10 @@ namespace
              << result.tiePoints().size() << "\n";
          out << "result[" << idx << "].message: "
              << result.message() << "\n";
+         out << "result[" << idx << "].quality_advisory: "
+             << (result.qualityAdvisory().empty()
+                    ? std::string("ok")
+                    : result.qualityAdvisory()) << "\n";
          if(std::isfinite(result.effectiveTargetRmsePixels()))
          {
             out << "result[" << idx
@@ -1092,6 +1096,7 @@ namespace ossimGui
 
       bool success()const{return m_success;}
       const ossimString& resultSummary()const{return m_resultSummary;}
+      const ossimString& advisorySummary()const{return m_advisorySummary;}
       const DataManagerWidgetEvent::HandlerListType& sourceHandlersToReload()const
       {
          return m_sourceHandlersToReload;
@@ -1160,6 +1165,7 @@ namespace ossimGui
       {
          setPercentComplete(0.0);
          m_sourceHandlersToReload.clear();
+         m_advisorySummary.clear();
          if(m_registrationSource.valid())
          {
             m_registrationSource->setCancelCallback([this]() {
@@ -1221,6 +1227,24 @@ namespace ossimGui
                         failedGeometryFiles.push_back(outputFile);
                      }
                   }
+               }
+            }
+
+            for(idx = 0; idx < results.size(); ++idx)
+            {
+               if(results[idx].success() &&
+                  !results[idx].qualityAdvisory().empty())
+               {
+                  if(!m_advisorySummary.empty())
+                  {
+                     m_advisorySummary += "\n";
+                  }
+                  m_advisorySummary += "Input ";
+                  m_advisorySummary +=
+                     ossimString::toString(results[idx].inputIndex());
+                  m_advisorySummary += ": ";
+                  m_advisorySummary +=
+                     results[idx].qualityAdvisory().c_str();
                }
             }
 
@@ -1340,6 +1364,7 @@ namespace ossimGui
       ossimRefPtr<ossimFixedRegistrationSource> m_registrationSource;
       ossimString m_label;
       ossimString m_resultSummary;
+      ossimString m_advisorySummary;
       DataManagerWidgetEvent::HandlerListType m_sourceHandlersToReload;
       bool m_success;
    };
@@ -1639,6 +1664,12 @@ namespace ossimGui
                   evt->setWarningMessage(
                      "Registration failed",
                      registrationJob->resultSummary().string());
+               }
+               else if(!registrationJob->advisorySummary().empty())
+               {
+                  evt->setWarningMessage(
+                     "Registration quality advisory",
+                     registrationJob->advisorySummary().string());
                }
             }
             std::shared_ptr<BundleRegistrationSourceJob> bundleJob =
