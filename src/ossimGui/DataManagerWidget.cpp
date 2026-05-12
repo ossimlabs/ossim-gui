@@ -4477,6 +4477,18 @@ void ossimGui::DataManagerWidget::createWriterFromType(const QString& type)
 void ossimGui::DataManagerWidget::createFixedRegistration()
 {
 #ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+   createDefaultFixedRegistrationItem();
+#else
+   QMessageBox::warning(this,
+                        "Registration",
+                        "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
+ossimGui::DataManagerRegistrationItem*
+ossimGui::DataManagerWidget::createDefaultFixedRegistrationItem()
+{
+#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
    ossimRefPtr<ossimFixedRegistrationSource> registration =
       new ossimFixedRegistrationSource();
    ossim_autoreg::AutoRegistrationOptions registrationOptions =
@@ -4509,13 +4521,11 @@ void ossimGui::DataManagerWidget::createFixedRegistration()
          item->setFlags(item->flags()|Qt::ItemIsEditable);
          m_registrationSources->addChild(item);
          m_activeItems.insert(item);
+         return item;
       }
    }
-#else
-   QMessageBox::warning(this,
-                        "Registration",
-                        "ossim-registration-source is not enabled in this build.");
 #endif
+   return 0;
 }
 
 void ossimGui::DataManagerWidget::createFixedOpenCvAutoRegistration()
@@ -4565,6 +4575,18 @@ void ossimGui::DataManagerWidget::createFixedOpenCvAutoRegistration()
 void ossimGui::DataManagerWidget::createBundleFloatingRegistration()
 {
 #ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+   createDefaultBundleFloatingRegistrationItem();
+#else
+   QMessageBox::information(this,
+                            "Registration",
+                            "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
+ossimGui::DataManagerRegistrationItem*
+ossimGui::DataManagerWidget::createDefaultBundleFloatingRegistrationItem()
+{
+#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
    ossimRefPtr<ossimBundleAdjustmentRegistrationSource> bundle =
       new ossimBundleAdjustmentRegistrationSource();
    bundle->setAllInputsFloating(true);
@@ -4583,8 +4605,71 @@ void ossimGui::DataManagerWidget::createBundleFloatingRegistration()
          item->setFlags(item->flags()|Qt::ItemIsEditable);
          m_registrationSources->addChild(item);
          m_activeItems.insert(item);
+         return item;
       }
    }
+#endif
+   return 0;
+}
+
+QList<ossimGui::DataManagerItem*>
+ossimGui::DataManagerWidget::selectedRegistrationInputItems() const
+{
+   QList<DataManagerItem*> result;
+   QList<QTreeWidgetItem*> selectedNodes = selectedItems();
+   QList<QTreeWidgetItem*>::iterator iter = selectedNodes.begin();
+   while(iter != selectedNodes.end())
+   {
+      DataManagerItem* item = dynamic_cast<DataManagerItem*>(*iter);
+      if(item &&
+         (item->itemAs<DataManagerRawImageSourceItem>() ||
+          item->itemAs<DataManagerImageChainItem>()) &&
+         item->objectAsNode())
+      {
+         result.push_back(item);
+      }
+      ++iter;
+   }
+   return result;
+}
+
+void ossimGui::DataManagerWidget::connectAndExecuteSelectedRegistration(
+   DataManagerRegistrationItem* item)
+{
+   if(!item)
+      return;
+
+   QList<DataManagerItem*> inputs = selectedRegistrationInputItems();
+   if(inputs.size() < 2)
+   {
+      QMessageBox::warning(this,
+                           "Registration",
+                           "Select at least two Sources or Chains before "
+                           "starting registration.");
+      return;
+   }
+
+   item->dropItems(inputs);
+   item->setSelected(true);
+   item->execute();
+}
+
+void ossimGui::DataManagerWidget::createFixedRegistrationFromSelection()
+{
+#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+   connectAndExecuteSelectedRegistration(createDefaultFixedRegistrationItem());
+#else
+   QMessageBox::warning(this,
+                        "Registration",
+                        "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
+void ossimGui::DataManagerWidget::createBundleFloatingRegistrationFromSelection()
+{
+#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+   connectAndExecuteSelectedRegistration(
+      createDefaultBundleFloatingRegistrationItem());
 #else
    QMessageBox::information(this,
                             "Registration",
@@ -5746,6 +5831,25 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
       
      if(nImageChainSelections>0||nRawSourceSelections>0)
      {
+        QMenu* registrationMenu = new QMenu("Registration");
+        QAction* fixedRegistrationAction =
+           registrationMenu->addAction("Default Fixed");
+        QAction* bundleRegistrationAction =
+           registrationMenu->addAction("Default Bundle All-Floating");
+#ifndef OSSIM_REGISTRATION_SOURCE_ENABLED
+        fixedRegistrationAction->setEnabled(false);
+        bundleRegistrationAction->setEnabled(false);
+#endif
+        menu->addMenu(registrationMenu);
+        connect(fixedRegistrationAction,
+                SIGNAL(triggered(bool)),
+                this,
+                SLOT(createFixedRegistrationFromSelection()));
+        connect(bundleRegistrationAction,
+                SIGNAL(triggered(bool)),
+                this,
+                SLOT(createBundleFloatingRegistrationFromSelection()));
+
         if(nRawSourceSelections>0)
         {
            QMenu* chainMenu = new QMenu("Chains");

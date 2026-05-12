@@ -39,6 +39,9 @@ All notable changes to `ossim-gui` are documented here.
 - Add fixed-registration effective target/search span and fixed scene/search
   span policy fields to GeoCell generated quality reports when
   `ossim-registration-source` is enabled.
+- Add Source/Chain popup registration actions so selected image items can
+  launch the default Fixed or Bundle All-Floating registration directly,
+  including automatic input connection and job start.
 
 ### Changed
 - Use `ossim-autoreg`'s shared bundle defaults when
