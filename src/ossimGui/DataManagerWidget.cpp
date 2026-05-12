@@ -503,6 +503,10 @@ namespace
           << (result.modelFreedomAdvisory().empty()
                  ? std::string("ok")
                  : result.modelFreedomAdvisory()) << "\n";
+      out << "edge_prune_policy: "
+          << (result.edgePrunePolicyMessage().empty()
+                 ? std::string("not_attempted")
+                 : result.edgePrunePolicyMessage()) << "\n";
       out << "pair_count: " << result.pairResults().size() << "\n";
       for(std::size_t idx = 0; idx < result.pairResults().size(); ++idx)
       {
