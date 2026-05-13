@@ -185,6 +185,86 @@ namespace
       return out.str();
    }
 
+   std::string bundleRegistrationMatcherAlternateSummary(
+      const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
+         result)
+   {
+      std::size_t evaluatedCount = 0;
+      std::size_t usedCount = 0;
+      std::string lastMethod;
+      std::string lastReason;
+      for(std::size_t idx = 0; idx < result.pairResults().size(); ++idx)
+      {
+         const ossimBundleAdjustmentRegistrationSource::PairResult& pair =
+            result.pairResults()[idx];
+         if(pair.matcherAlternateEvaluated())
+         {
+            ++evaluatedCount;
+            if(pair.matcherAlternateUsed())
+            {
+               ++usedCount;
+               if(!pair.matcherAlternateMethod().empty())
+               {
+                  lastMethod = pair.matcherAlternateMethod();
+               }
+            }
+            lastReason = pair.matcherAlternateAcceptance().reason();
+         }
+      }
+
+      if(!evaluatedCount)
+      {
+         return std::string();
+      }
+
+      std::ostringstream out;
+      out << "matcher alternates " << usedCount << "/" << evaluatedCount
+          << " used";
+      if(!lastMethod.empty())
+      {
+         out << ", method " << lastMethod;
+      }
+      if(!lastReason.empty())
+      {
+         out << ", last reason " << lastReason;
+      }
+      return out.str();
+   }
+
+   ossimString bundleRegistrationAdvisorySummary(
+      const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
+         result)
+   {
+      ossimString summary;
+      if(result.success() && !result.boundPressureAdvisory().empty())
+      {
+         summary += "Bound pressure: ";
+         summary += result.boundPressureAdvisory().c_str();
+      }
+      if(!result.modelFreedomAdvisory().empty())
+      {
+         if(!summary.empty())
+         {
+            summary += "\n";
+         }
+         summary += "Model freedom: ";
+         summary += result.modelFreedomAdvisory().c_str();
+      }
+
+      const std::string matcherAlternateSummary =
+         bundleRegistrationMatcherAlternateSummary(result);
+      if(!matcherAlternateSummary.empty())
+      {
+         if(!summary.empty())
+         {
+            summary += "\n";
+         }
+         summary += "Matcher recovery: ";
+         summary += matcherAlternateSummary.c_str();
+      }
+      return summary;
+   }
+
    ossimString bundleRegistrationDiagnosticsSummary(
       const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
          result)
@@ -222,6 +302,12 @@ namespace
       if(!denseAlternateSummary.empty())
       {
          out << ", " << denseAlternateSummary;
+      }
+      const std::string matcherAlternateSummary =
+         bundleRegistrationMatcherAlternateSummary(result);
+      if(!matcherAlternateSummary.empty())
+      {
+         out << ", " << matcherAlternateSummary;
       }
 
       return out.str().c_str();
@@ -392,6 +478,54 @@ namespace
          acceptance.candidateScoreQuality());
    }
 
+   void appendMatcherAlternateReport(
+      std::ostringstream& out,
+      const std::string& prefix,
+      const ossimBundleAdjustmentRegistrationSource::PairResult& pair)
+   {
+      out << prefix << ".matcher_alternate_evaluated: "
+          << (pair.matcherAlternateEvaluated() ? "true" : "false") << "\n";
+      if(!pair.matcherAlternateEvaluated())
+      {
+         return;
+      }
+
+      const ossim_autoreg::TiePointAlternateAcceptance& acceptance =
+         pair.matcherAlternateAcceptance();
+      out << prefix << ".matcher_alternate_used: "
+          << (pair.matcherAlternateUsed() ? "true" : "false") << "\n";
+      out << prefix << ".matcher_alternate_method: "
+          << pair.matcherAlternateMethod() << "\n";
+      out << prefix << ".matcher_alternate_accepted: "
+          << (acceptance.accepted() ? "true" : "false") << "\n";
+      out << prefix << ".matcher_alternate_reason: "
+          << acceptance.reason() << "\n";
+      appendTiePointSpreadQualityReport(
+         out,
+         prefix + ".matcher_alternate_base_spread",
+         acceptance.baseSpread());
+      appendTiePointSpreadQualityReport(
+         out,
+         prefix + ".matcher_alternate_candidate_spread",
+         acceptance.candidateSpread());
+      appendTiePointTranslationConsistencyReport(
+         out,
+         prefix + ".matcher_alternate_base_translation",
+         acceptance.baseConsistency());
+      appendTiePointTranslationConsistencyReport(
+         out,
+         prefix + ".matcher_alternate_candidate_translation",
+         acceptance.candidateConsistency());
+      appendTiePointScoreQualityReport(
+         out,
+         prefix + ".matcher_alternate_base_score",
+         acceptance.baseScoreQuality());
+      appendTiePointScoreQualityReport(
+         out,
+         prefix + ".matcher_alternate_candidate_score",
+         acceptance.candidateScoreQuality());
+   }
+
    std::string fixedRegistrationQualityReportText(
       const ossimString& label,
       const ossimString& summary,
@@ -507,6 +641,10 @@ namespace
           << (result.modelFreedomAdvisory().empty()
                  ? std::string("ok")
                  : result.modelFreedomAdvisory()) << "\n";
+      out << "bound_pressure_advisory: "
+          << (result.boundPressureAdvisory().empty()
+                 ? std::string("ok")
+                 : result.boundPressureAdvisory()) << "\n";
       out << "edge_prune_policy: "
           << (result.edgePrunePolicyMessage().empty()
                  ? std::string("not_attempted")
@@ -525,6 +663,12 @@ namespace
          out << "pair[" << idx << "].added_tie_points: "
              << pair.addedTiePointCount() << "\n";
          appendDenseAlternateReport(
+            out,
+            std::string("pair[") +
+               ossimString::toString(static_cast<ossim_uint32>(idx)).string()
+               + "]",
+            pair);
+         appendMatcherAlternateReport(
             out,
             std::string("pair[") +
                ossimString::toString(static_cast<ossim_uint32>(idx)).string()
@@ -1393,6 +1537,7 @@ namespace ossimGui
 
       bool success()const{return m_success;}
       const ossimString& resultSummary()const{return m_resultSummary;}
+      const ossimString& advisorySummary()const{return m_advisorySummary;}
       const DataManagerWidgetEvent::HandlerListType& sourceHandlersToReload()const
       {
          return m_sourceHandlersToReload;
@@ -1462,6 +1607,7 @@ namespace ossimGui
       {
          setPercentComplete(0.0);
          m_sourceHandlersToReload.clear();
+         m_advisorySummary.clear();
          if(m_registrationSource.valid())
          {
             m_registrationSource->setCancelCallback([this]() {
@@ -1590,6 +1736,7 @@ namespace ossimGui
                m_resultSummary += " - ";
                m_resultSummary += result.message().c_str();
             }
+            m_advisorySummary = bundleRegistrationAdvisorySummary(result);
 
             const ossimFilename reportPath =
                registrationQualityReportPath(m_label, "bundle-registration");
@@ -1633,6 +1780,7 @@ namespace ossimGui
          m_registrationSource;
       ossimString m_label;
       ossimString m_resultSummary;
+      ossimString m_advisorySummary;
       DataManagerWidgetEvent::HandlerListType m_sourceHandlersToReload;
       bool m_success;
    };
@@ -1682,6 +1830,12 @@ namespace ossimGui
                   evt->setWarningMessage(
                      "Bundle adjustment failed",
                      bundleJob->resultSummary().string());
+               }
+               else if(!bundleJob->advisorySummary().empty())
+               {
+                  evt->setWarningMessage(
+                     "Bundle adjustment quality advisory",
+                     bundleJob->advisorySummary().string());
                }
             }
             QCoreApplication::postEvent(m_dataManagerWidget, evt);

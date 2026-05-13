@@ -19,6 +19,8 @@ All notable changes to `ossim-gui` are documented here.
 > the model defaults, which makes revised sensor-model sigmas easier to reload.
 > Fixed registration jobs now surface low-control texture warnings from
 > `ossim-autoreg` in both the completion dialog and generated quality report.
+> Bundle registration jobs now surface source-level advisory and matcher
+> recovery details in the same GeoCell feedback path.
 
 ### Added
 - Add Bundle/Floating registration object creation when
@@ -46,6 +48,9 @@ All notable changes to `ossim-gui` are documented here.
 - Add fixed-registration quality advisories to GeoCell generated quality
   reports and show successful registration warning dialogs when
   `ossim-autoreg` flags accepted low-control texture-limited geometry.
+- Add bundle-registration advisory dialogs and quality-report fields for
+  bound-pressure advisories and guarded matcher recovery when
+  `ossim-registration-source` is enabled.
 - Add Source/Chain popup registration actions so selected image items can
   launch the default Fixed or Bundle All-Floating registration directly,
   including automatic input connection and job start.
