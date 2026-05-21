@@ -42,10 +42,12 @@
 #include <QSpinBox>
 #include <QTableWidget>
 #include <QMessageBox>
+#include <QMetaObject>
 #include <QUrl>
 #include <QVBoxLayout>
 #include <QStandardItemModel>
 #include <QDir>
+#include <QThread>
 #include <ossimGui/Common.h>
 #include <ossimGui/Event.h>
 #include <ossimGui/OpenImageDialog.h>
@@ -1229,8 +1231,10 @@ namespace ossimGui
    {
    public:
       RegistrationSourceJob(ossimFixedRegistrationSource* registrationSource,
+                            DataManagerWidget* dataManagerWidget,
                             const ossimString& label)
       :m_registrationSource(registrationSource),
+       m_dataManagerWidget(dataManagerWidget),
        m_label(label),
        m_success(false)
       {
@@ -1305,6 +1309,100 @@ namespace ossimGui
          return result;
       }
 
+      bool applyResultOnGuiThread(
+         const ossimFixedRegistrationSource::RegistrationResult& result)
+      {
+         if(!m_registrationSource.valid() || !m_dataManagerWidget)
+         {
+            return false;
+         }
+
+         bool applied = false;
+         const auto apply = [this, &result, &applied]() {
+            if(!m_registrationSource.valid())
+            {
+               applied = false;
+               return;
+            }
+
+            applied =
+               m_registrationSource->applyRegistrationResultToInput(result);
+            if(applied)
+            {
+               const ossimFixedRegistrationSource::InputWrapper* input =
+                  m_registrationSource->inputWrapper(result.inputIndex());
+               ossimImageSource* source = input ? input->source() : 0;
+               if(source)
+               {
+                  ossimRefPtr<ossimRefreshEvent> refreshEvent =
+                     new ossimRefreshEvent(
+                        ossimRefreshEvent::REFRESH_GEOMETRY);
+                  ossimEventVisitor visitor(refreshEvent.get(),
+                                            ossimVisitor::VISIT_ALL);
+                  source->accept(visitor);
+               }
+            }
+         };
+
+         if(QThread::currentThread() == m_dataManagerWidget->thread())
+         {
+            apply();
+         }
+         else
+         {
+            const bool invoked =
+               QMetaObject::invokeMethod(m_dataManagerWidget,
+                                         apply,
+                                         Qt::BlockingQueuedConnection);
+            if(!invoked)
+            {
+               applied = false;
+            }
+         }
+         return applied;
+      }
+
+      bool saveResultGeometryOnGuiThread(
+         const ossimFixedRegistrationSource::RegistrationResult& result,
+         const ossimFilename& outputFile)
+      {
+         if(!m_registrationSource.valid() || !m_dataManagerWidget)
+         {
+            return false;
+         }
+
+         bool saved = false;
+         const auto saveGeometry = [this, &result, &outputFile, &saved]() {
+            if(!m_registrationSource.valid())
+            {
+               saved = false;
+               return;
+            }
+
+            const ossim_autoreg::RegistrationSession* session =
+               m_registrationSource->registrationSession(
+                  result.floatingInputIndex());
+            saved = session && session->saveMovingGeometry(outputFile);
+         };
+
+         if(QThread::currentThread() == m_dataManagerWidget->thread())
+         {
+            saveGeometry();
+         }
+         else
+         {
+            const bool invoked =
+               QMetaObject::invokeMethod(m_dataManagerWidget,
+                                         saveGeometry,
+                                         Qt::BlockingQueuedConnection);
+            if(!invoked)
+            {
+               saved = false;
+            }
+         }
+         return saved;
+      }
+
       virtual void run()
       {
          setPercentComplete(0.0);
@@ -1320,12 +1418,22 @@ namespace ossimGui
                   const ossimFixedRegistrationSource::ProgressInfo& progress) {
                   updateProgressName(progress);
                });
+            m_registrationSource->setApplyResultsToInputs(false);
+            m_registrationSource->setApplyResultCallback(
+               [this](
+                  const ossimFixedRegistrationSource::RegistrationResult&
+                     result) {
+                  return applyResultOnGuiThread(result);
+               });
             m_success = m_registrationSource->executeRegistration();
             m_registrationSource->setCancelCallback(
                std::function<bool()>());
             m_registrationSource->setProgressCallback(
                std::function<void(
                   const ossimFixedRegistrationSource::ProgressInfo&)>());
+            m_registrationSource->setApplyResultCallback(
+               std::function<bool(
+                  const ossimFixedRegistrationSource::RegistrationResult&)>());
 
             const std::vector<ossimFixedRegistrationSource::RegistrationResult>& results =
                m_registrationSource->registrationResults();
@@ -1346,18 +1454,13 @@ namespace ossimGui
                   if(input && m_registrationSource->optimizeEnabled())
                   {
                      const ossimFilename outputFile = defaultGeometryOutput(*input);
-                     const ossim_autoreg::RegistrationSession* session =
-                        m_registrationSource->registrationSession(
-                           results[idx].floatingInputIndex());
-                     if(session &&
-                        input->applyAdjustableParametersToSource(
-                           session->movingAdjustableParameters(),
-                           m_registrationSource->adjustmentDescription(),
-                           results[idx].adjustmentIndex()))
+                     if(results[idx].appliedToInput() ||
+                        applyResultOnGuiThread(results[idx]))
                      {
                         ++propagatedGeometries;
                      }
-                     if(session && session->saveMovingGeometry(outputFile))
+                     if(saveResultGeometryOnGuiThread(results[idx],
+                                                       outputFile))
                      {
                         writtenGeometryFiles.push_back(outputFile);
                         ossimImageHandler* sourceHandler = input->sourceHandler();
@@ -1506,6 +1609,7 @@ namespace ossimGui
       }
 
       ossimRefPtr<ossimFixedRegistrationSource> m_registrationSource;
+      DataManagerWidget* m_dataManagerWidget;
       ossimString m_label;
       ossimString m_resultSummary;
       ossimString m_advisorySummary;
@@ -2441,6 +2545,7 @@ void ossimGui::DataManagerRegistrationItem::execute()
             std::shared_ptr<RegistrationSourceJob> job =
                std::make_shared<RegistrationSourceJob>(
                   registration,
+                  dataManagerWidget(),
                   ossimString(text(0).toStdString()));
             job->setCallback(
                std::make_shared<RegistrationSourceJobCallback>(

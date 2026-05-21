@@ -57,6 +57,9 @@ All notable changes to `ossim-gui` are documented here.
 - Add a Model Defaults button to the adjustable-parameter editor that clears
   all adjustment history, calls the model's `initAdjustableParameters()`, and
   reloads a fresh adjustment 0 from the current model defaults.
+- Add GUI-thread synchronized fixed-registration progress application so
+  accepted GeoCell geometry updates refresh the live image chain as each
+  floating input completes without stacking duplicate adjustment slots.
 
 ### Changed
 - Use `ossim-autoreg`'s shared bundle defaults when
