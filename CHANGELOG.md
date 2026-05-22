@@ -20,7 +20,10 @@ All notable changes to `ossim-gui` are documented here.
 > Fixed registration jobs now surface low-control texture warnings from
 > `ossim-autoreg` in both the completion dialog and generated quality report.
 > Bundle registration jobs now surface source-level advisory and matcher
-> recovery details in the same GeoCell feedback path.
+> recovery details in the same GeoCell feedback path. Registration property
+> editing now uses the generic OSSIM property view for post-creation tuning,
+> including dropdowns for enumerated choices and less fussy checkbox/combobox
+> editor behavior.
 
 ### Added
 - Add Bundle/Floating registration object creation when
@@ -63,6 +66,9 @@ All notable changes to `ossim-gui` are documented here.
 - Add GeoCell registration setup controls for fixed/floating parallel input
   jobs and adaptive candidate-bank threads, matching the CLI threading knobs
   exposed by `ossim-autoreg`.
+- Add generic property-editor support for registration-source settings after
+  creation, including dropdown commits for constrained string properties and
+  checkbox/combobox editors that no longer fight the table paint layer.
 
 ### Changed
 - Use `ossim-autoreg`'s shared bundle defaults when

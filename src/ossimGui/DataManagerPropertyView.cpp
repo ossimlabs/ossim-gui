@@ -9,7 +9,7 @@ namespace ossimGui
    StringChoicePropertyWidget::StringChoicePropertyWidget(QWidget* parent)
    :QComboBox(parent),m_property(0), m_delegate(0)
    {
-      connect(this, SIGNAL(currentIndexChanged ( int )), this, SLOT(valueChanged()));
+      setAutoFillBackground(true);
    }
    
    void StringChoicePropertyWidget::setDelegateInformation(DataManagerProperty* prop, const QAbstractItemDelegate* delegate)
@@ -30,7 +30,7 @@ namespace ossimGui
    BooleanPropertyWidget::BooleanPropertyWidget(QWidget* parent)
    :QCheckBox(parent),m_property(0), m_delegate(0)
    {
-      connect(this, SIGNAL(clicked( bool)), this, SLOT(valueChanged()));
+      setAutoFillBackground(true);
    }
    
    void BooleanPropertyWidget::valueChanged()
@@ -55,6 +55,12 @@ namespace ossimGui
    {
       QStandardItemModel* itemModel = (QStandardItemModel*)index.model();
       DataManagerProperty* propertyItem = dynamic_cast<DataManagerProperty*>(itemModel->itemFromIndex(index));
+      if(!propertyItem)
+      {
+         QItemDelegate::setEditorData(editor, index);
+         return;
+      }
+
       if(dynamic_cast<BooleanPropertyWidget*> (editor))
       {
          BooleanPropertyWidget* w = dynamic_cast<BooleanPropertyWidget*> (editor);
@@ -91,13 +97,18 @@ namespace ossimGui
       if(dynamic_cast<BooleanPropertyWidget*> (editor))
       {
          BooleanPropertyWidget* w = dynamic_cast<BooleanPropertyWidget*> (editor);
-         
-         model->setData(index, QVariant(w->isChecked()), Qt::EditRole);
+         const QVariant value(w->isChecked());
+         model->setData(index, value, Qt::UserRole);
+         model->setData(index, QVariant(QString()), Qt::DisplayRole);
       }
       else if(dynamic_cast<StringChoicePropertyWidget*> (editor))
       {
          StringChoicePropertyWidget* w = dynamic_cast<StringChoicePropertyWidget*> (editor);
-         model->setData(index, QVariant(w->currentText()), Qt::EditRole);
+         const QVariant value = w->itemData(w->currentIndex()).isValid() ?
+            w->itemData(w->currentIndex()) :
+            QVariant(w->currentText());
+         model->setData(index, value, Qt::UserRole);
+         model->setData(index, QVariant(QString()), Qt::DisplayRole);
       }
       else 
       {
@@ -124,6 +135,36 @@ namespace ossimGui
                   checkbox->setChecked(property->valueToString().toBool());
                   
                   result = checkbox;
+                  connect(checkbox,
+                          &QCheckBox::clicked,
+                          const_cast<DataManagerPropertyDelegate*>(this),
+                          [this, checkbox]()
+                          {
+                             DataManagerPropertyDelegate* self =
+                                const_cast<DataManagerPropertyDelegate*>(this);
+                             emit self->commitData(checkbox);
+                             emit self->closeEditor(checkbox);
+                          });
+                  itemProperty->setEditorActive(true);
+                  connect(result,
+                          &QObject::destroyed,
+                          [itemProperty]()
+                          {
+                             if(itemProperty && itemProperty->model())
+                             {
+                                itemProperty->setEditorActive(false);
+                                itemProperty->model()->blockSignals(true);
+                                itemProperty->setData(QVariant(),
+                                                      Qt::UserRole);
+                                itemProperty->setData(
+                                   QVariant(itemProperty->property() ?
+                                      itemProperty->property()->
+                                         valueToString().c_str() :
+                                      ""),
+                                   Qt::DisplayRole);
+                                itemProperty->model()->blockSignals(false);
+                             }
+                          });
                   result->setFocusPolicy(Qt::StrongFocus);
                   itemProperty->model()->blockSignals(true);
                   itemProperty->setData(QVariant(QString()), Qt::DisplayRole);
@@ -147,9 +188,41 @@ namespace ossimGui
                      stringChoice->setCurrentIndex(currentIdx);
                      stringChoice->setDelegateInformation(itemProperty, this);
                      result = stringChoice;
+                     connect(stringChoice,
+                             static_cast<void (QComboBox::*)(int)>(
+                                &QComboBox::activated),
+                             const_cast<DataManagerPropertyDelegate*>(this),
+                             [this, stringChoice](int)
+                             {
+                                DataManagerPropertyDelegate* self =
+                                   const_cast<DataManagerPropertyDelegate*>(
+                                      this);
+                                emit self->commitData(stringChoice);
+                                emit self->closeEditor(stringChoice);
+                             });
+                     itemProperty->setEditorActive(true);
+                     connect(result,
+                             &QObject::destroyed,
+                             [itemProperty]()
+                             {
+                                if(itemProperty && itemProperty->model())
+                                {
+                                  itemProperty->setEditorActive(false);
+                                  itemProperty->model()->blockSignals(true);
+                                  itemProperty->setData(QVariant(),
+                                                        Qt::UserRole);
+                                  itemProperty->setData(
+                                     QVariant(itemProperty->property() ?
+                                        itemProperty->property()->
+                                            valueToString().c_str() :
+                                         ""),
+                                      Qt::DisplayRole);
+                                   itemProperty->model()->blockSignals(false);
+                                }
+                             });
                      result->setFocusPolicy(Qt::StrongFocus);
                      itemProperty->model()->blockSignals(true);
-                     itemProperty->setData(QVariant(QString(constraints[currentIdx].c_str())), Qt::DisplayRole);
+                     itemProperty->setData(QVariant(QString()), Qt::DisplayRole);
                      itemProperty->model()->blockSignals(false);
                   }
                   else 
@@ -243,6 +316,11 @@ namespace ossimGui
       setAlternatingRowColors(true);
       setItemDelegateForColumn(1, new DataManagerPropertyDelegate(this));
       setEditTriggers(QAbstractItemView::AllEditTriggers);
+      connect(m_model,
+              SIGNAL(dataChanged(const QModelIndex&, const QModelIndex&)),
+              this,
+              SLOT(commitModelDataChanged(const QModelIndex&,
+                                          const QModelIndex&)));
       connect(this, SIGNAL(expanded ( const QModelIndex &)), this, SLOT(expanded ( const QModelIndex &)));
       connect(this, SIGNAL(collapsed ( const QModelIndex &)), this, SLOT(collapsed ( const QModelIndex &)));
    }
@@ -288,6 +366,13 @@ namespace ossimGui
    {
       
    }
+
+   void DataManagerPropertyView::commitModelDataChanged(
+      const QModelIndex& topLeft,
+      const QModelIndex& bottomRight)
+   {
+      dataChanged(topLeft, bottomRight);
+   }
    
    void	DataManagerPropertyView::dataChanged( const QModelIndex & topLeft, const QModelIndex & /* bottomRight */)
    {
@@ -300,7 +385,9 @@ namespace ossimGui
             ossimRefPtr<ossimProperty> property = propertyItem->property();
             if(property.valid())
             {
-               QVariant v = propertyItem->data(Qt::EditRole);
+               QVariant v = propertyItem->data(Qt::UserRole);
+               if(!v.isValid())
+                  v = propertyItem->data(Qt::EditRole);
                if(v.isValid())
                {
                   property->setValue(v.toString().toStdString());
@@ -320,8 +407,24 @@ namespace ossimGui
                   {
                      if(propertyInterface())
                      {
-                        
                         propertyInterface()->setProperty(rootItem->property());
+                        ossimRefPtr<ossimProperty> acceptedProperty =
+                           propertyInterface()->getProperty(
+                              property->getName());
+                        if(acceptedProperty.valid() &&
+                           !propertyItem->editorActive())
+                        {
+                           propertyItem->setProperty(acceptedProperty.get());
+                           m_model->blockSignals(true);
+                           propertyItem->setData(QVariant(), Qt::UserRole);
+                           propertyItem->setData(
+                              QVariant(acceptedProperty->valueToString().c_str()),
+                              Qt::EditRole);
+                           propertyItem->setData(
+                              QVariant(acceptedProperty->valueToString().c_str()),
+                              Qt::DisplayRole);
+                           m_model->blockSignals(false);
+                        }
                      }
                   }
                   if(property->isCacheRefresh())
