@@ -60,6 +60,9 @@ All notable changes to `ossim-gui` are documented here.
 - Add GUI-thread synchronized fixed-registration progress application so
   accepted GeoCell geometry updates refresh the live image chain as each
   floating input completes without stacking duplicate adjustment slots.
+- Add GeoCell registration setup controls for fixed/floating parallel input
+  jobs and adaptive candidate-bank threads, matching the CLI threading knobs
+  exposed by `ossim-autoreg`.
 
 ### Changed
 - Use `ossim-autoreg`'s shared bundle defaults when

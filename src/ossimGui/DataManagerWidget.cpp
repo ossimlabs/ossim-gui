@@ -753,6 +753,8 @@ namespace
       double minScore;
       double viewGsd;
       std::size_t maxTiePoints;
+      std::size_t maxConcurrentRegistrations;
+      std::size_t adaptiveBankThreadCount;
 
       RegistrationSetupOptions()
       : approach(REGISTRATION_SETUP_FIXED_AUTO),
@@ -763,7 +765,9 @@ namespace
         gridSpacing(128),
         minScore(0.6),
         viewGsd(0.0),
-        maxTiePoints(300)
+        maxTiePoints(300),
+        maxConcurrentRegistrations(1),
+        adaptiveBankThreadCount(4)
       {
       }
    };
@@ -790,6 +794,8 @@ namespace
       result.minScore = 0.6;
       result.viewGsd = 0.0;
       result.maxTiePoints = 300;
+      result.maxConcurrentRegistrations = 1;
+      result.adaptiveBankThreadCount = bundle ? 0 : 4;
 
       if(bundle)
       {
@@ -893,7 +899,9 @@ namespace
         m_gridSpacing(0),
         m_minScore(0),
         m_viewGsd(0),
-        m_maxTiePoints(0)
+        m_maxTiePoints(0),
+        m_maxConcurrentRegistrations(0),
+        m_adaptiveBankThreadCount(0)
       {
          setWindowTitle("Registration Setup");
 
@@ -975,6 +983,14 @@ namespace
          m_maxTiePoints->setRange(0, 100000);
          m_maxTiePoints->setValue(300);
 
+         m_maxConcurrentRegistrations = new QSpinBox(this);
+         m_maxConcurrentRegistrations->setRange(1, 64);
+         m_maxConcurrentRegistrations->setValue(1);
+
+         m_adaptiveBankThreadCount = new QSpinBox(this);
+         m_adaptiveBankThreadCount->setRange(0, 64);
+         m_adaptiveBankThreadCount->setValue(4);
+
          connect(m_approach,
                  static_cast<void (QComboBox::*)(int)>(
                     &QComboBox::currentIndexChanged),
@@ -994,6 +1010,10 @@ namespace
          form->addRow("Minimum score", m_minScore);
          form->addRow("View GSD", m_viewGsd);
          form->addRow("Max ties", m_maxTiePoints);
+         form->addRow("Parallel floating inputs",
+                      m_maxConcurrentRegistrations);
+         form->addRow("Adaptive bank threads",
+                      m_adaptiveBankThreadCount);
 
          QGroupBox* optionsBox = new QGroupBox("Options", this);
          optionsBox->setLayout(form);
@@ -1034,6 +1054,12 @@ namespace
          result.viewGsd = m_viewGsd->value();
          result.maxTiePoints =
             static_cast<std::size_t>(m_maxTiePoints->value());
+         result.maxConcurrentRegistrations =
+            static_cast<std::size_t>(
+               m_maxConcurrentRegistrations->value());
+         result.adaptiveBankThreadCount =
+            static_cast<std::size_t>(
+               m_adaptiveBankThreadCount->value());
          return result;
       }
 
@@ -1061,6 +1087,10 @@ namespace
          m_viewGsd->setValue(defaults.viewGsd);
          m_maxTiePoints->setValue(
             static_cast<int>(defaults.maxTiePoints));
+         m_maxConcurrentRegistrations->setValue(
+            static_cast<int>(defaults.maxConcurrentRegistrations));
+         m_adaptiveBankThreadCount->setValue(
+            static_cast<int>(defaults.adaptiveBankThreadCount));
       }
 
       void addMatchMethod(const QString& label, const QString& method)
@@ -1083,6 +1113,8 @@ namespace
       QDoubleSpinBox* m_minScore;
       QDoubleSpinBox* m_viewGsd;
       QSpinBox* m_maxTiePoints;
+      QSpinBox* m_maxConcurrentRegistrations;
+      QSpinBox* m_adaptiveBankThreadCount;
    };
 
    void applyRegistrationSetupTieOptions(
@@ -4796,8 +4828,12 @@ ossimGui::DataManagerWidget::createDefaultFixedRegistrationItem()
    registrationOptions.setRegistrationPasses(4);
    registrationOptions.setTargetRmsePixels(4.0);
    registrationOptions.setRmseImprovementTolerance(0.01);
+   registrationOptions.setAdaptiveBankThreadCount(
+      setupOptions.adaptiveBankThreadCount);
    registrationOptions.setGenerator(tiePointOptions);
    registration->setAutoRegistrationOptions(registrationOptions);
+   registration->setAdaptiveBankThreadCount(
+      setupOptions.adaptiveBankThreadCount);
 
    ossimRefPtr<ossimObject> obj = registration.get();
    if(obj.valid())
@@ -5053,20 +5089,32 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
          tiePointOptions.setMatchMethod(std::string());
       }
       registrationOptions.setGenerator(tiePointOptions);
+      registrationOptions.setThreadCount(
+         setupOptions.maxConcurrentRegistrations);
+      registrationOptions.setAdaptiveBankThreadCount(
+         setupOptions.adaptiveBankThreadCount);
       registration->setAutoRegistrationOptions(registrationOptions);
+      registration->setMaxConcurrentRegistrations(
+         setupOptions.maxConcurrentRegistrations);
+      registration->setAdaptiveBankThreadCount(
+         setupOptions.adaptiveBankThreadCount);
       obj = registration.get();
       nodeName = setupOptions.matchMethod.empty() ?
          QString("Registered: adaptive fixed auto") :
          registeredNodeName(setupOptions.matchMethod);
       toolTip =
-         QString("%1\nMatcher: %2\nResampler: %3\nView GSD: %4")
+         QString("%1\nMatcher: %2\nResampler: %3\nView GSD: %4\nParallel floating inputs: %5\nAdaptive bank threads: %6")
             .arg(registration->autoRegistrationSettingsSummary().c_str())
             .arg(QString::fromStdString(
                setupOptions.matchMethod.empty() ?
                   std::string("adaptive auto") :
                   setupOptions.matchMethod))
             .arg(QString::fromStdString(setupOptions.resamplerType))
-            .arg(setupOptions.viewGsd);
+            .arg(setupOptions.viewGsd)
+            .arg(static_cast<int>(
+               setupOptions.maxConcurrentRegistrations))
+            .arg(static_cast<int>(
+               setupOptions.adaptiveBankThreadCount));
    }
 
    if(obj.valid())
