@@ -66,6 +66,9 @@ All notable changes to `ossim-gui` are documented here.
 - Add GUI-thread synchronized bundle geometry saves so bundle registration
   sidecar writes and reload propagation use the same main-thread path as fixed
   registration.
+- Clarify GeoCell bundle result summaries and quality reports with the active
+  bundle mode, motion policy, target RMSE, pass count, and all-floating datum
+  prior so anchored and all-floating solves are easier to compare.
 - Add GeoCell registration setup controls for fixed/floating parallel input
   jobs and adaptive candidate-bank threads, matching the CLI threading knobs
   exposed by `ossim-autoreg`.

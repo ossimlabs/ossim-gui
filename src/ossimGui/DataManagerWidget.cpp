@@ -233,6 +233,35 @@ namespace
       return out.str();
    }
 
+   std::string bundleRegistrationModeName(
+      const ossimBundleAdjustmentRegistrationSource* source)
+   {
+      if(!source)
+      {
+         return "unknown";
+      }
+      return source->allInputsFloating() ? "all-floating" : "anchored";
+   }
+
+   std::string bundleRegistrationMotionPolicy(
+      const ossimBundleAdjustmentRegistrationSource* source)
+   {
+      if(!source)
+      {
+         return "unknown";
+      }
+      if(source->allInputsFloating())
+      {
+         return "all connected images can move toward the relative bundle "
+                "solution";
+      }
+
+      std::ostringstream out;
+      out << "anchor input " << source->anchorInputIndex()
+          << " is held fixed; non-anchor inputs move";
+      return out.str();
+   }
+
    ossimString bundleRegistrationAdvisorySummary(
       const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
          result)
@@ -621,6 +650,7 @@ namespace
       const ossimString& label,
       const ossimString& summary,
       bool success,
+      const ossimBundleAdjustmentRegistrationSource* source,
       const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
          result,
       const std::vector<ossimFilename>& writtenGeometryFiles)
@@ -635,6 +665,20 @@ namespace
       out << "label: " << label << "\n";
       out << "success: " << (success ? "true" : "false") << "\n";
       out << "summary: " << summary << "\n";
+      out << "bundle_mode: " << bundleRegistrationModeName(source) << "\n";
+      out << "bundle_motion_policy: "
+          << bundleRegistrationMotionPolicy(source) << "\n";
+      if(source)
+      {
+         const ossim_autoreg::AutoRegistrationOptions options =
+            source->autoRegistrationOptions();
+         out << "bundle_target_rmse_pixels: "
+             << options.targetRmsePixels() << "\n";
+         out << "bundle_registration_passes: "
+             << options.registrationPasses() << "\n";
+         out << "bundle_floating_datum_prior_weight: "
+             << source->floatingDatumPriorWeight() << "\n";
+      }
       out << "session_open: "
           << (result.sessionOpen() ? "true" : "false") << "\n";
       out << "ran: " << (result.ran() ? "true" : "false") << "\n";
@@ -1824,7 +1868,16 @@ namespace ossimGui
                m_resultSummary += ", RMSE ";
                m_resultSummary += ossimString::toString(
                   result.optimization().finalRmsPixels());
+               m_resultSummary += " (target ";
+               m_resultSummary += ossimString::toString(
+                  m_registrationSource->autoRegistrationOptions().
+                     targetRmsePixels());
+               m_resultSummary += ")";
             }
+            m_resultSummary += ", ";
+            m_resultSummary +=
+               bundleRegistrationMotionPolicy(m_registrationSource.get()).
+                  c_str();
             const ossimString diagnosticsSummary =
                bundleRegistrationDiagnosticsSummary(result);
             if(!diagnosticsSummary.empty())
@@ -1913,6 +1966,7 @@ namespace ossimGui
                   m_label,
                   m_resultSummary,
                   m_success,
+                  m_registrationSource.get(),
                   result,
                   writtenGeometryFiles));
             appendRegistrationQualityReportStatus(
