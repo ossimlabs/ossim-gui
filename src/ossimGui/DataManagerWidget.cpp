@@ -1654,8 +1654,10 @@ namespace ossimGui
    public:
       BundleRegistrationSourceJob(
          ossimBundleAdjustmentRegistrationSource* registrationSource,
+         DataManagerWidget* dataManagerWidget,
          const ossimString& label)
       :m_registrationSource(registrationSource),
+       m_dataManagerWidget(dataManagerWidget),
        m_label(label),
        m_success(false)
       {
@@ -1737,6 +1739,35 @@ namespace ossimGui
             result.setExtension("geom");
          }
          return result;
+      }
+
+      bool saveGeometriesOnGuiThread(
+         const std::vector<ossimFilename>& outputGeometryFiles)
+      {
+         bool saved = false;
+         auto saveGeometry = [this, &outputGeometryFiles, &saved]() {
+            saved = m_registrationSource.valid() &&
+                    m_registrationSource->saveGeometries(outputGeometryFiles);
+         };
+
+         if(m_dataManagerWidget &&
+            QThread::currentThread() != m_dataManagerWidget->thread())
+         {
+            const bool invoked =
+               QMetaObject::invokeMethod(m_dataManagerWidget,
+                                         saveGeometry,
+                                         Qt::BlockingQueuedConnection);
+            if(!invoked)
+            {
+               saved = false;
+            }
+         }
+         else
+         {
+            saveGeometry();
+         }
+
+         return saved;
       }
 
       virtual void run()
@@ -1822,7 +1853,7 @@ namespace ossimGui
                }
 
                if(outputGeometryFiles.size() == inputIndexes.size() &&
-                  m_registrationSource->saveGeometries(outputGeometryFiles))
+                  saveGeometriesOnGuiThread(outputGeometryFiles))
                {
                   writtenGeometryFiles = outputGeometryFiles;
                   for(idx = 0; idx < inputIndexes.size(); ++idx)
@@ -1914,6 +1945,7 @@ namespace ossimGui
 
       ossimRefPtr<ossimBundleAdjustmentRegistrationSource>
          m_registrationSource;
+      DataManagerWidget* m_dataManagerWidget;
       ossimString m_label;
       ossimString m_resultSummary;
       ossimString m_advisorySummary;
@@ -2591,6 +2623,7 @@ void ossimGui::DataManagerRegistrationItem::execute()
             std::shared_ptr<BundleRegistrationSourceJob> job =
                std::make_shared<BundleRegistrationSourceJob>(
                   bundleRegistration,
+                  dataManagerWidget(),
                   ossimString(text(0).toStdString()));
             job->setCallback(
                std::make_shared<RegistrationSourceJobCallback>(
