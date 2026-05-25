@@ -69,6 +69,7 @@
 #include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <limits>
 #include <set>
 #include <sstream>
 
@@ -267,8 +268,17 @@ namespace
          result)
    {
       ossimString summary;
+      if(!result.searchSpanRecoveryMessage().empty())
+      {
+         summary += "Search span recovery: ";
+         summary += result.searchSpanRecoveryMessage().c_str();
+      }
       if(result.success() && !result.boundPressureAdvisory().empty())
       {
+         if(!summary.empty())
+         {
+            summary += "\n";
+         }
          summary += "Bound pressure: ";
          summary += result.boundPressureAdvisory().c_str();
       }
@@ -294,6 +304,41 @@ namespace
          summary += matcherAlternateSummary.c_str();
       }
       return summary;
+   }
+
+   std::size_t bundleRegistrationMinimumEdgeTiePointCount(
+      const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
+         result)
+   {
+      std::size_t minimum = std::numeric_limits<std::size_t>::max();
+      for(const ossimBundleAdjustmentRegistrationSource::PairResult& pair :
+          result.pairResults())
+      {
+         if(pair.tiePoints().empty())
+         {
+            continue;
+         }
+         minimum = std::min(minimum, pair.tiePoints().size());
+      }
+      return minimum == std::numeric_limits<std::size_t>::max() ? 0 : minimum;
+   }
+
+   std::size_t bundleRegistrationSparseEdgeCount(
+      const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
+         result,
+      std::size_t minimumTiePointCount)
+   {
+      std::size_t count = 0;
+      for(const ossimBundleAdjustmentRegistrationSource::PairResult& pair :
+          result.pairResults())
+      {
+         if(!pair.tiePoints().empty() &&
+            pair.tiePoints().size() < minimumTiePointCount)
+         {
+            ++count;
+         }
+      }
+      return count;
    }
 
    ossimString bundleRegistrationDiagnosticsSummary(
@@ -679,10 +724,22 @@ namespace
          out << "bundle_floating_datum_prior_weight: "
              << source->floatingDatumPriorWeight() << "\n";
       }
+      const std::size_t sparseEdgeCount =
+         bundleRegistrationSparseEdgeCount(result,
+                                           source ? source->
+                                              autoRegistrationOptions().
+                                              minInliers() : 6);
       out << "session_open: "
           << (result.sessionOpen() ? "true" : "false") << "\n";
       out << "ran: " << (result.ran() ? "true" : "false") << "\n";
       out << "message: " << result.message() << "\n";
+      out << "stop_reason: "
+          << (result.stopReason().empty() ? std::string("unknown") :
+                                           result.stopReason()) << "\n";
+      out << "search_span_recovery: "
+          << (result.searchSpanRecoveryMessage().empty()
+                 ? std::string("not_attempted")
+                 : result.searchSpanRecoveryMessage()) << "\n";
       out << "model_freedom_advisory: "
           << (result.modelFreedomAdvisory().empty()
                  ? std::string("ok")
@@ -696,6 +753,11 @@ namespace
                  ? std::string("not_attempted")
                  : result.edgePrunePolicyMessage()) << "\n";
       out << "pair_count: " << result.pairResults().size() << "\n";
+      out << "bundle_edge_min_tie_points: "
+          << bundleRegistrationMinimumEdgeTiePointCount(result) << "\n";
+      out << "bundle_edge_sparse_count: " << sparseEdgeCount << "\n";
+      out << "bundle_edge_support_advisory: "
+          << (sparseEdgeCount ? "weak" : "ok") << "\n";
       for(std::size_t idx = 0; idx < result.pairResults().size(); ++idx)
       {
          const ossimBundleAdjustmentRegistrationSource::PairResult& pair =
