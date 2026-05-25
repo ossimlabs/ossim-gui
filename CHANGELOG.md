@@ -26,6 +26,9 @@ All notable changes to `ossim-gui` are documented here.
 > editor behavior.
 
 ### Added
+- Add GeoCell bundle quality-report fields for search-span recovery, minimum
+  bundle-edge tie support, sparse-edge counts, and bundle edge support advisory
+  status (c6d5f41).
 - Add Bundle/Floating registration object creation when
   `ossim-registration-source` is enabled (b09aaf4).
 - Add GeoCell registration quality report artifacts for fixed and bundle
@@ -77,6 +80,8 @@ All notable changes to `ossim-gui` are documented here.
   checkbox/combobox editors that no longer fight the table paint layer.
 
 ### Changed
+- Show bundle search-span recovery messages alongside bound-pressure advisories
+  so GeoCell completion feedback matches the CLI/source diagnostics (c6d5f41).
 - Use `ossim-autoreg`'s shared bundle defaults when
   `ossim-registration-source` is enabled, keeping GeoCell bundle setup aligned
   with the CLI default configuration model.
