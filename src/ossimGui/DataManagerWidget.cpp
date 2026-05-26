@@ -654,6 +654,16 @@ namespace
              << (result.qualityAdvisory().empty()
                     ? std::string("ok")
                     : result.qualityAdvisory()) << "\n";
+         if(!result.detailLog().empty())
+         {
+            out << "result[" << idx << "].detail_log_begin\n";
+            out << result.detailLog();
+            if(result.detailLog()[result.detailLog().size() - 1] != '\n')
+            {
+               out << "\n";
+            }
+            out << "result[" << idx << "].detail_log_end\n";
+         }
          if(std::isfinite(result.effectiveTargetRmsePixels()))
          {
             out << "result[" << idx
