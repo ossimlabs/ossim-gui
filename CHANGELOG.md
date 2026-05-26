@@ -23,7 +23,9 @@ All notable changes to `ossim-gui` are documented here.
 > recovery details in the same GeoCell feedback path. Registration property
 > editing now uses the generic OSSIM property view for post-creation tuning,
 > including dropdowns for enumerated choices and less fussy checkbox/combobox
-> editor behavior.
+> editor behavior. GeoCell fixed-auto registration now keeps the same shared
+> coarse-to-fine defaults as the CLI/source path, so default fixed runs do not
+> quietly stop early.
 
 ### Added
 - Include fixed-registration source detail logs in generated GeoCell
@@ -159,5 +161,9 @@ All notable changes to `ossim-gui` are documented here.
   GUI chains can pick up the new handler geometry (86403cf).
 
 ### Fixed
+- Keep GeoCell fixed-auto registration on the shared CLI/source default pass
+  schedule instead of forcing the old four-pass setup, restoring the expected
+  geometry update for the Celtic `001` fixed / `002` floating workflow
+  (88ab3c2).
 - Remove completed registration jobs from the Jobs panel like other background
   jobs (86403cf).
