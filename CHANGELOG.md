@@ -26,6 +26,9 @@ All notable changes to `ossim-gui` are documented here.
 > editor behavior.
 
 ### Added
+- Include fixed-registration source detail logs in generated GeoCell
+  quality reports so adaptive candidate selection and final-quality mode
+  receipts are visible from GUI runs (0472469).
 - Add GeoCell bundle quality-report fields for search-span recovery, minimum
   bundle-edge tie support, sparse-edge counts, and bundle edge support advisory
   status (c6d5f41).
