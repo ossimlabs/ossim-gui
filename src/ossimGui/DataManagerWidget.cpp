@@ -4984,9 +4984,6 @@ ossimGui::DataManagerWidget::createDefaultFixedRegistrationItem()
    registrationOptions.setAutoRegister(true);
    registrationOptions.setGenerateTiePoints(true);
    registrationOptions.setSkipOptimization(false);
-   registrationOptions.setRegistrationPasses(4);
-   registrationOptions.setTargetRmsePixels(4.0);
-   registrationOptions.setRmseImprovementTolerance(0.01);
    registrationOptions.setAdaptiveBankThreadCount(
       setupOptions.adaptiveBankThreadCount);
    registrationOptions.setGenerator(tiePointOptions);
@@ -5233,9 +5230,6 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
          else if(setupOptions.matchMethod == "phase-correlation")
             registration->applyAutoRegistrationPreset("fixed:phase");
          registration->setAutoRegistrationEnabled(true);
-         registration->setRegistrationPasses(4);
-         registration->setTargetRmsePixels(4.0);
-         registration->setRmseImprovementTolerance(0.01);
          registrationOptions = registration->autoRegistrationOptions();
       }
 
