@@ -10,6 +10,8 @@
 #include <ossim/base/ossimStringProperty.h>
 #include <ossim/base/ossimUrl.h>
 #include <ossim/base/ossimObjectFactoryRegistry.h>
+#include <ossim/elevation/ossimElevationDatabase.h>
+#include <ossim/elevation/ossimElevManager.h>
 #include <ossim/imaging/ossimImageFileWriter.h>
 #include <ossim/imaging/ossimImageHandler.h>
 #include <ossim/imaging/ossimImageHandlerRegistry.h>
@@ -68,6 +70,7 @@
 #include <ossimGui/RegPoint.h>
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <fstream>
 #include <limits>
 #include <set>
@@ -106,6 +109,57 @@ namespace
    {
       return static_cast<bool>(
          ossim_autoreg::TiePointGeneratorFactory::instance()->create(method));
+   }
+
+   std::string environmentValue(const char* name)
+   {
+      const char* value = std::getenv(name);
+      return value ? std::string(value) : std::string();
+   }
+
+   void appendRegistrationRuntimeContext(std::ostream& out)
+   {
+      out << "runtime.ossim_install_prefix: "
+          << environmentValue("OSSIM_INSTALL_PREFIX") << "\n";
+      out << "runtime.ossim_prefs_file: "
+          << environmentValue("OSSIM_PREFS_FILE") << "\n";
+      out << "runtime.ossim_data: "
+          << environmentValue("OSSIM_DATA") << "\n";
+      out << "runtime.ossim_plugin_path: "
+          << environmentValue("OSSIM_PLUGIN_PATH") << "\n";
+
+      ossimElevManager* elevationManager = ossimElevManager::instance();
+      out << "runtime.elevation_manager_available: "
+          << (elevationManager ? "true" : "false") << "\n";
+      if(!elevationManager)
+      {
+         return;
+      }
+
+      const ossim_uint32 databaseCount =
+         elevationManager->getNumberOfElevationDatabases();
+      out << "runtime.elevation_database_count: "
+          << databaseCount << "\n";
+      for(ossim_uint32 idx = 0; idx < databaseCount; ++idx)
+      {
+         const ossimElevationDatabase* database =
+            elevationManager->getElevationDatabase(idx);
+         out << "runtime.elevation_database[" << idx
+             << "].connection_string: "
+             << (database ? database->getConnectionString().string()
+                          : std::string())
+             << "\n";
+      }
+
+      std::vector<ossimFilename> openCells;
+      elevationManager->getOpenCellList(openCells);
+      out << "runtime.elevation_open_cell_count: "
+          << openCells.size() << "\n";
+      for(std::size_t idx = 0; idx < openCells.size(); ++idx)
+      {
+         out << "runtime.elevation_open_cell[" << idx << "]: "
+             << openCells[idx] << "\n";
+      }
    }
 
    std::string preferredRegistrationMatchMethod()
@@ -616,6 +670,7 @@ namespace
       out << "label: " << label << "\n";
       out << "success: " << (success ? "true" : "false") << "\n";
       out << "summary: " << summary << "\n";
+      appendRegistrationRuntimeContext(out);
       out << "result_count: " << results.size() << "\n";
       out << "written_geometry_count: " << writtenGeometryFiles.size()
           << "\n";
@@ -720,6 +775,7 @@ namespace
       out << "label: " << label << "\n";
       out << "success: " << (success ? "true" : "false") << "\n";
       out << "summary: " << summary << "\n";
+      appendRegistrationRuntimeContext(out);
       out << "bundle_mode: " << bundleRegistrationModeName(source) << "\n";
       out << "bundle_motion_policy: "
           << bundleRegistrationMotionPolicy(source) << "\n";
