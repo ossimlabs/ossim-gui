@@ -27,9 +27,14 @@ All notable changes to `ossim-gui` are documented here.
 > coarse-to-fine defaults as the CLI/source path, so default fixed runs do not
 > quietly stop early. Registration reports now include the OSSIM runtime and
 > elevation context so GeoCell swipe reviews can confirm whether they used the
-> same preferences and terrain sources as the CLI.
+> same preferences and terrain sources as the CLI. Fixed-auto launch reports now
+> snapshot the settings that were active when the job started, even if the user
+> edits properties while the registration is still running.
 
 ### Added
+- Include fixed-registration launch input/status and settings snapshots in
+  GeoCell quality reports so long-running jobs can be audited against the
+  values they actually used.
 - Include OSSIM runtime context in generated fixed and bundle registration
   quality reports, including `OSSIM_PREFS_FILE`, `OSSIM_DATA`, plugin path,
   elevation database connections, and currently opened elevation cells.
@@ -90,6 +95,9 @@ All notable changes to `ossim-gui` are documented here.
   checkbox/combobox editors that no longer fight the table paint layer.
 
 ### Changed
+- Create GeoCell default Fixed Auto registrations from the shared adaptive
+  fixed-auto defaults instead of a preferred concrete matcher, keeping the
+  source bridge aligned with the CLI/source API path.
 - Show bundle search-span recovery messages alongside bound-pressure advisories
   so GeoCell completion feedback matches the CLI/source diagnostics (c6d5f41).
 - Use `ossim-autoreg`'s shared bundle defaults when

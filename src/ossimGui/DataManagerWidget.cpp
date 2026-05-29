@@ -659,6 +659,8 @@ namespace
    std::string fixedRegistrationQualityReportText(
       const ossimString& label,
       const ossimString& summary,
+      const std::string& launchInputStatus,
+      const std::string& launchSettings,
       bool success,
       const std::vector<ossimFixedRegistrationSource::RegistrationResult>&
          results,
@@ -670,6 +672,14 @@ namespace
       out << "label: " << label << "\n";
       out << "success: " << (success ? "true" : "false") << "\n";
       out << "summary: " << summary << "\n";
+      if(!launchInputStatus.empty())
+      {
+         out << "launch_input_status: " << launchInputStatus << "\n";
+      }
+      if(!launchSettings.empty())
+      {
+         out << "launch_settings: " << launchSettings << "\n";
+      }
       appendRegistrationRuntimeContext(out);
       out << "result_count: " << results.size() << "\n";
       out << "written_geometry_count: " << writtenGeometryFiles.size()
@@ -965,9 +975,25 @@ namespace
       result.gridSpacing = 96;
       result.minScore = 0.6;
       result.viewGsd = 0.0;
-      result.maxTiePoints = 300;
+      result.maxTiePoints = 200;
       result.maxConcurrentRegistrations = 1;
       result.adaptiveBankThreadCount = bundle ? 0 : 4;
+
+      if(approach == REGISTRATION_SETUP_FIXED_AUTO &&
+         result.matchMethod.empty())
+      {
+         ossim_autoreg::AutoRegistrationOptions defaults;
+         defaults.setAutoRegister(true);
+         ossim_autoreg::applyAutoRegistrationDefaults(defaults);
+         result.resamplerType = defaults.generator().resamplerType();
+         result.chipSize = defaults.generator().chipSize();
+         result.searchRadius = defaults.generator().searchRadius();
+         result.gridSpacing = defaults.generator().gridSpacing();
+         result.minScore = defaults.generator().minScore();
+         result.viewGsd = defaults.generator().viewGsd();
+         result.maxTiePoints = defaults.generator().maxTiePoints();
+         return result;
+      }
 
       if(bundle)
       {
@@ -999,7 +1025,7 @@ namespace
       {
          result.searchRadius = 36;
          result.gridSpacing = 96;
-         result.maxTiePoints = bundle ? 200 : 300;
+         result.maxTiePoints = 200;
       }
       else if(result.matchMethod == "hybrid-phase-ncc")
       {
@@ -1440,6 +1466,12 @@ namespace ossimGui
       :m_registrationSource(registrationSource),
        m_dataManagerWidget(dataManagerWidget),
        m_label(label),
+       m_launchInputStatus(registrationSource
+                              ? registrationSource->inputStatusSummary()
+                              : std::string()),
+       m_launchSettings(registrationSource
+                           ? registrationSource->autoRegistrationSettingsSummary()
+                           : std::string()),
        m_success(false)
       {
          setId("ossimGui::RegistrationSourceJob");
@@ -1762,19 +1794,15 @@ namespace ossimGui
             }
             if(!m_success && m_registrationSource.valid())
             {
-               const std::string inputStatus =
-                  m_registrationSource->inputStatusSummary();
-               if(!inputStatus.empty())
+               if(!m_launchInputStatus.empty())
                {
                   m_resultSummary += " - ";
-                  m_resultSummary += inputStatus.c_str();
+                  m_resultSummary += m_launchInputStatus.c_str();
                }
-               const std::string autoStatus =
-                  m_registrationSource->autoRegistrationSettingsSummary();
-               if(!autoStatus.empty())
+               if(!m_launchSettings.empty())
                {
                   m_resultSummary += " - ";
-                  m_resultSummary += autoStatus.c_str();
+                  m_resultSummary += m_launchSettings.c_str();
                }
             }
             const ossimFilename reportPath =
@@ -1784,6 +1812,8 @@ namespace ossimGui
                fixedRegistrationQualityReportText(
                   m_label,
                   m_resultSummary,
+                  m_launchInputStatus,
+                  m_launchSettings,
                   m_success,
                   results,
                   writtenGeometryFiles,
@@ -1815,6 +1845,8 @@ namespace ossimGui
       ossimRefPtr<ossimFixedRegistrationSource> m_registrationSource;
       DataManagerWidget* m_dataManagerWidget;
       ossimString m_label;
+      std::string m_launchInputStatus;
+      std::string m_launchSettings;
       ossimString m_resultSummary;
       ossimString m_advisorySummary;
       DataManagerWidgetEvent::HandlerListType m_sourceHandlersToReload;
@@ -5032,7 +5064,7 @@ ossimGui::DataManagerWidget::createDefaultFixedRegistrationItem()
       registration->autoRegistrationOptions();
    RegistrationSetupOptions setupOptions =
       registrationSetupDefaults(REGISTRATION_SETUP_FIXED_AUTO,
-                                preferredFixedAutoMatchMethod());
+                                std::string());
    ossim_autoreg::TiePointGenerationOptions tiePointOptions =
       registrationOptions.generator();
    applyRegistrationSetupTieOptions(tiePointOptions, setupOptions);
