@@ -29,7 +29,9 @@ All notable changes to `ossim-gui` are documented here.
 > elevation context so GeoCell swipe reviews can confirm whether they used the
 > same preferences and terrain sources as the CLI. Fixed-auto launch reports now
 > snapshot the settings that were active when the job started, even if the user
-> edits properties while the registration is still running.
+> edits properties while the registration is still running. Long fixed-auto
+> jobs now label live preview, accepted, restored, and coarse geometry updates
+> so GeoCell progress reads like the registration is actually moving.
 
 ### Added
 - Include fixed-registration launch input/status and settings snapshots in
@@ -95,6 +97,8 @@ All notable changes to `ossim-gui` are documented here.
   checkbox/combobox editors that no longer fight the table paint layer.
 
 ### Changed
+- Label fixed-registration job progress as preview, accepted, restored, or
+  coarse geometry when live pass updates arrive from `ossim-autoreg`.
 - Create GeoCell default Fixed Auto registrations from the shared adaptive
   fixed-auto defaults instead of a preferred concrete matcher, keeping the
   source bridge aligned with the CLI/source API path.

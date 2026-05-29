@@ -75,6 +75,7 @@
 #include <limits>
 #include <set>
 #include <sstream>
+#include <string>
 
 #ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
 #include <ossim/registration/ossimBundleAdjustmentRegistrationSource.h>
@@ -1504,21 +1505,46 @@ namespace ossimGui
       }
 
    protected:
+      std::string displayProgressMessage(
+         const ossimFixedRegistrationSource::ProgressInfo& progress) const
+      {
+         const std::string message = progress.message();
+         if(message.find("preview pass") != std::string::npos)
+         {
+            return "preview geometry: " + message;
+         }
+         if(message.find("accepted pass") != std::string::npos)
+         {
+            return "accepted geometry: " + message;
+         }
+         if(message.find("restored best") != std::string::npos)
+         {
+            return "restored geometry: " + message;
+         }
+         if(message.find("coarse seed accepted") != std::string::npos ||
+            message.find("fallback coarse seed accepted") != std::string::npos)
+         {
+            return "coarse geometry: " + message;
+         }
+         return message;
+      }
+
       void updateProgressName(
          const ossimFixedRegistrationSource::ProgressInfo& progress)
       {
          ossimString name = "Register";
-         if(!progress.message().empty())
+         const std::string message = displayProgressMessage(progress);
+         if(!message.empty())
          {
             name += " ";
-            name += progress.message().c_str();
+            name += message.c_str();
          }
          name += ": ";
          name += m_label;
          setName(name);
-         if(!progress.message().empty())
+         if(!message.empty())
          {
-            setDescription(progress.message().c_str());
+            setDescription(message.c_str());
          }
          setPercentComplete(progress.percentComplete());
       }
