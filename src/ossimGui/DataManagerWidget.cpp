@@ -1509,22 +1509,35 @@ namespace ossimGui
          const ossimFixedRegistrationSource::ProgressInfo& progress) const
       {
          const std::string message = progress.message();
+         std::string geometryMessage;
          if(message.find("preview pass") != std::string::npos)
          {
-            return "preview geometry: " + message;
+            geometryMessage = "preview geometry: " + message;
          }
-         if(message.find("accepted pass") != std::string::npos)
+         else if(message.find("accepted pass") != std::string::npos)
          {
-            return "accepted geometry: " + message;
+            geometryMessage = "accepted geometry: " + message;
          }
-         if(message.find("restored best") != std::string::npos)
+         else if(message.find("restored best") != std::string::npos)
          {
-            return "restored geometry: " + message;
+            geometryMessage = "restored geometry: " + message;
          }
-         if(message.find("coarse seed accepted") != std::string::npos ||
-            message.find("fallback coarse seed accepted") != std::string::npos)
+         else if(message.find("coarse seed accepted") != std::string::npos ||
+                 message.find("fallback coarse seed accepted") != std::string::npos)
          {
-            return "coarse geometry: " + message;
+            geometryMessage = "coarse geometry: " + message;
+         }
+
+         if(!geometryMessage.empty())
+         {
+            m_lastGeometryProgress = geometryMessage;
+            return geometryMessage;
+         }
+
+         if(!m_lastGeometryProgress.empty() &&
+            message.find("generating ties") != std::string::npos)
+         {
+            return m_lastGeometryProgress + " | " + message;
          }
          return message;
       }
@@ -1873,6 +1886,7 @@ namespace ossimGui
       ossimString m_label;
       std::string m_launchInputStatus;
       std::string m_launchSettings;
+      mutable std::string m_lastGeometryProgress;
       ossimString m_resultSummary;
       ossimString m_advisorySummary;
       DataManagerWidgetEvent::HandlerListType m_sourceHandlersToReload;

@@ -31,7 +31,9 @@ All notable changes to `ossim-gui` are documented here.
 > snapshot the settings that were active when the job started, even if the user
 > edits properties while the registration is still running. Long fixed-auto
 > jobs now label live preview, accepted, restored, and coarse geometry updates
-> so GeoCell progress reads like the registration is actually moving.
+> so GeoCell progress reads like the registration is actually moving, and the
+> latest RMSE-bearing geometry update stays visible while generic pass messages
+> continue.
 
 ### Added
 - Include fixed-registration launch input/status and settings snapshots in
@@ -97,6 +99,9 @@ All notable changes to `ossim-gui` are documented here.
   checkbox/combobox editors that no longer fight the table paint layer.
 
 ### Changed
+- Keep the latest fixed-registration geometry progress label visible through
+  generic tie-generation updates so RMSE/tie-count feedback remains readable
+  during long GeoCell runs.
 - Label fixed-registration job progress as preview, accepted, restored, or
   coarse geometry when live pass updates arrive from `ossim-autoreg`.
 - Create GeoCell default Fixed Auto registrations from the shared adaptive
