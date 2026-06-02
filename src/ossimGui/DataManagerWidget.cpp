@@ -112,6 +112,63 @@ namespace
          ossim_autoreg::TiePointGeneratorFactory::instance()->create(method));
    }
 
+   bool containsText(const std::string& text, const std::string& pattern)
+   {
+      return text.find(pattern) != std::string::npos;
+   }
+
+   std::string registrationProgressPhaseMessage(const std::string& message)
+   {
+      if(message.empty())
+      {
+         return message;
+      }
+
+      std::string phase;
+      if(containsText(message, "adaptive trial") ||
+         containsText(message, "candidate bank") ||
+         containsText(message, "source candidate bank"))
+      {
+         phase = "candidate bank";
+      }
+      else if(containsText(message, "post-bank") ||
+              containsText(message, "guided probe") ||
+              containsText(message, "adaptive refinement"))
+      {
+         phase = "post-bank refinement";
+      }
+      else if(containsText(message, "final-quality") ||
+              containsText(message, "final quality") ||
+              containsText(message, "full-quality refinement"))
+      {
+         phase = "final quality";
+      }
+      else if(containsText(message, "coarse") ||
+              containsText(message, "Coarse"))
+      {
+         phase = "coarse";
+      }
+      else if(containsText(message, "generating ties") ||
+              containsText(message, "generating pair ties"))
+      {
+         phase = "tie generation";
+      }
+      else if(containsText(message, "optimizing"))
+      {
+         phase = "optimization";
+      }
+      else if(containsText(message, "filtering residuals"))
+      {
+         phase = "residual filtering";
+      }
+
+      if(phase.empty() || containsText(message, phase + ":"))
+      {
+         return message;
+      }
+      return phase + ": " + message;
+   }
+
    std::string environmentValue(const char* name)
    {
       const char* value = std::getenv(name);
@@ -1539,7 +1596,7 @@ namespace ossimGui
          {
             return m_lastGeometryProgress + " | " + message;
          }
-         return message;
+         return registrationProgressPhaseMessage(message);
       }
 
       void updateProgressName(
@@ -1947,17 +2004,19 @@ namespace ossimGui
          const ossimBundleAdjustmentRegistrationSource::ProgressInfo& progress)
       {
          ossimString name = "Bundle adjust";
-         if(!progress.message().empty())
+         const std::string message =
+            registrationProgressPhaseMessage(progress.message());
+         if(!message.empty())
          {
             name += " ";
-            name += progress.message().c_str();
+            name += message.c_str();
          }
          name += ": ";
          name += m_label;
          setName(name);
-         if(!progress.message().empty())
+         if(!message.empty())
          {
-            setDescription(progress.message().c_str());
+            setDescription(message.c_str());
          }
          setPercentComplete(progress.percentComplete());
       }
