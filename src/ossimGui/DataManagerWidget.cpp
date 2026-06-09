@@ -39,6 +39,7 @@
 #include <QToolBar>
 #include <QItemDelegate>
 #include <QComboBox>
+#include <QCheckBox>
 #include <QDateTime>
 #include <QDoubleSpinBox>
 #include <QSpinBox>
@@ -995,6 +996,7 @@ namespace
       std::size_t maxTiePoints;
       std::size_t maxConcurrentRegistrations;
       std::size_t adaptiveBankThreadCount;
+      bool adaptiveFullPostBankRefinement;
 
       RegistrationSetupOptions()
       : approach(REGISTRATION_SETUP_FIXED_AUTO),
@@ -1007,7 +1009,8 @@ namespace
         viewGsd(0.0),
         maxTiePoints(300),
         maxConcurrentRegistrations(1),
-        adaptiveBankThreadCount(4)
+        adaptiveBankThreadCount(4),
+        adaptiveFullPostBankRefinement(true)
       {
       }
    };
@@ -1036,6 +1039,7 @@ namespace
       result.maxTiePoints = 200;
       result.maxConcurrentRegistrations = 1;
       result.adaptiveBankThreadCount = bundle ? 0 : 4;
+      result.adaptiveFullPostBankRefinement = true;
 
       if(approach == REGISTRATION_SETUP_FIXED_AUTO &&
          result.matchMethod.empty())
@@ -1157,7 +1161,8 @@ namespace
         m_viewGsd(0),
         m_maxTiePoints(0),
         m_maxConcurrentRegistrations(0),
-        m_adaptiveBankThreadCount(0)
+        m_adaptiveBankThreadCount(0),
+        m_adaptiveFullPostBankRefinement(0)
       {
          setWindowTitle("Registration Setup");
 
@@ -1247,6 +1252,9 @@ namespace
          m_adaptiveBankThreadCount->setRange(0, 64);
          m_adaptiveBankThreadCount->setValue(4);
 
+         m_adaptiveFullPostBankRefinement = new QCheckBox(this);
+         m_adaptiveFullPostBankRefinement->setChecked(true);
+
          connect(m_approach,
                  static_cast<void (QComboBox::*)(int)>(
                     &QComboBox::currentIndexChanged),
@@ -1270,6 +1278,8 @@ namespace
                       m_maxConcurrentRegistrations);
          form->addRow("Adaptive bank threads",
                       m_adaptiveBankThreadCount);
+         form->addRow("Full post-bank refinement",
+                      m_adaptiveFullPostBankRefinement);
 
          QGroupBox* optionsBox = new QGroupBox("Options", this);
          optionsBox->setLayout(form);
@@ -1316,6 +1326,8 @@ namespace
          result.adaptiveBankThreadCount =
             static_cast<std::size_t>(
                m_adaptiveBankThreadCount->value());
+         result.adaptiveFullPostBankRefinement =
+            m_adaptiveFullPostBankRefinement->isChecked();
          return result;
       }
 
@@ -1347,6 +1359,8 @@ namespace
             static_cast<int>(defaults.maxConcurrentRegistrations));
          m_adaptiveBankThreadCount->setValue(
             static_cast<int>(defaults.adaptiveBankThreadCount));
+         m_adaptiveFullPostBankRefinement->setChecked(
+            defaults.adaptiveFullPostBankRefinement);
       }
 
       void addMatchMethod(const QString& label, const QString& method)
@@ -1371,6 +1385,7 @@ namespace
       QSpinBox* m_maxTiePoints;
       QSpinBox* m_maxConcurrentRegistrations;
       QSpinBox* m_adaptiveBankThreadCount;
+      QCheckBox* m_adaptiveFullPostBankRefinement;
    };
 
    void applyRegistrationSetupTieOptions(
@@ -5173,10 +5188,14 @@ ossimGui::DataManagerWidget::createDefaultFixedRegistrationItem()
    registrationOptions.setSkipOptimization(false);
    registrationOptions.setAdaptiveBankThreadCount(
       setupOptions.adaptiveBankThreadCount);
+   registrationOptions.setAdaptiveFullPostBankRefinement(
+      setupOptions.adaptiveFullPostBankRefinement);
    registrationOptions.setGenerator(tiePointOptions);
    registration->setAutoRegistrationOptions(registrationOptions);
    registration->setAdaptiveBankThreadCount(
       setupOptions.adaptiveBankThreadCount);
+   registration->setAdaptiveFullPostBankRefinement(
+      setupOptions.adaptiveFullPostBankRefinement);
 
    ossimRefPtr<ossimObject> obj = registration.get();
    if(obj.valid())
@@ -5433,11 +5452,15 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
          setupOptions.maxConcurrentRegistrations);
       registrationOptions.setAdaptiveBankThreadCount(
          setupOptions.adaptiveBankThreadCount);
+      registrationOptions.setAdaptiveFullPostBankRefinement(
+         setupOptions.adaptiveFullPostBankRefinement);
       registration->setAutoRegistrationOptions(registrationOptions);
       registration->setMaxConcurrentRegistrations(
          setupOptions.maxConcurrentRegistrations);
       registration->setAdaptiveBankThreadCount(
          setupOptions.adaptiveBankThreadCount);
+      registration->setAdaptiveFullPostBankRefinement(
+         setupOptions.adaptiveFullPostBankRefinement);
       obj = registration.get();
       nodeName = setupOptions.matchMethod.empty() ?
          QString("Registered: adaptive fixed auto") :
