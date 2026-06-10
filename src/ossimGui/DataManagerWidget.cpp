@@ -996,6 +996,7 @@ namespace
       std::size_t maxTiePoints;
       std::size_t denseGridSeedBudget;
       bool autoDenseGridSeedBudget;
+      bool tiePointTimingDiagnostics;
       std::size_t maxConcurrentRegistrations;
       std::size_t adaptiveBankThreadCount;
       bool adaptiveFullPostBankRefinement;
@@ -1012,6 +1013,7 @@ namespace
         maxTiePoints(300),
         denseGridSeedBudget(0),
         autoDenseGridSeedBudget(false),
+        tiePointTimingDiagnostics(false),
         maxConcurrentRegistrations(1),
         adaptiveBankThreadCount(4),
         adaptiveFullPostBankRefinement(true)
@@ -1064,6 +1066,8 @@ namespace
             defaults.generator().denseGridSeedBudget();
          result.autoDenseGridSeedBudget =
             defaults.generator().autoDenseGridSeedBudget();
+         result.tiePointTimingDiagnostics =
+            defaults.generator().timingDiagnostics();
          return result;
       }
 
@@ -1086,6 +1090,8 @@ namespace
             defaults.generator().denseGridSeedBudget();
          result.autoDenseGridSeedBudget =
             defaults.generator().autoDenseGridSeedBudget();
+         result.tiePointTimingDiagnostics =
+            defaults.generator().timingDiagnostics();
          return result;
       }
 
@@ -1267,6 +1273,12 @@ namespace
          m_autoDenseGridSeedBudget = new QCheckBox(this);
          m_autoDenseGridSeedBudget->setChecked(false);
 
+         m_tiePointTimingDiagnostics = new QCheckBox(this);
+         m_tiePointTimingDiagnostics->setChecked(false);
+         m_tiePointTimingDiagnostics->setToolTip(
+            "Collect renderer/tile timing counters for profiling. "
+            "Leave off for faster normal registration.");
+
          m_maxConcurrentRegistrations = new QSpinBox(this);
          m_maxConcurrentRegistrations->setRange(1, 64);
          m_maxConcurrentRegistrations->setValue(1);
@@ -1300,6 +1312,8 @@ namespace
          form->addRow("Dense seed budget", m_denseGridSeedBudget);
          form->addRow("Auto dense seed budget",
                       m_autoDenseGridSeedBudget);
+         form->addRow("Tie timing diagnostics",
+                      m_tiePointTimingDiagnostics);
          form->addRow("Parallel floating inputs",
                       m_maxConcurrentRegistrations);
          form->addRow("Adaptive bank threads",
@@ -1351,6 +1365,8 @@ namespace
                m_denseGridSeedBudget->value());
          result.autoDenseGridSeedBudget =
             m_autoDenseGridSeedBudget->isChecked();
+         result.tiePointTimingDiagnostics =
+            m_tiePointTimingDiagnostics->isChecked();
          result.maxConcurrentRegistrations =
             static_cast<std::size_t>(
                m_maxConcurrentRegistrations->value());
@@ -1390,6 +1406,8 @@ namespace
             static_cast<int>(defaults.denseGridSeedBudget));
          m_autoDenseGridSeedBudget->setChecked(
             defaults.autoDenseGridSeedBudget);
+         m_tiePointTimingDiagnostics->setChecked(
+            defaults.tiePointTimingDiagnostics);
          m_maxConcurrentRegistrations->setValue(
             static_cast<int>(defaults.maxConcurrentRegistrations));
          m_adaptiveBankThreadCount->setValue(
@@ -1420,6 +1438,7 @@ namespace
       QSpinBox* m_maxTiePoints;
       QSpinBox* m_denseGridSeedBudget;
       QCheckBox* m_autoDenseGridSeedBudget;
+      QCheckBox* m_tiePointTimingDiagnostics;
       QSpinBox* m_maxConcurrentRegistrations;
       QSpinBox* m_adaptiveBankThreadCount;
       QCheckBox* m_adaptiveFullPostBankRefinement;
@@ -1441,6 +1460,8 @@ namespace
          setupOptions.denseGridSeedBudget;
       tiePointOptions.autoDenseGridSeedBudget() =
          setupOptions.autoDenseGridSeedBudget;
+      tiePointOptions.timingDiagnostics() =
+         setupOptions.tiePointTimingDiagnostics;
    }
 
    QString registeredNodeName(const std::string& matchMethod)
@@ -5455,12 +5476,13 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
          "Bundle All-Floating Registration" :
          "Bundle Anchored Registration";
       toolTip =
-         QString("Matcher: %1\nResampler: %2\nView GSD: %3\nDense seed budget: %4\nAuto dense seed budget: %5")
+         QString("Matcher: %1\nResampler: %2\nView GSD: %3\nDense seed budget: %4\nAuto dense seed budget: %5\nTie timing diagnostics: %6")
             .arg(QString::fromStdString(setupOptions.matchMethod))
             .arg(QString::fromStdString(setupOptions.resamplerType))
             .arg(setupOptions.viewGsd)
             .arg(static_cast<int>(setupOptions.denseGridSeedBudget))
-            .arg(setupOptions.autoDenseGridSeedBudget ? "true" : "false");
+            .arg(setupOptions.autoDenseGridSeedBudget ? "true" : "false")
+            .arg(setupOptions.tiePointTimingDiagnostics ? "true" : "false");
    }
    else
    {
@@ -5511,7 +5533,7 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
          QString("Registered: adaptive fixed auto") :
          registeredNodeName(setupOptions.matchMethod);
       toolTip =
-         QString("%1\nMatcher: %2\nResampler: %3\nView GSD: %4\nParallel floating inputs: %5\nAdaptive bank threads: %6\nDense seed budget: %7\nAuto dense seed budget: %8")
+         QString("%1\nMatcher: %2\nResampler: %3\nView GSD: %4\nParallel floating inputs: %5\nAdaptive bank threads: %6\nDense seed budget: %7\nAuto dense seed budget: %8\nTie timing diagnostics: %9")
             .arg(registration->autoRegistrationSettingsSummary().c_str())
             .arg(QString::fromStdString(
                setupOptions.matchMethod.empty() ?
@@ -5525,7 +5547,8 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
                setupOptions.adaptiveBankThreadCount))
             .arg(static_cast<int>(
                setupOptions.denseGridSeedBudget))
-            .arg(setupOptions.autoDenseGridSeedBudget ? "true" : "false");
+            .arg(setupOptions.autoDenseGridSeedBudget ? "true" : "false")
+            .arg(setupOptions.tiePointTimingDiagnostics ? "true" : "false");
    }
 
    if(obj.valid())
