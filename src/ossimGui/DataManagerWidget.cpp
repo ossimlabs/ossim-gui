@@ -1002,6 +1002,7 @@ namespace
       std::size_t maxConcurrentRegistrations;
       std::size_t adaptiveBankThreadCount;
       bool adaptiveFullPostBankRefinement;
+      std::string nativeLowGridPolicy;
       bool opencvRansacPrefilter;
       double opencvRansacThresholdPixels;
 
@@ -1023,6 +1024,7 @@ namespace
         maxConcurrentRegistrations(1),
         adaptiveBankThreadCount(4),
         adaptiveFullPostBankRefinement(true),
+        nativeLowGridPolicy("advisory"),
         opencvRansacPrefilter(true),
         opencvRansacThresholdPixels(25.0)
       {
@@ -1058,6 +1060,7 @@ namespace
       result.maxConcurrentRegistrations = 1;
       result.adaptiveBankThreadCount = bundle ? 0 : 4;
       result.adaptiveFullPostBankRefinement = true;
+      result.nativeLowGridPolicy = "advisory";
       result.opencvRansacPrefilter = true;
       result.opencvRansacThresholdPixels = 25.0;
 
@@ -1087,6 +1090,8 @@ namespace
             defaults.opencvRansacPrefilter();
          result.opencvRansacThresholdPixels =
             defaults.opencvRansacThresholdPixels();
+         result.nativeLowGridPolicy =
+            defaults.nativeLowGridPolicy();
          return result;
       }
 
@@ -1117,6 +1122,8 @@ namespace
             defaults.opencvRansacPrefilter();
          result.opencvRansacThresholdPixels =
             defaults.opencvRansacThresholdPixels();
+         result.nativeLowGridPolicy =
+            defaults.nativeLowGridPolicy();
          return result;
       }
 
@@ -1212,6 +1219,7 @@ namespace
         m_maxConcurrentRegistrations(0),
         m_adaptiveBankThreadCount(0),
         m_adaptiveFullPostBankRefinement(0),
+        m_nativeLowGridPolicy(0),
         m_opencvRansacPrefilter(0),
         m_opencvRansacThresholdPixels(0)
       {
@@ -1338,6 +1346,13 @@ namespace
          m_adaptiveFullPostBankRefinement = new QCheckBox(this);
          m_adaptiveFullPostBankRefinement->setChecked(true);
 
+         m_nativeLowGridPolicy = new QComboBox(this);
+         m_nativeLowGridPolicy->addItem("Advisory", "advisory");
+         m_nativeLowGridPolicy->addItem("Reject", "reject");
+         m_nativeLowGridPolicy->setToolTip(
+            "Handling for native image-space matches with low control-grid "
+            "occupancy.");
+
          m_opencvRansacPrefilter = new QCheckBox(this);
          m_opencvRansacPrefilter->setChecked(true);
          m_opencvRansacPrefilter->setToolTip(
@@ -1384,6 +1399,8 @@ namespace
                       m_adaptiveBankThreadCount);
          form->addRow("Full post-bank refinement",
                       m_adaptiveFullPostBankRefinement);
+         form->addRow("Native low-grid policy",
+                      m_nativeLowGridPolicy);
          form->addRow("OpenCV RANSAC prefilter",
                       m_opencvRansacPrefilter);
          form->addRow("OpenCV RANSAC threshold",
@@ -1447,6 +1464,9 @@ namespace
                m_adaptiveBankThreadCount->value());
          result.adaptiveFullPostBankRefinement =
             m_adaptiveFullPostBankRefinement->isChecked();
+         result.nativeLowGridPolicy =
+            m_nativeLowGridPolicy->itemData(
+               m_nativeLowGridPolicy->currentIndex()).toString().toStdString();
          result.opencvRansacPrefilter =
             m_opencvRansacPrefilter->isChecked();
          result.opencvRansacThresholdPixels =
@@ -1497,6 +1517,13 @@ namespace
             static_cast<int>(defaults.adaptiveBankThreadCount));
          m_adaptiveFullPostBankRefinement->setChecked(
             defaults.adaptiveFullPostBankRefinement);
+         {
+            const int nativeLowGridIndex =
+               m_nativeLowGridPolicy->findData(QString::fromStdString(
+                  defaults.nativeLowGridPolicy));
+            if(nativeLowGridIndex >= 0)
+               m_nativeLowGridPolicy->setCurrentIndex(nativeLowGridIndex);
+         }
          m_opencvRansacPrefilter->setChecked(
             defaults.opencvRansacPrefilter);
          m_opencvRansacThresholdPixels->setValue(
@@ -1531,6 +1558,7 @@ namespace
       QSpinBox* m_maxConcurrentRegistrations;
       QSpinBox* m_adaptiveBankThreadCount;
       QCheckBox* m_adaptiveFullPostBankRefinement;
+      QComboBox* m_nativeLowGridPolicy;
       QCheckBox* m_opencvRansacPrefilter;
       QDoubleSpinBox* m_opencvRansacThresholdPixels;
    };
@@ -5622,6 +5650,8 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
          setupOptions.adaptiveFullPostBankRefinement);
       registrationOptions.setSupportPassMatcherResampler(
          setupOptions.supportPassMatcherResampler);
+      registrationOptions.setNativeLowGridPolicy(
+         setupOptions.nativeLowGridPolicy);
       registrationOptions.setOpencvRansacPrefilter(
          setupOptions.opencvRansacPrefilter);
       registrationOptions.setOpencvRansacThresholdPixels(
@@ -5638,7 +5668,7 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
          QString("Registered: adaptive fixed auto") :
          registeredNodeName(setupOptions.matchMethod);
       toolTip =
-         QString("%1\nMatcher: %2\nResampler: %3\nSupport pass resampler: %4\nView GSD: %5\nMin score margin: %6\nParallel floating inputs: %7\nAdaptive bank threads: %8\nDense seed budget: %9\nAuto dense seed budget: %10\nTie timing diagnostics: %11\nOpenCV RANSAC prefilter: %12\nOpenCV RANSAC threshold: %13")
+         QString("%1\nMatcher: %2\nResampler: %3\nSupport pass resampler: %4\nView GSD: %5\nMin score margin: %6\nNative low-grid policy: %7\nParallel floating inputs: %8\nAdaptive bank threads: %9\nDense seed budget: %10\nAuto dense seed budget: %11\nTie timing diagnostics: %12\nOpenCV RANSAC prefilter: %13\nOpenCV RANSAC threshold: %14")
             .arg(registration->autoRegistrationSettingsSummary().c_str())
             .arg(QString::fromStdString(
                setupOptions.matchMethod.empty() ?
@@ -5651,6 +5681,7 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
                   setupOptions.supportPassMatcherResampler))
             .arg(setupOptions.viewGsd)
             .arg(setupOptions.minScoreMargin)
+            .arg(QString::fromStdString(setupOptions.nativeLowGridPolicy))
             .arg(static_cast<int>(
                setupOptions.maxConcurrentRegistrations))
             .arg(static_cast<int>(
