@@ -988,6 +988,7 @@ namespace
       RegistrationSetupApproach approach;
       std::string matchMethod;
       std::string resamplerType;
+      std::string supportPassMatcherResampler;
       int chipSize;
       int searchRadius;
       int gridSpacing;
@@ -1005,6 +1006,7 @@ namespace
       : approach(REGISTRATION_SETUP_FIXED_AUTO),
         matchMethod(preferredRegistrationMatchMethod()),
         resamplerType("cubic"),
+        supportPassMatcherResampler(),
         chipSize(31),
         searchRadius(64),
         gridSpacing(128),
@@ -1037,6 +1039,7 @@ namespace
               preferredRegistrationMatchMethod())) :
          matchMethod;
       result.resamplerType = "cubic";
+      result.supportPassMatcherResampler.clear();
       result.chipSize = 31;
       result.searchRadius = 36;
       result.gridSpacing = 96;
@@ -1055,7 +1058,9 @@ namespace
          ossim_autoreg::AutoRegistrationOptions defaults;
          defaults.setAutoRegister(true);
          ossim_autoreg::applyAutoRegistrationDefaults(defaults);
-         result.resamplerType = defaults.generator().resamplerType();
+        result.resamplerType = defaults.generator().resamplerType();
+         result.supportPassMatcherResampler =
+            defaults.supportPassMatcherResampler();
          result.chipSize = defaults.generator().chipSize();
          result.searchRadius = defaults.generator().searchRadius();
          result.gridSpacing = defaults.generator().gridSpacing();
@@ -1079,7 +1084,8 @@ namespace
             defaults,
             approach == REGISTRATION_SETUP_BUNDLE_ANCHORED);
 
-         result.resamplerType = defaults.generator().resamplerType();
+        result.resamplerType = defaults.generator().resamplerType();
+         result.supportPassMatcherResampler.clear();
          result.chipSize = defaults.generator().chipSize();
          result.searchRadius = defaults.generator().searchRadius();
          result.gridSpacing = defaults.generator().gridSpacing();
@@ -1174,6 +1180,7 @@ namespace
         m_approach(0),
         m_matchMethod(0),
         m_resampler(0),
+        m_supportPassResampler(0),
         m_chipSize(0),
         m_searchRadius(0),
         m_gridSpacing(0),
@@ -1236,6 +1243,16 @@ namespace
          m_resampler->addItem("bilinear", "bilinear");
          m_resampler->addItem("nearest", "nearest_neighbor");
          m_resampler->addItem("sinc", "sinc");
+
+         m_supportPassResampler = new QComboBox(this);
+         m_supportPassResampler->addItem("default", "");
+         m_supportPassResampler->addItem("cubic", "cubic");
+         m_supportPassResampler->addItem("bilinear", "bilinear");
+         m_supportPassResampler->addItem("nearest", "nearest_neighbor");
+         m_supportPassResampler->addItem("sinc", "sinc");
+         m_supportPassResampler->setToolTip(
+            "Optional fixed-auto support-pass matcher resampler. "
+            "Default keeps the main resampler.");
 
          m_chipSize = new QSpinBox(this);
          m_chipSize->setRange(5, 255);
@@ -1303,6 +1320,7 @@ namespace
          form->addRow("Approach", m_approach);
          form->addRow("Matcher", m_matchMethod);
          form->addRow("Resampler", m_resampler);
+         form->addRow("Support pass resampler", m_supportPassResampler);
          form->addRow("Chip size", m_chipSize);
          form->addRow("Search radius", m_searchRadius);
          form->addRow("Grid spacing", m_gridSpacing);
@@ -1351,6 +1369,9 @@ namespace
          result.resamplerType =
             m_resampler->itemData(m_resampler->currentIndex()).
                toString().toStdString();
+         result.supportPassMatcherResampler =
+            m_supportPassResampler->itemData(
+               m_supportPassResampler->currentIndex()).toString().toStdString();
          result.chipSize = m_chipSize->value();
          if((result.chipSize % 2) == 0)
             ++result.chipSize;
@@ -1395,6 +1416,12 @@ namespace
                defaults.resamplerType));
          if(resamplerIndex >= 0)
             m_resampler->setCurrentIndex(resamplerIndex);
+         const int supportPassResamplerIndex =
+            m_supportPassResampler->findData(QString::fromStdString(
+               defaults.supportPassMatcherResampler));
+         if(supportPassResamplerIndex >= 0)
+            m_supportPassResampler->setCurrentIndex(
+               supportPassResamplerIndex);
          m_chipSize->setValue(defaults.chipSize);
          m_searchRadius->setValue(defaults.searchRadius);
          m_gridSpacing->setValue(defaults.gridSpacing);
@@ -1430,6 +1457,7 @@ namespace
       QComboBox* m_approach;
       QComboBox* m_matchMethod;
       QComboBox* m_resampler;
+      QComboBox* m_supportPassResampler;
       QSpinBox* m_chipSize;
       QSpinBox* m_searchRadius;
       QSpinBox* m_gridSpacing;
@@ -5521,6 +5549,8 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
          setupOptions.adaptiveBankThreadCount);
       registrationOptions.setAdaptiveFullPostBankRefinement(
          setupOptions.adaptiveFullPostBankRefinement);
+      registrationOptions.setSupportPassMatcherResampler(
+         setupOptions.supportPassMatcherResampler);
       registration->setAutoRegistrationOptions(registrationOptions);
       registration->setMaxConcurrentRegistrations(
          setupOptions.maxConcurrentRegistrations);
@@ -5533,13 +5563,17 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
          QString("Registered: adaptive fixed auto") :
          registeredNodeName(setupOptions.matchMethod);
       toolTip =
-         QString("%1\nMatcher: %2\nResampler: %3\nView GSD: %4\nParallel floating inputs: %5\nAdaptive bank threads: %6\nDense seed budget: %7\nAuto dense seed budget: %8\nTie timing diagnostics: %9")
+         QString("%1\nMatcher: %2\nResampler: %3\nSupport pass resampler: %4\nView GSD: %5\nParallel floating inputs: %6\nAdaptive bank threads: %7\nDense seed budget: %8\nAuto dense seed budget: %9\nTie timing diagnostics: %10")
             .arg(registration->autoRegistrationSettingsSummary().c_str())
             .arg(QString::fromStdString(
                setupOptions.matchMethod.empty() ?
                   std::string("adaptive auto") :
                   setupOptions.matchMethod))
             .arg(QString::fromStdString(setupOptions.resamplerType))
+            .arg(QString::fromStdString(
+               setupOptions.supportPassMatcherResampler.empty() ?
+                  std::string("default") :
+                  setupOptions.supportPassMatcherResampler))
             .arg(setupOptions.viewGsd)
             .arg(static_cast<int>(
                setupOptions.maxConcurrentRegistrations))
