@@ -33,9 +33,13 @@ All notable changes to `ossim-gui` are documented here.
 > jobs now label live preview, accepted, restored, and coarse geometry updates
 > so GeoCell progress reads like the registration is actually moving, and the
 > latest RMSE-bearing geometry update stays visible while generic pass messages
-> continue.
+> continue. GeoCell can now opt into tie-point timing diagnostics only when
+> profiling is needed.
 
 ### Added
+- Add a GeoCell `Tie timing diagnostics` setup control that maps to the shared
+  `ossim-autoreg` timing knob and explains it is for profiling rather than
+  normal registration (86a6637).
 - Include fixed-registration launch input/status and settings snapshots in
   GeoCell quality reports so long-running jobs can be audited against the
   values they actually used.
