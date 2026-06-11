@@ -1001,6 +1001,8 @@ namespace
       std::size_t maxConcurrentRegistrations;
       std::size_t adaptiveBankThreadCount;
       bool adaptiveFullPostBankRefinement;
+      bool opencvRansacPrefilter;
+      double opencvRansacThresholdPixels;
 
       RegistrationSetupOptions()
       : approach(REGISTRATION_SETUP_FIXED_AUTO),
@@ -1018,7 +1020,9 @@ namespace
         tiePointTimingDiagnostics(false),
         maxConcurrentRegistrations(1),
         adaptiveBankThreadCount(4),
-        adaptiveFullPostBankRefinement(true)
+        adaptiveFullPostBankRefinement(true),
+        opencvRansacPrefilter(true),
+        opencvRansacThresholdPixels(25.0)
       {
       }
    };
@@ -1051,6 +1055,8 @@ namespace
       result.maxConcurrentRegistrations = 1;
       result.adaptiveBankThreadCount = bundle ? 0 : 4;
       result.adaptiveFullPostBankRefinement = true;
+      result.opencvRansacPrefilter = true;
+      result.opencvRansacThresholdPixels = 25.0;
 
       if(approach == REGISTRATION_SETUP_FIXED_AUTO &&
          result.matchMethod.empty())
@@ -1073,6 +1079,10 @@ namespace
             defaults.generator().autoDenseGridSeedBudget();
          result.tiePointTimingDiagnostics =
             defaults.generator().timingDiagnostics();
+         result.opencvRansacPrefilter =
+            defaults.opencvRansacPrefilter();
+         result.opencvRansacThresholdPixels =
+            defaults.opencvRansacThresholdPixels();
          return result;
       }
 
@@ -1098,6 +1108,10 @@ namespace
             defaults.generator().autoDenseGridSeedBudget();
          result.tiePointTimingDiagnostics =
             defaults.generator().timingDiagnostics();
+         result.opencvRansacPrefilter =
+            defaults.opencvRansacPrefilter();
+         result.opencvRansacThresholdPixels =
+            defaults.opencvRansacThresholdPixels();
          return result;
       }
 
@@ -1191,7 +1205,9 @@ namespace
         m_autoDenseGridSeedBudget(0),
         m_maxConcurrentRegistrations(0),
         m_adaptiveBankThreadCount(0),
-        m_adaptiveFullPostBankRefinement(0)
+        m_adaptiveFullPostBankRefinement(0),
+        m_opencvRansacPrefilter(0),
+        m_opencvRansacThresholdPixels(0)
       {
          setWindowTitle("Registration Setup");
 
@@ -1307,6 +1323,20 @@ namespace
          m_adaptiveFullPostBankRefinement = new QCheckBox(this);
          m_adaptiveFullPostBankRefinement->setChecked(true);
 
+         m_opencvRansacPrefilter = new QCheckBox(this);
+         m_opencvRansacPrefilter->setChecked(true);
+         m_opencvRansacPrefilter->setToolTip(
+            "Use OpenCV affine RANSAC as a tie-point coherence prefilter.");
+
+         m_opencvRansacThresholdPixels = new QDoubleSpinBox(this);
+         m_opencvRansacThresholdPixels->setRange(0.0, 100000.0);
+         m_opencvRansacThresholdPixels->setDecimals(2);
+         m_opencvRansacThresholdPixels->setSingleStep(1.0);
+         m_opencvRansacThresholdPixels->setValue(25.0);
+         m_opencvRansacThresholdPixels->setToolTip(
+            "RANSAC inlier threshold in pixels for the OpenCV affine "
+            "prefilter.");
+
          connect(m_approach,
                  static_cast<void (QComboBox::*)(int)>(
                     &QComboBox::currentIndexChanged),
@@ -1338,6 +1368,10 @@ namespace
                       m_adaptiveBankThreadCount);
          form->addRow("Full post-bank refinement",
                       m_adaptiveFullPostBankRefinement);
+         form->addRow("OpenCV RANSAC prefilter",
+                      m_opencvRansacPrefilter);
+         form->addRow("OpenCV RANSAC threshold",
+                      m_opencvRansacThresholdPixels);
 
          QGroupBox* optionsBox = new QGroupBox("Options", this);
          optionsBox->setLayout(form);
@@ -1396,6 +1430,10 @@ namespace
                m_adaptiveBankThreadCount->value());
          result.adaptiveFullPostBankRefinement =
             m_adaptiveFullPostBankRefinement->isChecked();
+         result.opencvRansacPrefilter =
+            m_opencvRansacPrefilter->isChecked();
+         result.opencvRansacThresholdPixels =
+            m_opencvRansacThresholdPixels->value();
          return result;
       }
 
@@ -1441,6 +1479,10 @@ namespace
             static_cast<int>(defaults.adaptiveBankThreadCount));
          m_adaptiveFullPostBankRefinement->setChecked(
             defaults.adaptiveFullPostBankRefinement);
+         m_opencvRansacPrefilter->setChecked(
+            defaults.opencvRansacPrefilter);
+         m_opencvRansacThresholdPixels->setValue(
+            defaults.opencvRansacThresholdPixels);
       }
 
       void addMatchMethod(const QString& label, const QString& method)
@@ -1470,6 +1512,8 @@ namespace
       QSpinBox* m_maxConcurrentRegistrations;
       QSpinBox* m_adaptiveBankThreadCount;
       QCheckBox* m_adaptiveFullPostBankRefinement;
+      QCheckBox* m_opencvRansacPrefilter;
+      QDoubleSpinBox* m_opencvRansacThresholdPixels;
    };
 
    void applyRegistrationSetupTieOptions(
@@ -5498,19 +5542,25 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
       applyRegistrationSetupTieOptions(tiePointOptions, setupOptions);
       registrationOptions.setGenerator(tiePointOptions);
       registrationOptions.overrides().setAutoDenseGridSeedBudget(true);
+      registrationOptions.setOpencvRansacPrefilter(
+         setupOptions.opencvRansacPrefilter);
+      registrationOptions.setOpencvRansacThresholdPixels(
+         setupOptions.opencvRansacThresholdPixels);
       bundle->setAutoRegistrationOptions(registrationOptions);
       obj = bundle.get();
       nodeName = bundle->allInputsFloating() ?
          "Bundle All-Floating Registration" :
          "Bundle Anchored Registration";
       toolTip =
-         QString("Matcher: %1\nResampler: %2\nView GSD: %3\nDense seed budget: %4\nAuto dense seed budget: %5\nTie timing diagnostics: %6")
+         QString("Matcher: %1\nResampler: %2\nView GSD: %3\nDense seed budget: %4\nAuto dense seed budget: %5\nTie timing diagnostics: %6\nOpenCV RANSAC prefilter: %7\nOpenCV RANSAC threshold: %8")
             .arg(QString::fromStdString(setupOptions.matchMethod))
             .arg(QString::fromStdString(setupOptions.resamplerType))
             .arg(setupOptions.viewGsd)
             .arg(static_cast<int>(setupOptions.denseGridSeedBudget))
             .arg(setupOptions.autoDenseGridSeedBudget ? "true" : "false")
-            .arg(setupOptions.tiePointTimingDiagnostics ? "true" : "false");
+            .arg(setupOptions.tiePointTimingDiagnostics ? "true" : "false")
+            .arg(setupOptions.opencvRansacPrefilter ? "true" : "false")
+            .arg(setupOptions.opencvRansacThresholdPixels);
    }
    else
    {
@@ -5551,6 +5601,10 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
          setupOptions.adaptiveFullPostBankRefinement);
       registrationOptions.setSupportPassMatcherResampler(
          setupOptions.supportPassMatcherResampler);
+      registrationOptions.setOpencvRansacPrefilter(
+         setupOptions.opencvRansacPrefilter);
+      registrationOptions.setOpencvRansacThresholdPixels(
+         setupOptions.opencvRansacThresholdPixels);
       registration->setAutoRegistrationOptions(registrationOptions);
       registration->setMaxConcurrentRegistrations(
          setupOptions.maxConcurrentRegistrations);
@@ -5563,7 +5617,7 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
          QString("Registered: adaptive fixed auto") :
          registeredNodeName(setupOptions.matchMethod);
       toolTip =
-         QString("%1\nMatcher: %2\nResampler: %3\nSupport pass resampler: %4\nView GSD: %5\nParallel floating inputs: %6\nAdaptive bank threads: %7\nDense seed budget: %8\nAuto dense seed budget: %9\nTie timing diagnostics: %10")
+         QString("%1\nMatcher: %2\nResampler: %3\nSupport pass resampler: %4\nView GSD: %5\nParallel floating inputs: %6\nAdaptive bank threads: %7\nDense seed budget: %8\nAuto dense seed budget: %9\nTie timing diagnostics: %10\nOpenCV RANSAC prefilter: %11\nOpenCV RANSAC threshold: %12")
             .arg(registration->autoRegistrationSettingsSummary().c_str())
             .arg(QString::fromStdString(
                setupOptions.matchMethod.empty() ?
@@ -5582,7 +5636,9 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
             .arg(static_cast<int>(
                setupOptions.denseGridSeedBudget))
             .arg(setupOptions.autoDenseGridSeedBudget ? "true" : "false")
-            .arg(setupOptions.tiePointTimingDiagnostics ? "true" : "false");
+            .arg(setupOptions.tiePointTimingDiagnostics ? "true" : "false")
+            .arg(setupOptions.opencvRansacPrefilter ? "true" : "false")
+            .arg(setupOptions.opencvRansacThresholdPixels);
    }
 
    if(obj.valid())
