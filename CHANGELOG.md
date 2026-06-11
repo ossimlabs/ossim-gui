@@ -35,8 +35,14 @@ All notable changes to `ossim-gui` are documented here.
 > latest RMSE-bearing geometry update stays visible while generic pass messages
 > continue. GeoCell can now opt into tie-point timing diagnostics only when
 > profiling is needed.
+> GeoCell setup can now tune the OpenCV RANSAC prefilter and threshold through
+> the same shared registration options used by CLI/source runs.
 
 ### Added
+- Add GeoCell Registration Setup controls for the OpenCV RANSAC prefilter and
+  threshold, wiring them into fixed and bundle registration sources and the
+  created item tooltip so GUI speed experiments expose the same coherence gate
+  as CLI runs (0fad5f5).
 - Add a GeoCell `Tie timing diagnostics` setup control that maps to the shared
   `ossim-autoreg` timing knob and explains it is for profiling rather than
   normal registration (86a6637).
