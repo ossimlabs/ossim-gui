@@ -37,8 +37,14 @@ All notable changes to `ossim-gui` are documented here.
 > profiling is needed.
 > GeoCell setup can now tune the OpenCV RANSAC prefilter and threshold through
 > the same shared registration options used by CLI/source runs.
+> GeoCell setup can now tune the native-affine NCC score-margin gate too, so
+> GUI runs can use the same ambiguity filter as CLI experiments.
 
 ### Added
+- Add a GeoCell Registration Setup control for the native-affine minimum score
+  margin, wiring it into fixed and bundle registration sources plus created
+  item tooltips so GUI runs expose the same ambiguity filter as CLI/source
+  registration (504582a).
 - Add GeoCell Registration Setup controls for the OpenCV RANSAC prefilter and
   threshold, wiring them into fixed and bundle registration sources and the
   created item tooltip so GUI speed experiments expose the same coherence gate
