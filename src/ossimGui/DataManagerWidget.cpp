@@ -993,6 +993,7 @@ namespace
       int searchRadius;
       int gridSpacing;
       double minScore;
+      double minScoreMargin;
       double viewGsd;
       std::size_t maxTiePoints;
       std::size_t denseGridSeedBudget;
@@ -1013,6 +1014,7 @@ namespace
         searchRadius(64),
         gridSpacing(128),
         minScore(0.6),
+        minScoreMargin(0.03),
         viewGsd(0.0),
         maxTiePoints(300),
         denseGridSeedBudget(0),
@@ -1048,6 +1050,7 @@ namespace
       result.searchRadius = 36;
       result.gridSpacing = 96;
       result.minScore = 0.6;
+      result.minScoreMargin = 0.03;
       result.viewGsd = 0.0;
       result.maxTiePoints = 200;
       result.denseGridSeedBudget = 0;
@@ -1071,6 +1074,7 @@ namespace
          result.searchRadius = defaults.generator().searchRadius();
          result.gridSpacing = defaults.generator().gridSpacing();
          result.minScore = defaults.generator().minScore();
+         result.minScoreMargin = defaults.generator().minScoreMargin();
          result.viewGsd = defaults.generator().viewGsd();
          result.maxTiePoints = defaults.generator().maxTiePoints();
          result.denseGridSeedBudget =
@@ -1100,6 +1104,7 @@ namespace
          result.searchRadius = defaults.generator().searchRadius();
          result.gridSpacing = defaults.generator().gridSpacing();
          result.minScore = defaults.generator().minScore();
+         result.minScoreMargin = defaults.generator().minScoreMargin();
          result.viewGsd = defaults.generator().viewGsd();
          result.maxTiePoints = defaults.generator().maxTiePoints();
          result.denseGridSeedBudget =
@@ -1199,6 +1204,7 @@ namespace
         m_searchRadius(0),
         m_gridSpacing(0),
         m_minScore(0),
+        m_minScoreMargin(0),
         m_viewGsd(0),
         m_maxTiePoints(0),
         m_denseGridSeedBudget(0),
@@ -1289,6 +1295,15 @@ namespace
          m_minScore->setSingleStep(0.05);
          m_minScore->setValue(0.6);
 
+         m_minScoreMargin = new QDoubleSpinBox(this);
+         m_minScoreMargin->setRange(0.0, 1.0);
+         m_minScoreMargin->setDecimals(3);
+         m_minScoreMargin->setSingleStep(0.01);
+         m_minScoreMargin->setValue(0.03);
+         m_minScoreMargin->setToolTip(
+            "Minimum native-affine NCC peak separation. "
+            "Use 0 to disable ambiguity filtering.");
+
          m_viewGsd = new QDoubleSpinBox(this);
          m_viewGsd->setRange(-100.0, 1000000.0);
          m_viewGsd->setDecimals(3);
@@ -1355,6 +1370,7 @@ namespace
          form->addRow("Search radius", m_searchRadius);
          form->addRow("Grid spacing", m_gridSpacing);
          form->addRow("Minimum score", m_minScore);
+         form->addRow("Minimum score margin", m_minScoreMargin);
          form->addRow("View GSD", m_viewGsd);
          form->addRow("Max ties", m_maxTiePoints);
          form->addRow("Dense seed budget", m_denseGridSeedBudget);
@@ -1412,6 +1428,7 @@ namespace
          result.searchRadius = m_searchRadius->value();
          result.gridSpacing = m_gridSpacing->value();
          result.minScore = m_minScore->value();
+         result.minScoreMargin = m_minScoreMargin->value();
          result.viewGsd = m_viewGsd->value();
          result.maxTiePoints =
             static_cast<std::size_t>(m_maxTiePoints->value());
@@ -1464,6 +1481,7 @@ namespace
          m_searchRadius->setValue(defaults.searchRadius);
          m_gridSpacing->setValue(defaults.gridSpacing);
          m_minScore->setValue(defaults.minScore);
+         m_minScoreMargin->setValue(defaults.minScoreMargin);
          m_viewGsd->setValue(defaults.viewGsd);
          m_maxTiePoints->setValue(
             static_cast<int>(defaults.maxTiePoints));
@@ -1504,6 +1522,7 @@ namespace
       QSpinBox* m_searchRadius;
       QSpinBox* m_gridSpacing;
       QDoubleSpinBox* m_minScore;
+      QDoubleSpinBox* m_minScoreMargin;
       QDoubleSpinBox* m_viewGsd;
       QSpinBox* m_maxTiePoints;
       QSpinBox* m_denseGridSeedBudget;
@@ -1526,6 +1545,7 @@ namespace
       tiePointOptions.searchRadius() = setupOptions.searchRadius;
       tiePointOptions.gridSpacing() = setupOptions.gridSpacing;
       tiePointOptions.minScore() = setupOptions.minScore;
+      tiePointOptions.minScoreMargin() = setupOptions.minScoreMargin;
       tiePointOptions.viewGsd() = setupOptions.viewGsd;
       tiePointOptions.maxTiePoints() = setupOptions.maxTiePoints;
       tiePointOptions.denseGridSeedBudget() =
@@ -5552,10 +5572,11 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
          "Bundle All-Floating Registration" :
          "Bundle Anchored Registration";
       toolTip =
-         QString("Matcher: %1\nResampler: %2\nView GSD: %3\nDense seed budget: %4\nAuto dense seed budget: %5\nTie timing diagnostics: %6\nOpenCV RANSAC prefilter: %7\nOpenCV RANSAC threshold: %8")
+         QString("Matcher: %1\nResampler: %2\nView GSD: %3\nMin score margin: %4\nDense seed budget: %5\nAuto dense seed budget: %6\nTie timing diagnostics: %7\nOpenCV RANSAC prefilter: %8\nOpenCV RANSAC threshold: %9")
             .arg(QString::fromStdString(setupOptions.matchMethod))
             .arg(QString::fromStdString(setupOptions.resamplerType))
             .arg(setupOptions.viewGsd)
+            .arg(setupOptions.minScoreMargin)
             .arg(static_cast<int>(setupOptions.denseGridSeedBudget))
             .arg(setupOptions.autoDenseGridSeedBudget ? "true" : "false")
             .arg(setupOptions.tiePointTimingDiagnostics ? "true" : "false")
@@ -5617,7 +5638,7 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
          QString("Registered: adaptive fixed auto") :
          registeredNodeName(setupOptions.matchMethod);
       toolTip =
-         QString("%1\nMatcher: %2\nResampler: %3\nSupport pass resampler: %4\nView GSD: %5\nParallel floating inputs: %6\nAdaptive bank threads: %7\nDense seed budget: %8\nAuto dense seed budget: %9\nTie timing diagnostics: %10\nOpenCV RANSAC prefilter: %11\nOpenCV RANSAC threshold: %12")
+         QString("%1\nMatcher: %2\nResampler: %3\nSupport pass resampler: %4\nView GSD: %5\nMin score margin: %6\nParallel floating inputs: %7\nAdaptive bank threads: %8\nDense seed budget: %9\nAuto dense seed budget: %10\nTie timing diagnostics: %11\nOpenCV RANSAC prefilter: %12\nOpenCV RANSAC threshold: %13")
             .arg(registration->autoRegistrationSettingsSummary().c_str())
             .arg(QString::fromStdString(
                setupOptions.matchMethod.empty() ?
@@ -5629,6 +5650,7 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
                   std::string("default") :
                   setupOptions.supportPassMatcherResampler))
             .arg(setupOptions.viewGsd)
+            .arg(setupOptions.minScoreMargin)
             .arg(static_cast<int>(
                setupOptions.maxConcurrentRegistrations))
             .arg(static_cast<int>(
