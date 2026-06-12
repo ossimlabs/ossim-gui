@@ -1095,6 +1095,47 @@ namespace
          return result;
       }
 
+      if(approach == REGISTRATION_SETUP_FIXED_AUTO &&
+         result.matchMethod == "native-affine-ncc")
+      {
+         ossim_autoreg::AutoRegistrationOptions defaults;
+         defaults.setAutoRegister(true);
+         ossim_autoreg::applyAutoRegistrationDefaults(defaults);
+         std::ostringstream presetErrors;
+         ossim_autoreg::applyAutoRegistrationPreset(
+            defaults,
+            "fixed:native-affine",
+            presetErrors);
+         result.resamplerType = defaults.generator().resamplerType();
+         result.supportPassMatcherResampler =
+            defaults.supportPassMatcherResampler();
+         result.chipSize = defaults.generator().chipSize();
+         result.searchRadius = defaults.generator().searchRadius();
+         result.gridSpacing = defaults.generator().gridSpacing();
+         result.minScore = defaults.generator().minScore();
+         result.minScoreMargin = defaults.generator().minScoreMargin();
+         result.viewGsd = defaults.generator().viewGsd();
+         result.maxTiePoints = defaults.generator().maxTiePoints();
+         result.denseGridSeedBudget =
+            defaults.generator().denseGridSeedBudget();
+         result.autoDenseGridSeedBudget =
+            defaults.generator().autoDenseGridSeedBudget();
+         result.tiePointTimingDiagnostics =
+            defaults.generator().timingDiagnostics();
+         result.maxConcurrentRegistrations = defaults.threadCount();
+         result.adaptiveBankThreadCount =
+            defaults.adaptiveBankThreadCount();
+         result.adaptiveFullPostBankRefinement =
+            defaults.adaptiveFullPostBankRefinement();
+         result.nativeLowGridPolicy =
+            defaults.nativeLowGridPolicy();
+         result.opencvRansacPrefilter =
+            defaults.opencvRansacPrefilter();
+         result.opencvRansacThresholdPixels =
+            defaults.opencvRansacThresholdPixels();
+         return result;
+      }
+
       if(bundle)
       {
          ossim_autoreg::AutoRegistrationOptions defaults;
@@ -1249,6 +1290,7 @@ namespace
          addAvailableMatchMethod("OpenCV BRISK", "opencv-brisk");
          addAvailableMatchMethod("OpenCV GFTT/LK", "opencv-gftt-lk");
          addAvailableMatchMethod("OpenCV Phase", "opencv-phase-correlation");
+         addAvailableMatchMethod("Native Affine Auto", "native-affine-ncc");
          addMatchMethod("Phase Correlation", "phase-correlation");
          addMatchMethod("Hybrid Phase/NCC", "hybrid-phase-ncc");
          addMatchMethod("Spatial NCC", "spatial-ncc");
@@ -5442,6 +5484,60 @@ void ossimGui::DataManagerWidget::createFixedOpenCvAutoRegistration()
 #endif
 }
 
+void ossimGui::DataManagerWidget::createFixedNativeAffineAutoRegistration()
+{
+#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+   createDefaultFixedNativeAffineAutoRegistrationItem();
+#else
+   QMessageBox::warning(this,
+                        "Registration",
+                        "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
+ossimGui::DataManagerRegistrationItem*
+ossimGui::DataManagerWidget::createDefaultFixedNativeAffineAutoRegistrationItem()
+{
+#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+   if(!ossim_autoreg::TiePointGeneratorFactory::instance()->
+         create("native-affine-ncc"))
+   {
+      QMessageBox::warning(
+         this,
+         "Registration",
+         "The native affine NCC tie-point generator is not available.");
+      return 0;
+   }
+
+   ossimRefPtr<ossimFixedRegistrationSource> registration =
+      new ossimFixedRegistrationSource();
+   registration->applyAutoRegistrationPreset("fixed:native-affine");
+   ossimRefPtr<ossimObject> obj = registration.get();
+   if(obj.valid())
+   {
+      std::lock_guard<std::mutex> lock(m_activeItemsMutex);
+      ossimRefPtr<DataManager::Node> node =
+         m_dataManager->addSource(obj.get(), false);
+      if(node.valid())
+      {
+         node->setName("Registered: native affine auto");
+         DataManagerRegistrationItem* item =
+            new DataManagerRegistrationItem(node.get());
+         item->setFlags(item->flags()|Qt::ItemIsEditable);
+         item->setToolTip(
+            0,
+            QString("%1\nTie point generators: %2")
+               .arg(registration->autoRegistrationSettingsSummary().c_str())
+               .arg(tiePointGeneratorSummary()));
+         m_registrationSources->addChild(item);
+         m_activeItems.insert(item);
+         return item;
+      }
+   }
+#endif
+   return 0;
+}
+
 void ossimGui::DataManagerWidget::createBundleFloatingRegistration()
 {
 #ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
@@ -5528,6 +5624,18 @@ void ossimGui::DataManagerWidget::createFixedRegistrationFromSelection()
 {
 #ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
    connectAndExecuteSelectedRegistration(createDefaultFixedRegistrationItem());
+#else
+   QMessageBox::warning(this,
+                        "Registration",
+                        "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
+void ossimGui::DataManagerWidget::createFixedNativeAffineAutoRegistrationFromSelection()
+{
+#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+   connectAndExecuteSelectedRegistration(
+      createDefaultFixedNativeAffineAutoRegistrationItem());
 #else
    QMessageBox::warning(this,
                         "Registration",
@@ -6601,12 +6709,15 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
       QAction* fixedAction = registrationMenu->addAction("Fixed");
       QAction* fixedOpenCvAction =
          registrationMenu->addAction("Fixed OpenCV Auto");
+      QAction* fixedNativeAffineAction =
+         registrationMenu->addAction("Fixed Native Affine Auto");
       QAction* bundleFloatingAction =
          registrationMenu->addAction("Bundle/Floating");
 #ifndef OSSIM_REGISTRATION_SOURCE_ENABLED
       setupAction->setEnabled(false);
       fixedAction->setEnabled(false);
       fixedOpenCvAction->setEnabled(false);
+      fixedNativeAffineAction->setEnabled(false);
       bundleFloatingAction->setEnabled(false);
 #endif
       menu->addMenu(registrationMenu);
@@ -6619,6 +6730,10 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
               SIGNAL(triggered(bool)),
               this,
               SLOT(createFixedOpenCvAutoRegistration()));
+      connect(fixedNativeAffineAction,
+              SIGNAL(triggered(bool)),
+              this,
+              SLOT(createFixedNativeAffineAutoRegistration()));
       connect(bundleFloatingAction,
               SIGNAL(triggered(bool)),
               this,
@@ -6749,10 +6864,13 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
         QMenu* registrationMenu = new QMenu("Registration");
         QAction* fixedRegistrationAction =
            registrationMenu->addAction("Default Fixed");
+        QAction* fixedNativeAffineAction =
+           registrationMenu->addAction("Fixed Native Affine Auto");
         QAction* bundleRegistrationAction =
            registrationMenu->addAction("Default Bundle All-Floating");
 #ifndef OSSIM_REGISTRATION_SOURCE_ENABLED
         fixedRegistrationAction->setEnabled(false);
+        fixedNativeAffineAction->setEnabled(false);
         bundleRegistrationAction->setEnabled(false);
 #endif
         menu->addMenu(registrationMenu);
@@ -6760,6 +6878,10 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
                 SIGNAL(triggered(bool)),
                 this,
                 SLOT(createFixedRegistrationFromSelection()));
+        connect(fixedNativeAffineAction,
+                SIGNAL(triggered(bool)),
+                this,
+                SLOT(createFixedNativeAffineAutoRegistrationFromSelection()));
         connect(bundleRegistrationAction,
                 SIGNAL(triggered(bool)),
                 this,
