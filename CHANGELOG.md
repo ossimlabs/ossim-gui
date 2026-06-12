@@ -39,8 +39,14 @@ All notable changes to `ossim-gui` are documented here.
 > the same shared registration options used by CLI/source runs.
 > GeoCell setup can now tune the native-affine NCC score-margin gate too, so
 > GUI runs can use the same ambiguity filter as CLI experiments.
+> GeoCell can now launch the tuned native-affine fixed-auto preset directly
+> from registration menus and selected image chains.
 
 ### Added
+- Add GeoCell `Fixed Native Affine Auto` actions for Registration-folder and
+  selected image-chain context menus, and hydrate native-affine setup defaults
+  from the shared `fixed:native-affine` preset so GUI runs match the
+  CLI/source path (`8eb2fd7`).
 - Add a GeoCell Registration Setup control for the native-affine minimum score
   margin, wiring it into fixed and bundle registration sources plus created
   item tooltips so GUI runs expose the same ambiguity filter as CLI/source
