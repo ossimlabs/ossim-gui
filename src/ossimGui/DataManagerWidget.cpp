@@ -774,6 +774,10 @@ namespace
              << result.tiePoints().size() << "\n";
          out << "result[" << idx << "].message: "
              << result.message() << "\n";
+         out << "result[" << idx << "].execution_path: "
+             << (result.executionPath().empty()
+                    ? std::string("unspecified")
+                    : result.executionPath()) << "\n";
          out << "result[" << idx << "].quality_advisory: "
              << (result.qualityAdvisory().empty()
                     ? std::string("ok")
@@ -2089,6 +2093,26 @@ namespace ossimGui
                      m_resultSummary += ": ";
                      m_resultSummary += results[idx].message().c_str();
                   }
+               }
+               ossimString cleanupInputs;
+               for(idx = 0; idx < results.size(); ++idx)
+               {
+                  if(results[idx].success() &&
+                     results[idx].executionPath().find("cleanup") !=
+                        std::string::npos)
+                  {
+                     if(!cleanupInputs.empty())
+                     {
+                        cleanupInputs += ", ";
+                     }
+                     cleanupInputs +=
+                        ossimString::toString(results[idx].inputIndex());
+                  }
+               }
+               if(!cleanupInputs.empty())
+               {
+                  m_resultSummary += "; native cleanup applied to input(s) ";
+                  m_resultSummary += cleanupInputs;
                }
             }
             if(isCanceled())
@@ -5549,6 +5573,17 @@ void ossimGui::DataManagerWidget::createBundleFloatingRegistration()
 #endif
 }
 
+void ossimGui::DataManagerWidget::createBundleNativeAffineAutoRegistration()
+{
+#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+   createDefaultBundleNativeAffineAutoRegistrationItem();
+#else
+   QMessageBox::information(this,
+                            "Registration",
+                            "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
 ossimGui::DataManagerRegistrationItem*
 ossimGui::DataManagerWidget::createDefaultBundleFloatingRegistrationItem()
 {
@@ -5569,6 +5604,61 @@ ossimGui::DataManagerWidget::createDefaultBundleFloatingRegistrationItem()
          DataManagerRegistrationItem* item =
             new DataManagerRegistrationItem(node.get());
          item->setFlags(item->flags()|Qt::ItemIsEditable);
+         m_registrationSources->addChild(item);
+         m_activeItems.insert(item);
+         return item;
+      }
+   }
+#endif
+   return 0;
+}
+
+ossimGui::DataManagerRegistrationItem*
+ossimGui::DataManagerWidget::createDefaultBundleNativeAffineAutoRegistrationItem()
+{
+#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+   const RegistrationSetupOptions setupOptions =
+      registrationSetupDefaults(REGISTRATION_SETUP_BUNDLE_ALL_FLOATING,
+                                "native-affine-ncc");
+   ossimRefPtr<ossimBundleAdjustmentRegistrationSource> bundle =
+      new ossimBundleAdjustmentRegistrationSource();
+   bundle->setAllInputsFloating(true);
+   applyBundleDefaultsToSource(bundle.get(), false);
+
+   ossim_autoreg::AutoRegistrationOptions registrationOptions =
+      bundle->autoRegistrationOptions();
+   ossim_autoreg::TiePointGenerationOptions tiePointOptions =
+      registrationOptions.generator();
+   applyRegistrationSetupTieOptions(tiePointOptions, setupOptions);
+   registrationOptions.setGenerator(tiePointOptions);
+   registrationOptions.overrides().setAutoDenseGridSeedBudget(true);
+   registrationOptions.setOpencvRansacPrefilter(
+      setupOptions.opencvRansacPrefilter);
+   registrationOptions.setOpencvRansacThresholdPixels(
+      setupOptions.opencvRansacThresholdPixels);
+   bundle->setAutoRegistrationOptions(registrationOptions);
+
+   ossimRefPtr<ossimObject> obj = bundle.get();
+   if(obj.valid())
+   {
+      std::lock_guard<std::mutex> lock(m_activeItemsMutex);
+      ossimRefPtr<DataManager::Node> node =
+         m_dataManager->addSource(obj.get(), false);
+      if(node.valid())
+      {
+         node->setName("Bundle Native Affine Auto Registration");
+         DataManagerRegistrationItem* item =
+            new DataManagerRegistrationItem(node.get());
+         item->setFlags(item->flags()|Qt::ItemIsEditable);
+         item->setToolTip(
+            0,
+            QString("Matcher: %1\nResampler: %2\nView GSD: %3\nMin score margin: %4\nDense seed budget: %5\nAuto dense seed budget: %6")
+               .arg(QString::fromStdString(setupOptions.matchMethod))
+               .arg(QString::fromStdString(setupOptions.resamplerType))
+               .arg(setupOptions.viewGsd)
+               .arg(setupOptions.minScoreMargin)
+               .arg(static_cast<int>(setupOptions.denseGridSeedBudget))
+               .arg(setupOptions.autoDenseGridSeedBudget ? "true" : "false"));
          m_registrationSources->addChild(item);
          m_activeItems.insert(item);
          return item;
@@ -5648,6 +5738,18 @@ void ossimGui::DataManagerWidget::createBundleFloatingRegistrationFromSelection(
 #ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
    connectAndExecuteSelectedRegistration(
       createDefaultBundleFloatingRegistrationItem());
+#else
+   QMessageBox::information(this,
+                            "Registration",
+                            "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
+void ossimGui::DataManagerWidget::createBundleNativeAffineAutoRegistrationFromSelection()
+{
+#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+   connectAndExecuteSelectedRegistration(
+      createDefaultBundleNativeAffineAutoRegistrationItem());
 #else
    QMessageBox::information(this,
                             "Registration",
@@ -6713,12 +6815,15 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
          registrationMenu->addAction("Fixed Native Affine Auto");
       QAction* bundleFloatingAction =
          registrationMenu->addAction("Bundle/Floating");
+      QAction* bundleNativeAffineAction =
+         registrationMenu->addAction("Bundle Native Affine Auto");
 #ifndef OSSIM_REGISTRATION_SOURCE_ENABLED
       setupAction->setEnabled(false);
       fixedAction->setEnabled(false);
       fixedOpenCvAction->setEnabled(false);
       fixedNativeAffineAction->setEnabled(false);
       bundleFloatingAction->setEnabled(false);
+      bundleNativeAffineAction->setEnabled(false);
 #endif
       menu->addMenu(registrationMenu);
       connect(setupAction,
@@ -6738,6 +6843,10 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
               SIGNAL(triggered(bool)),
               this,
               SLOT(createBundleFloatingRegistration()));
+      connect(bundleNativeAffineAction,
+              SIGNAL(triggered(bool)),
+              this,
+              SLOT(createBundleNativeAffineAutoRegistration()));
    }
    else if(dynamic_cast<DataManagerRegistrationItem*> (activeItem))
    {
@@ -6868,10 +6977,13 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
            registrationMenu->addAction("Fixed Native Affine Auto");
         QAction* bundleRegistrationAction =
            registrationMenu->addAction("Default Bundle All-Floating");
+        QAction* bundleNativeAffineAction =
+           registrationMenu->addAction("Bundle Native Affine Auto");
 #ifndef OSSIM_REGISTRATION_SOURCE_ENABLED
         fixedRegistrationAction->setEnabled(false);
         fixedNativeAffineAction->setEnabled(false);
         bundleRegistrationAction->setEnabled(false);
+        bundleNativeAffineAction->setEnabled(false);
 #endif
         menu->addMenu(registrationMenu);
         connect(fixedRegistrationAction,
@@ -6886,6 +6998,10 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
                 SIGNAL(triggered(bool)),
                 this,
                 SLOT(createBundleFloatingRegistrationFromSelection()));
+        connect(bundleNativeAffineAction,
+                SIGNAL(triggered(bool)),
+                this,
+                SLOT(createBundleNativeAffineAutoRegistrationFromSelection()));
 
         if(nRawSourceSelections>0)
         {

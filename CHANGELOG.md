@@ -41,8 +41,18 @@ All notable changes to `ossim-gui` are documented here.
 > GUI runs can use the same ambiguity filter as CLI experiments.
 > GeoCell can now launch the tuned native-affine fixed-auto preset directly
 > from registration menus and selected image chains.
+> Fixed registration reports now say when native affine accepted adaptive
+> cleanup, saving one little expedition into the detail log.
+> GeoCell also has a one-click native-affine bundle path now, so fixed and
+> bundle experiments can be compared without hand-tuning the setup dialog.
 
 ### Added
+- Add `Bundle Native Affine Auto` actions for Registration-folder and selected
+  image-chain context menus, creating an all-floating bundle source with the
+  shared native-affine setup defaults.
+- Include fixed-auto execution paths in GeoCell fixed-registration quality
+  reports, and mention native cleanup in the completion summary only for
+  inputs where cleanup replaced the direct native-affine result.
 - Add GeoCell `Fixed Native Affine Auto` actions for Registration-folder and
   selected image-chain context menus, and hydrate native-affine setup defaults
   from the shared `fixed:native-affine` preset so GUI runs match the

@@ -652,9 +652,11 @@ namespace ossimGui{
       virtual void createFixedOpenCvAutoRegistration();
       virtual void createFixedNativeAffineAutoRegistration();
       virtual void createBundleFloatingRegistration();
+      virtual void createBundleNativeAffineAutoRegistration();
       virtual void createFixedRegistrationFromSelection();
       virtual void createFixedNativeAffineAutoRegistrationFromSelection();
       virtual void createBundleFloatingRegistrationFromSelection();
+      virtual void createBundleNativeAffineAutoRegistrationFromSelection();
       virtual void createRegistrationFromDialog();
       virtual void setSelectedBundleAllFloating(bool enabled);
       virtual void registerSelected();
@@ -753,6 +755,8 @@ namespace ossimGui{
          createDefaultFixedNativeAffineAutoRegistrationItem();
       DataManagerRegistrationItem*
          createDefaultBundleFloatingRegistrationItem();
+      DataManagerRegistrationItem*
+         createDefaultBundleNativeAffineAutoRegistrationItem();
       QList<DataManagerItem*> selectedRegistrationInputItems() const;
       void connectAndExecuteSelectedRegistration(
          DataManagerRegistrationItem* item);
