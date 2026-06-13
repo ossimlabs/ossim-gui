@@ -47,8 +47,12 @@ All notable changes to `ossim-gui` are documented here.
 > bundle experiments can be compared without hand-tuning the setup dialog.
 > Bundle quality reports now show per-pair execution paths too, which makes
 > native bundle fallback behavior visible without guessing.
+> Sparse bundle-edge support now appears in GeoCell advisories and reports,
+> so a connected bundle graph cannot hide behind a tiny RMSE alone.
 
 ### Added
+- Surface sparse bundle-edge support issues in GeoCell bundle advisories and
+  quality reports.
 - Include bundle pair execution paths in GeoCell bundle-registration quality
   reports so native-affine edges and accepted matcher fallbacks are visible.
 - Add `Bundle Native Affine Auto` actions for Registration-folder and selected

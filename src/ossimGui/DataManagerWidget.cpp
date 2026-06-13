@@ -404,6 +404,15 @@ namespace
          summary += "Model freedom: ";
          summary += result.modelFreedomAdvisory().c_str();
       }
+      if(result.edgeQualityIssue().hasIssue())
+      {
+         if(!summary.empty())
+         {
+            summary += "\n";
+         }
+         summary += "Edge support: ";
+         summary += result.edgeQualityIssue().reason().c_str();
+      }
 
       const std::string matcherAlternateSummary =
          bundleRegistrationMatcherAlternateSummary(result);
@@ -891,6 +900,10 @@ namespace
           << (result.edgePrunePolicyMessage().empty()
                  ? std::string("not_attempted")
                  : result.edgePrunePolicyMessage()) << "\n";
+      out << "edge_quality: "
+          << (result.edgeQualityIssue().hasIssue()
+                 ? result.edgeQualityIssue().reason()
+                 : std::string("ok")) << "\n";
       out << "pair_count: " << result.pairResults().size() << "\n";
       out << "bundle_edge_min_tie_points: "
           << bundleRegistrationMinimumEdgeTiePointCount(result) << "\n";
