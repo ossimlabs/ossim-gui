@@ -376,6 +376,52 @@ namespace
       return out.str();
    }
 
+   std::string bundleRegistrationAcceptanceTier(
+      const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
+         result,
+      const ossimBundleAdjustmentRegistrationSource* source)
+   {
+      const bool hasEdgeIssue = result.edgeQualityIssue().hasIssue();
+      const bool hasModelFreedomIssue =
+         !result.modelFreedomAdvisory().empty();
+      const bool hasBoundPressure =
+         !result.boundPressureAdvisory().empty();
+
+      if(!result.success())
+      {
+         if(hasEdgeIssue)
+         {
+            return "rejected_sparse";
+         }
+         if(hasModelFreedomIssue)
+         {
+            return "rejected_model_limited";
+         }
+         return "rejected";
+      }
+
+      const ossim_autoreg::BundleAdjustmentResult& optimization =
+         result.optimization();
+      const double targetRmse =
+         source ? source->autoRegistrationOptions().targetRmsePixels()
+                : std::numeric_limits<double>::quiet_NaN();
+      const bool targetReached =
+         !optimization.ran() ||
+         (std::isfinite(optimization.finalRmsPixels()) &&
+          (!std::isfinite(targetRmse) ||
+           optimization.finalRmsPixels() <= targetRmse));
+
+      if(hasEdgeIssue || hasModelFreedomIssue || hasBoundPressure ||
+         !targetReached)
+      {
+         return "accepted_advisory";
+      }
+
+      return result.searchSpanRecoveryMessage().empty()
+                ? std::string("accepted_precise")
+                : std::string("accepted_recovered");
+   }
+
    ossimString bundleRegistrationAdvisorySummary(
       const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
          result)
@@ -425,6 +471,16 @@ namespace
          summary += "Matcher recovery: ";
          summary += matcherAlternateSummary.c_str();
       }
+      const std::string tier = bundleRegistrationAcceptanceTier(result, 0);
+      if(!tier.empty() && tier != "accepted_precise")
+      {
+         if(!summary.empty())
+         {
+            summary += "\n";
+         }
+         summary += "Acceptance: ";
+         summary += tier.c_str();
+      }
       return summary;
    }
 
@@ -461,6 +517,61 @@ namespace
          }
       }
       return count;
+   }
+
+   std::string bundleRegistrationPairRoute(
+      const ossimBundleAdjustmentRegistrationSource::PairResult& pair)
+   {
+      const std::string& path = pair.executionPath();
+      if(path.find("mixed-phase-orb-post-filter") != std::string::npos)
+      {
+         return "native_sparse_recovery";
+      }
+      if(pair.matcherAlternateUsed() && !pair.matcherAlternateMethod().empty())
+      {
+         return std::string("matcher_fallback:") +
+                pair.matcherAlternateMethod();
+      }
+      if(path.find("mixed-phase-orb") != std::string::npos)
+      {
+         return "mixed_phase_orb";
+      }
+      if(path.find("native-affine-ncc") != std::string::npos)
+      {
+         return "native_affine";
+      }
+      return path.empty() ? std::string("unspecified") : path;
+   }
+
+   std::string bundleRegistrationPairSummary(
+      const ossimBundleAdjustmentRegistrationSource::PairResult& pair,
+      std::size_t minimumTiePointCount)
+   {
+      std::ostringstream out;
+      out << pair.firstInputIndex() << "->" << pair.secondInputIndex()
+          << " route=" << bundleRegistrationPairRoute(pair)
+          << " ties=" << pair.tiePoints().size();
+      if(pair.addedTiePointCount() != pair.tiePoints().size())
+      {
+         out << " added=" << pair.addedTiePointCount();
+      }
+      if(!pair.executionPath().empty())
+      {
+         out << " path=" << pair.executionPath();
+      }
+      if(pair.tiePoints().empty())
+      {
+         out << " support=empty";
+      }
+      else if(pair.tiePoints().size() < minimumTiePointCount)
+      {
+         out << " support=sparse";
+      }
+      else
+      {
+         out << " support=ok";
+      }
+      return out.str();
    }
 
    ossimString bundleRegistrationDiagnosticsSummary(
@@ -896,6 +1007,8 @@ namespace
           << (result.boundPressureAdvisory().empty()
                  ? std::string("ok")
                  : result.boundPressureAdvisory()) << "\n";
+      out << "acceptance_tier: "
+          << bundleRegistrationAcceptanceTier(result, source) << "\n";
       out << "edge_prune_policy: "
           << (result.edgePrunePolicyMessage().empty()
                  ? std::string("not_attempted")
@@ -922,6 +1035,14 @@ namespace
              << pair.tiePoints().size() << "\n";
          out << "pair[" << idx << "].added_tie_points: "
              << pair.addedTiePointCount() << "\n";
+         out << "pair[" << idx << "].route: "
+             << bundleRegistrationPairRoute(pair) << "\n";
+         out << "pair[" << idx << "].summary: "
+             << bundleRegistrationPairSummary(
+                   pair,
+                   source ? source->autoRegistrationOptions().minInliers()
+                          : 6)
+             << "\n";
          out << "pair[" << idx << "].execution_path: "
              << (pair.executionPath().empty()
                     ? std::string("unspecified")

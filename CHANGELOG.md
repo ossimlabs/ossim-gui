@@ -49,8 +49,12 @@ All notable changes to `ossim-gui` are documented here.
 > native bundle fallback behavior visible without guessing.
 > Sparse bundle-edge support now appears in GeoCell advisories and reports,
 > so a connected bundle graph cannot hide behind a tiny RMSE alone.
+> Bundle quality reports now include acceptance tiers and compact per-pair
+> route summaries for faster visual swipe triage.
 
 ### Added
+- Add bundle acceptance tiers and compact per-pair route summaries to GeoCell
+  bundle registration quality reports.
 - Surface sparse bundle-edge support issues in GeoCell bundle advisories and
   quality reports.
 - Include bundle pair execution paths in GeoCell bundle-registration quality
