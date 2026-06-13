@@ -909,6 +909,10 @@ namespace
              << pair.tiePoints().size() << "\n";
          out << "pair[" << idx << "].added_tie_points: "
              << pair.addedTiePointCount() << "\n";
+         out << "pair[" << idx << "].execution_path: "
+             << (pair.executionPath().empty()
+                    ? std::string("unspecified")
+                    : pair.executionPath()) << "\n";
          appendDenseAlternateReport(
             out,
             std::string("pair[") +

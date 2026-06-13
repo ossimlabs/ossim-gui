@@ -45,8 +45,12 @@ All notable changes to `ossim-gui` are documented here.
 > cleanup, saving one little expedition into the detail log.
 > GeoCell also has a one-click native-affine bundle path now, so fixed and
 > bundle experiments can be compared without hand-tuning the setup dialog.
+> Bundle quality reports now show per-pair execution paths too, which makes
+> native bundle fallback behavior visible without guessing.
 
 ### Added
+- Include bundle pair execution paths in GeoCell bundle-registration quality
+  reports so native-affine edges and accepted matcher fallbacks are visible.
 - Add `Bundle Native Affine Auto` actions for Registration-folder and selected
   image-chain context menus, creating an all-floating bundle source with the
   shared native-affine setup defaults.
