@@ -51,8 +51,14 @@ All notable changes to `ossim-gui` are documented here.
 > so a connected bundle graph cannot hide behind a tiny RMSE alone.
 > Bundle quality reports now include acceptance tiers and compact per-pair
 > route summaries for faster visual swipe triage.
+> GeoCell bundle setup now exposes the shared native bundle neighbor-span
+> policy, and bundle quality reports record whether a run used all pairs or a
+> bounded neighbor graph.
 
 ### Added
+- Add a GeoCell Registration Setup control for `Bundle neighbor span`, wiring
+  it into bundle registration sources, created-item tooltips, and generated
+  bundle quality reports as `bundle_pair_policy`.
 - Add bundle acceptance tiers and compact per-pair route summaries to GeoCell
   bundle registration quality reports.
 - Surface sparse bundle-edge support issues in GeoCell bundle advisories and

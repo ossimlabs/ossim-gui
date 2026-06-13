@@ -376,6 +376,23 @@ namespace
       return out.str();
    }
 
+   std::string bundleRegistrationPairPolicy(
+      const ossimBundleAdjustmentRegistrationSource* source)
+   {
+      if(!source)
+      {
+         return "unknown";
+      }
+      const std::size_t span = source->bundleNeighborSpan();
+      if(span)
+      {
+         std::ostringstream out;
+         out << "neighbor_span_" << span;
+         return out.str();
+      }
+      return "all_pairs";
+   }
+
    std::string bundleRegistrationAcceptanceTier(
       const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
          result,
@@ -972,6 +989,8 @@ namespace
       out << "bundle_mode: " << bundleRegistrationModeName(source) << "\n";
       out << "bundle_motion_policy: "
           << bundleRegistrationMotionPolicy(source) << "\n";
+      out << "bundle_pair_policy: "
+          << bundleRegistrationPairPolicy(source) << "\n";
       if(source)
       {
          const ossim_autoreg::AutoRegistrationOptions options =
@@ -1141,6 +1160,7 @@ namespace
       std::size_t denseGridSeedBudget;
       bool autoDenseGridSeedBudget;
       bool tiePointTimingDiagnostics;
+      std::size_t bundleNeighborSpan;
       std::size_t maxConcurrentRegistrations;
       std::size_t adaptiveBankThreadCount;
       bool adaptiveFullPostBankRefinement;
@@ -1163,6 +1183,7 @@ namespace
         denseGridSeedBudget(0),
         autoDenseGridSeedBudget(false),
         tiePointTimingDiagnostics(false),
+        bundleNeighborSpan(0),
         maxConcurrentRegistrations(1),
         adaptiveBankThreadCount(4),
         adaptiveFullPostBankRefinement(true),
@@ -1399,6 +1420,8 @@ namespace
         m_maxTiePoints(0),
         m_denseGridSeedBudget(0),
         m_autoDenseGridSeedBudget(0),
+        m_tiePointTimingDiagnostics(0),
+        m_bundleNeighborSpan(0),
         m_maxConcurrentRegistrations(0),
         m_adaptiveBankThreadCount(0),
         m_adaptiveFullPostBankRefinement(0),
@@ -1519,6 +1542,13 @@ namespace
             "Collect renderer/tile timing counters for profiling. "
             "Leave off for faster normal registration.");
 
+         m_bundleNeighborSpan = new QSpinBox(this);
+         m_bundleNeighborSpan->setRange(0, 100000);
+         m_bundleNeighborSpan->setValue(0);
+         m_bundleNeighborSpan->setToolTip(
+            "Bundle only: 0 tests all image pairs. 1 tests adjacent "
+            "image-index pairs for strip-style datasets.");
+
          m_maxConcurrentRegistrations = new QSpinBox(this);
          m_maxConcurrentRegistrations->setRange(1, 64);
          m_maxConcurrentRegistrations->setValue(1);
@@ -1577,6 +1607,8 @@ namespace
                       m_autoDenseGridSeedBudget);
          form->addRow("Tie timing diagnostics",
                       m_tiePointTimingDiagnostics);
+         form->addRow("Bundle neighbor span",
+                      m_bundleNeighborSpan);
          form->addRow("Parallel floating inputs",
                       m_maxConcurrentRegistrations);
          form->addRow("Adaptive bank threads",
@@ -1640,6 +1672,8 @@ namespace
             m_autoDenseGridSeedBudget->isChecked();
          result.tiePointTimingDiagnostics =
             m_tiePointTimingDiagnostics->isChecked();
+         result.bundleNeighborSpan =
+            static_cast<std::size_t>(m_bundleNeighborSpan->value());
          result.maxConcurrentRegistrations =
             static_cast<std::size_t>(
                m_maxConcurrentRegistrations->value());
@@ -1695,6 +1729,8 @@ namespace
             defaults.autoDenseGridSeedBudget);
          m_tiePointTimingDiagnostics->setChecked(
             defaults.tiePointTimingDiagnostics);
+         m_bundleNeighborSpan->setValue(
+            static_cast<int>(defaults.bundleNeighborSpan));
          m_maxConcurrentRegistrations->setValue(
             static_cast<int>(defaults.maxConcurrentRegistrations));
          m_adaptiveBankThreadCount->setValue(
@@ -1739,6 +1775,7 @@ namespace
       QSpinBox* m_denseGridSeedBudget;
       QCheckBox* m_autoDenseGridSeedBudget;
       QCheckBox* m_tiePointTimingDiagnostics;
+      QSpinBox* m_bundleNeighborSpan;
       QSpinBox* m_maxConcurrentRegistrations;
       QSpinBox* m_adaptiveBankThreadCount;
       QCheckBox* m_adaptiveFullPostBankRefinement;
@@ -5769,6 +5806,8 @@ ossimGui::DataManagerWidget::createDefaultBundleNativeAffineAutoRegistrationItem
       registrationOptions.generator();
    applyRegistrationSetupTieOptions(tiePointOptions, setupOptions);
    registrationOptions.setGenerator(tiePointOptions);
+   registrationOptions.setBundleNeighborSpan(
+      setupOptions.bundleNeighborSpan);
    registrationOptions.overrides().setAutoDenseGridSeedBudget(true);
    registrationOptions.setOpencvRansacPrefilter(
       setupOptions.opencvRansacPrefilter);
@@ -5790,13 +5829,14 @@ ossimGui::DataManagerWidget::createDefaultBundleNativeAffineAutoRegistrationItem
          item->setFlags(item->flags()|Qt::ItemIsEditable);
          item->setToolTip(
             0,
-            QString("Matcher: %1\nResampler: %2\nView GSD: %3\nMin score margin: %4\nDense seed budget: %5\nAuto dense seed budget: %6")
+            QString("Matcher: %1\nResampler: %2\nView GSD: %3\nMin score margin: %4\nDense seed budget: %5\nAuto dense seed budget: %6\nBundle neighbor span: %7")
                .arg(QString::fromStdString(setupOptions.matchMethod))
                .arg(QString::fromStdString(setupOptions.resamplerType))
                .arg(setupOptions.viewGsd)
                .arg(setupOptions.minScoreMargin)
                .arg(static_cast<int>(setupOptions.denseGridSeedBudget))
-               .arg(setupOptions.autoDenseGridSeedBudget ? "true" : "false"));
+               .arg(setupOptions.autoDenseGridSeedBudget ? "true" : "false")
+               .arg(static_cast<int>(setupOptions.bundleNeighborSpan)));
          m_registrationSources->addChild(item);
          m_activeItems.insert(item);
          return item;
@@ -5937,6 +5977,8 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
          registrationOptions.generator();
       applyRegistrationSetupTieOptions(tiePointOptions, setupOptions);
       registrationOptions.setGenerator(tiePointOptions);
+      registrationOptions.setBundleNeighborSpan(
+         setupOptions.bundleNeighborSpan);
       registrationOptions.overrides().setAutoDenseGridSeedBudget(true);
       registrationOptions.setOpencvRansacPrefilter(
          setupOptions.opencvRansacPrefilter);
@@ -5948,7 +5990,7 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
          "Bundle All-Floating Registration" :
          "Bundle Anchored Registration";
       toolTip =
-         QString("Matcher: %1\nResampler: %2\nView GSD: %3\nMin score margin: %4\nDense seed budget: %5\nAuto dense seed budget: %6\nTie timing diagnostics: %7\nOpenCV RANSAC prefilter: %8\nOpenCV RANSAC threshold: %9")
+         QString("Matcher: %1\nResampler: %2\nView GSD: %3\nMin score margin: %4\nDense seed budget: %5\nAuto dense seed budget: %6\nTie timing diagnostics: %7\nBundle neighbor span: %8\nOpenCV RANSAC prefilter: %9\nOpenCV RANSAC threshold: %10")
             .arg(QString::fromStdString(setupOptions.matchMethod))
             .arg(QString::fromStdString(setupOptions.resamplerType))
             .arg(setupOptions.viewGsd)
@@ -5956,6 +5998,7 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
             .arg(static_cast<int>(setupOptions.denseGridSeedBudget))
             .arg(setupOptions.autoDenseGridSeedBudget ? "true" : "false")
             .arg(setupOptions.tiePointTimingDiagnostics ? "true" : "false")
+            .arg(static_cast<int>(setupOptions.bundleNeighborSpan))
             .arg(setupOptions.opencvRansacPrefilter ? "true" : "false")
             .arg(setupOptions.opencvRansacThresholdPixels);
    }
