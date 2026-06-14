@@ -393,6 +393,17 @@ namespace
       return "all_pairs";
    }
 
+   std::string bundlePairPolicyDescription(std::size_t span)
+   {
+      if(span)
+      {
+         std::ostringstream out;
+         out << "neighbor_span_" << span;
+         return out.str();
+      }
+      return "all_pairs";
+   }
+
    std::string bundleRegistrationAcceptanceTier(
       const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
          result,
@@ -1144,6 +1155,12 @@ namespace
       REGISTRATION_SETUP_BUNDLE_ANCHORED = 3
    };
 
+   enum BundlePairPolicy
+   {
+      BUNDLE_PAIR_POLICY_ALL_PAIRS = 0,
+      BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN = 1
+   };
+
    struct RegistrationSetupOptions
    {
       RegistrationSetupApproach approach;
@@ -1160,6 +1177,7 @@ namespace
       std::size_t denseGridSeedBudget;
       bool autoDenseGridSeedBudget;
       bool tiePointTimingDiagnostics;
+      BundlePairPolicy bundlePairPolicy;
       std::size_t bundleNeighborSpan;
       std::size_t maxConcurrentRegistrations;
       std::size_t adaptiveBankThreadCount;
@@ -1183,6 +1201,7 @@ namespace
         denseGridSeedBudget(0),
         autoDenseGridSeedBudget(false),
         tiePointTimingDiagnostics(false),
+        bundlePairPolicy(BUNDLE_PAIR_POLICY_ALL_PAIRS),
         bundleNeighborSpan(0),
         maxConcurrentRegistrations(1),
         adaptiveBankThreadCount(4),
@@ -1421,6 +1440,7 @@ namespace
         m_denseGridSeedBudget(0),
         m_autoDenseGridSeedBudget(0),
         m_tiePointTimingDiagnostics(0),
+        m_bundlePairPolicy(0),
         m_bundleNeighborSpan(0),
         m_maxConcurrentRegistrations(0),
         m_adaptiveBankThreadCount(0),
@@ -1542,12 +1562,21 @@ namespace
             "Collect renderer/tile timing counters for profiling. "
             "Leave off for faster normal registration.");
 
+         m_bundlePairPolicy = new QComboBox(this);
+         m_bundlePairPolicy->addItem("All pairs",
+                                     BUNDLE_PAIR_POLICY_ALL_PAIRS);
+         m_bundlePairPolicy->addItem("Neighbor span",
+                                     BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN);
+         m_bundlePairPolicy->setToolTip(
+            "Bundle only: choose whether to test every image pair or only "
+            "nearby image-index neighbors.");
+
          m_bundleNeighborSpan = new QSpinBox(this);
-         m_bundleNeighborSpan->setRange(0, 100000);
-         m_bundleNeighborSpan->setValue(0);
+         m_bundleNeighborSpan->setRange(1, 100000);
+         m_bundleNeighborSpan->setValue(1);
          m_bundleNeighborSpan->setToolTip(
-            "Bundle only: 0 tests all image pairs. 1 tests adjacent "
-            "image-index pairs for strip-style datasets.");
+            "Bundle only: neighbor image-index distance. 1 tests adjacent "
+            "pairs for strip-style datasets.");
 
          m_maxConcurrentRegistrations = new QSpinBox(this);
          m_maxConcurrentRegistrations->setRange(1, 64);
@@ -1589,6 +1618,10 @@ namespace
                  static_cast<void (QComboBox::*)(int)>(
                     &QComboBox::currentIndexChanged),
                  [this](int) { applySelectedDefaults(); });
+         connect(m_bundlePairPolicy,
+                 static_cast<void (QComboBox::*)(int)>(
+                    &QComboBox::currentIndexChanged),
+                 [this](int) { updateBundlePairPolicyControls(); });
 
          QFormLayout* form = new QFormLayout();
          form->addRow("Approach", m_approach);
@@ -1607,6 +1640,8 @@ namespace
                       m_autoDenseGridSeedBudget);
          form->addRow("Tie timing diagnostics",
                       m_tiePointTimingDiagnostics);
+         form->addRow("Bundle pair policy",
+                      m_bundlePairPolicy);
          form->addRow("Bundle neighbor span",
                       m_bundleNeighborSpan);
          form->addRow("Parallel floating inputs",
@@ -1672,8 +1707,14 @@ namespace
             m_autoDenseGridSeedBudget->isChecked();
          result.tiePointTimingDiagnostics =
             m_tiePointTimingDiagnostics->isChecked();
+         result.bundlePairPolicy =
+            static_cast<BundlePairPolicy>(
+               m_bundlePairPolicy->itemData(
+                  m_bundlePairPolicy->currentIndex()).toInt());
          result.bundleNeighborSpan =
-            static_cast<std::size_t>(m_bundleNeighborSpan->value());
+            result.bundlePairPolicy == BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN ?
+               static_cast<std::size_t>(m_bundleNeighborSpan->value()) :
+               0;
          result.maxConcurrentRegistrations =
             static_cast<std::size_t>(
                m_maxConcurrentRegistrations->value());
@@ -1729,8 +1770,21 @@ namespace
             defaults.autoDenseGridSeedBudget);
          m_tiePointTimingDiagnostics->setChecked(
             defaults.tiePointTimingDiagnostics);
+         {
+            const int pairPolicyIndex =
+               m_bundlePairPolicy->findData(
+                  defaults.bundleNeighborSpan ?
+                     BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN :
+                     BUNDLE_PAIR_POLICY_ALL_PAIRS);
+            if(pairPolicyIndex >= 0)
+               m_bundlePairPolicy->setCurrentIndex(pairPolicyIndex);
+         }
          m_bundleNeighborSpan->setValue(
-            static_cast<int>(defaults.bundleNeighborSpan));
+            static_cast<int>(
+               defaults.bundleNeighborSpan ?
+                  defaults.bundleNeighborSpan :
+                  1));
+         updateBundlePairPolicyControls();
          m_maxConcurrentRegistrations->setValue(
             static_cast<int>(defaults.maxConcurrentRegistrations));
          m_adaptiveBankThreadCount->setValue(
@@ -1761,6 +1815,15 @@ namespace
             addMatchMethod(label, method);
       }
 
+      void updateBundlePairPolicyControls()
+      {
+         const bool neighborSpan =
+            m_bundlePairPolicy->itemData(
+               m_bundlePairPolicy->currentIndex()).toInt() ==
+            BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN;
+         m_bundleNeighborSpan->setEnabled(neighborSpan);
+      }
+
       QComboBox* m_approach;
       QComboBox* m_matchMethod;
       QComboBox* m_resampler;
@@ -1775,6 +1838,7 @@ namespace
       QSpinBox* m_denseGridSeedBudget;
       QCheckBox* m_autoDenseGridSeedBudget;
       QCheckBox* m_tiePointTimingDiagnostics;
+      QComboBox* m_bundlePairPolicy;
       QSpinBox* m_bundleNeighborSpan;
       QSpinBox* m_maxConcurrentRegistrations;
       QSpinBox* m_adaptiveBankThreadCount;
@@ -5759,6 +5823,19 @@ void ossimGui::DataManagerWidget::createBundleNativeAffineAutoRegistration()
 #endif
 }
 
+void ossimGui::DataManagerWidget::createBundleNativeAffineStripAutoRegistration()
+{
+#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+   createDefaultBundleNativeAffineAutoRegistrationItem(
+      1,
+      "Bundle Native Affine Strip Auto Registration");
+#else
+   QMessageBox::information(this,
+                            "Registration",
+                            "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
 ossimGui::DataManagerRegistrationItem*
 ossimGui::DataManagerWidget::createDefaultBundleFloatingRegistrationItem()
 {
@@ -5789,12 +5866,19 @@ ossimGui::DataManagerWidget::createDefaultBundleFloatingRegistrationItem()
 }
 
 ossimGui::DataManagerRegistrationItem*
-ossimGui::DataManagerWidget::createDefaultBundleNativeAffineAutoRegistrationItem()
+ossimGui::DataManagerWidget::createDefaultBundleNativeAffineAutoRegistrationItem(
+   std::size_t bundleNeighborSpan,
+   const QString& nodeName)
 {
 #ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
-   const RegistrationSetupOptions setupOptions =
+   RegistrationSetupOptions setupOptions =
       registrationSetupDefaults(REGISTRATION_SETUP_BUNDLE_ALL_FLOATING,
                                 "native-affine-ncc");
+   setupOptions.bundleNeighborSpan = bundleNeighborSpan;
+   setupOptions.bundlePairPolicy =
+      bundleNeighborSpan ?
+         BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN :
+         BUNDLE_PAIR_POLICY_ALL_PAIRS;
    ossimRefPtr<ossimBundleAdjustmentRegistrationSource> bundle =
       new ossimBundleAdjustmentRegistrationSource();
    bundle->setAllInputsFloating(true);
@@ -5823,20 +5907,22 @@ ossimGui::DataManagerWidget::createDefaultBundleNativeAffineAutoRegistrationItem
          m_dataManager->addSource(obj.get(), false);
       if(node.valid())
       {
-         node->setName("Bundle Native Affine Auto Registration");
+         node->setName(nodeName.toStdString().c_str());
          DataManagerRegistrationItem* item =
             new DataManagerRegistrationItem(node.get());
          item->setFlags(item->flags()|Qt::ItemIsEditable);
          item->setToolTip(
             0,
-            QString("Matcher: %1\nResampler: %2\nView GSD: %3\nMin score margin: %4\nDense seed budget: %5\nAuto dense seed budget: %6\nBundle neighbor span: %7")
+            QString("Matcher: %1\nResampler: %2\nView GSD: %3\nMin score margin: %4\nDense seed budget: %5\nAuto dense seed budget: %6\nBundle pair policy: %7")
                .arg(QString::fromStdString(setupOptions.matchMethod))
                .arg(QString::fromStdString(setupOptions.resamplerType))
                .arg(setupOptions.viewGsd)
                .arg(setupOptions.minScoreMargin)
                .arg(static_cast<int>(setupOptions.denseGridSeedBudget))
                .arg(setupOptions.autoDenseGridSeedBudget ? "true" : "false")
-               .arg(static_cast<int>(setupOptions.bundleNeighborSpan)));
+               .arg(QString::fromStdString(
+                  bundlePairPolicyDescription(
+                     setupOptions.bundleNeighborSpan))));
          m_registrationSources->addChild(item);
          m_activeItems.insert(item);
          return item;
@@ -5935,6 +6021,20 @@ void ossimGui::DataManagerWidget::createBundleNativeAffineAutoRegistrationFromSe
 #endif
 }
 
+void ossimGui::DataManagerWidget::createBundleNativeAffineStripAutoRegistrationFromSelection()
+{
+#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+   connectAndExecuteSelectedRegistration(
+      createDefaultBundleNativeAffineAutoRegistrationItem(
+         1,
+         "Bundle Native Affine Strip Auto Registration"));
+#else
+   QMessageBox::information(this,
+                            "Registration",
+                            "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
 void ossimGui::DataManagerWidget::createRegistrationFromDialog()
 {
 #ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
@@ -5990,7 +6090,7 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
          "Bundle All-Floating Registration" :
          "Bundle Anchored Registration";
       toolTip =
-         QString("Matcher: %1\nResampler: %2\nView GSD: %3\nMin score margin: %4\nDense seed budget: %5\nAuto dense seed budget: %6\nTie timing diagnostics: %7\nBundle neighbor span: %8\nOpenCV RANSAC prefilter: %9\nOpenCV RANSAC threshold: %10")
+         QString("Matcher: %1\nResampler: %2\nView GSD: %3\nMin score margin: %4\nDense seed budget: %5\nAuto dense seed budget: %6\nTie timing diagnostics: %7\nBundle pair policy: %8\nOpenCV RANSAC prefilter: %9\nOpenCV RANSAC threshold: %10")
             .arg(QString::fromStdString(setupOptions.matchMethod))
             .arg(QString::fromStdString(setupOptions.resamplerType))
             .arg(setupOptions.viewGsd)
@@ -5998,7 +6098,9 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
             .arg(static_cast<int>(setupOptions.denseGridSeedBudget))
             .arg(setupOptions.autoDenseGridSeedBudget ? "true" : "false")
             .arg(setupOptions.tiePointTimingDiagnostics ? "true" : "false")
-            .arg(static_cast<int>(setupOptions.bundleNeighborSpan))
+            .arg(QString::fromStdString(
+               bundlePairPolicyDescription(
+                  setupOptions.bundleNeighborSpan)))
             .arg(setupOptions.opencvRansacPrefilter ? "true" : "false")
             .arg(setupOptions.opencvRansacThresholdPixels);
    }
@@ -6998,6 +7100,8 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
          registrationMenu->addAction("Bundle/Floating");
       QAction* bundleNativeAffineAction =
          registrationMenu->addAction("Bundle Native Affine Auto");
+      QAction* bundleNativeAffineStripAction =
+         registrationMenu->addAction("Bundle Native Affine Strip Auto");
 #ifndef OSSIM_REGISTRATION_SOURCE_ENABLED
       setupAction->setEnabled(false);
       fixedAction->setEnabled(false);
@@ -7005,6 +7109,7 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
       fixedNativeAffineAction->setEnabled(false);
       bundleFloatingAction->setEnabled(false);
       bundleNativeAffineAction->setEnabled(false);
+      bundleNativeAffineStripAction->setEnabled(false);
 #endif
       menu->addMenu(registrationMenu);
       connect(setupAction,
@@ -7028,6 +7133,10 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
               SIGNAL(triggered(bool)),
               this,
               SLOT(createBundleNativeAffineAutoRegistration()));
+      connect(bundleNativeAffineStripAction,
+              SIGNAL(triggered(bool)),
+              this,
+              SLOT(createBundleNativeAffineStripAutoRegistration()));
    }
    else if(dynamic_cast<DataManagerRegistrationItem*> (activeItem))
    {
@@ -7160,11 +7269,14 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
            registrationMenu->addAction("Default Bundle All-Floating");
         QAction* bundleNativeAffineAction =
            registrationMenu->addAction("Bundle Native Affine Auto");
+        QAction* bundleNativeAffineStripAction =
+           registrationMenu->addAction("Bundle Native Affine Strip Auto");
 #ifndef OSSIM_REGISTRATION_SOURCE_ENABLED
         fixedRegistrationAction->setEnabled(false);
         fixedNativeAffineAction->setEnabled(false);
         bundleRegistrationAction->setEnabled(false);
         bundleNativeAffineAction->setEnabled(false);
+        bundleNativeAffineStripAction->setEnabled(false);
 #endif
         menu->addMenu(registrationMenu);
         connect(fixedRegistrationAction,
@@ -7183,6 +7295,10 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
                 SIGNAL(triggered(bool)),
                 this,
                 SLOT(createBundleNativeAffineAutoRegistrationFromSelection()));
+        connect(bundleNativeAffineStripAction,
+                SIGNAL(triggered(bool)),
+                this,
+                SLOT(createBundleNativeAffineStripAutoRegistrationFromSelection()));
 
         if(nRawSourceSelections>0)
         {

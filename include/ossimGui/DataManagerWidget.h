@@ -653,10 +653,12 @@ namespace ossimGui{
       virtual void createFixedNativeAffineAutoRegistration();
       virtual void createBundleFloatingRegistration();
       virtual void createBundleNativeAffineAutoRegistration();
+      virtual void createBundleNativeAffineStripAutoRegistration();
       virtual void createFixedRegistrationFromSelection();
       virtual void createFixedNativeAffineAutoRegistrationFromSelection();
       virtual void createBundleFloatingRegistrationFromSelection();
       virtual void createBundleNativeAffineAutoRegistrationFromSelection();
+      virtual void createBundleNativeAffineStripAutoRegistrationFromSelection();
       virtual void createRegistrationFromDialog();
       virtual void setSelectedBundleAllFloating(bool enabled);
       virtual void registerSelected();
@@ -756,7 +758,10 @@ namespace ossimGui{
       DataManagerRegistrationItem*
          createDefaultBundleFloatingRegistrationItem();
       DataManagerRegistrationItem*
-         createDefaultBundleNativeAffineAutoRegistrationItem();
+         createDefaultBundleNativeAffineAutoRegistrationItem(
+            std::size_t bundleNeighborSpan = 0,
+            const QString& nodeName =
+               QString("Bundle Native Affine Auto Registration"));
       QList<DataManagerItem*> selectedRegistrationInputItems() const;
       void connectAndExecuteSelectedRegistration(
          DataManagerRegistrationItem* item);
