@@ -66,8 +66,12 @@ All notable changes to `ossim-gui` are documented here.
 > advisory strip-candidate evidence used by CLI/source runs.
 > GeoCell bundle reports now headline the resolved pair graph, so promoted Auto
 > strip runs show `neighbor_span_1` instead of the requested placeholder.
+> GeoCell bundle completion text now names the resolved Auto pair policy and
+> calls out all-pairs fallback recovery when it happens.
 
 ### Added
+- Show the resolved Auto bundle pair-policy decision in GeoCell completion
+  summaries and include all-pairs fallback recovery in advisory text.
 - Report the resolved bundle pair graph in GeoCell bundle quality reports when
   shared Auto policy diagnostics promote a run to a bounded strip graph.
 - Show shared bundle pair-policy diagnostics in GeoCell bundle quality reports,

@@ -464,8 +464,22 @@ namespace
          result)
    {
       ossimString summary;
+      const ossim_autoreg::BundlePairPolicyDiagnostics&
+         pairPolicyDiagnostics = result.pairPolicyDiagnostics();
+      if(pairPolicyDiagnostics.requestedPolicy() == "auto" &&
+         pairPolicyDiagnostics.resolvedPolicy() == "auto_all_pairs" &&
+         pairPolicyDiagnostics.resolutionReason() ==
+            "auto_all_pairs_fallback")
+      {
+         summary += "Bundle pair policy: Auto retried with all pairs after "
+                    "the promoted strip graph failed.";
+      }
       if(!result.searchSpanRecoveryMessage().empty())
       {
+         if(!summary.empty())
+         {
+            summary += "\n";
+         }
          summary += "Search span recovery: ";
          summary += result.searchSpanRecoveryMessage().c_str();
       }
@@ -517,6 +531,38 @@ namespace
          }
          summary += "Acceptance: ";
          summary += tier.c_str();
+      }
+      return summary;
+   }
+
+   ossimString bundlePairPolicyDecisionSummary(
+      const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
+         result)
+   {
+      const ossim_autoreg::BundlePairPolicyDiagnostics& diagnostics =
+         result.pairPolicyDiagnostics();
+      if(diagnostics.requestedPolicy().empty() ||
+         diagnostics.resolvedPolicy().empty())
+      {
+         return ossimString();
+      }
+
+      ossimString summary;
+      summary += "pair policy ";
+      summary += diagnostics.requestedPolicy().c_str();
+      summary += " -> ";
+      summary += diagnostics.resolvedPolicy().c_str();
+      if(!diagnostics.resolutionReason().empty())
+      {
+         summary += " (";
+         summary += diagnostics.resolutionReason().c_str();
+         if(!diagnostics.stripCandidateReason().empty() &&
+            diagnostics.stripCandidate())
+         {
+            summary += ", ";
+            summary += diagnostics.stripCandidateReason().c_str();
+         }
+         summary += ")";
       }
       return summary;
    }
@@ -2716,6 +2762,13 @@ namespace ossimGui
             {
                m_resultSummary += ", ";
                m_resultSummary += diagnosticsSummary;
+            }
+            const ossimString pairPolicyDecision =
+               bundlePairPolicyDecisionSummary(result);
+            if(!pairPolicyDecision.empty())
+            {
+               m_resultSummary += ", ";
+               m_resultSummary += pairPolicyDecision;
             }
 
             std::vector<ossimFilename> writtenGeometryFiles;
