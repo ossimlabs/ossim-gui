@@ -68,8 +68,12 @@ All notable changes to `ossim-gui` are documented here.
 > strip runs show `neighbor_span_1` instead of the requested placeholder.
 > GeoCell bundle completion text now names the resolved Auto pair policy and
 > calls out all-pairs fallback recovery when it happens.
+> GeoCell bundle quality reports now include explicit Auto pair-policy fallback
+> attempted, reason, and result fields.
 
 ### Added
+- Add explicit Auto bundle pair-policy fallback fields to GeoCell quality
+  reports, matching the shared `ossim-autoreg` diagnostics.
 - Show the resolved Auto bundle pair-policy decision in GeoCell completion
   summaries and include all-pairs fallback recovery in advisory text.
 - Report the resolved bundle pair graph in GeoCell bundle quality reports when

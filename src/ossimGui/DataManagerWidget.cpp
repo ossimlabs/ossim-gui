@@ -466,10 +466,7 @@ namespace
       ossimString summary;
       const ossim_autoreg::BundlePairPolicyDiagnostics&
          pairPolicyDiagnostics = result.pairPolicyDiagnostics();
-      if(pairPolicyDiagnostics.requestedPolicy() == "auto" &&
-         pairPolicyDiagnostics.resolvedPolicy() == "auto_all_pairs" &&
-         pairPolicyDiagnostics.resolutionReason() ==
-            "auto_all_pairs_fallback")
+      if(pairPolicyDiagnostics.fallbackAttempted())
       {
          summary += "Bundle pair policy: Auto retried with all pairs after "
                     "the promoted strip graph failed.";
@@ -1261,6 +1258,16 @@ namespace
           << (diagnostics.stripCandidate() ? "true" : "false") << "\n";
       out << "bundle_pair_policy_strip_reason: "
           << diagnostics.stripCandidateReason() << "\n";
+      out << "bundle_pair_policy_fallback_attempted: "
+          << (diagnostics.fallbackAttempted() ? "true" : "false") << "\n";
+      out << "bundle_pair_policy_fallback_reason: "
+          << (diagnostics.fallbackReason().empty() ?
+                 std::string("none") :
+                 diagnostics.fallbackReason()) << "\n";
+      out << "bundle_pair_policy_fallback_result: "
+          << (diagnostics.fallbackResult().empty() ?
+                 std::string("not_attempted") :
+                 diagnostics.fallbackResult()) << "\n";
       out << "bundle_pair_policy_image_count: "
           << diagnostics.imageCount() << "\n";
       out << "bundle_pair_policy_pair_count: "
