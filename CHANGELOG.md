@@ -62,8 +62,13 @@ All notable changes to `ossim-gui` are documented here.
 > to all pairs.
 > That GeoCell `Auto` pair-policy choice now flows through the shared
 > `ossim-autoreg` source options instead of staying as a local GUI-only label.
+> GeoCell bundle reports now show the shared Auto pair-policy diagnostics and
+> advisory strip-candidate evidence used by CLI/source runs.
 
 ### Added
+- Show shared bundle pair-policy diagnostics in GeoCell bundle quality reports,
+  including requested/resolved policy, resolution reason, and advisory
+  strip-candidate overlap evidence.
 - Flow GeoCell's bundle pair policy selector through shared
   `ossim-autoreg` bundle pair policy options, keeping `Auto` reportable as
   `auto_all_pairs` while it remains conservative.

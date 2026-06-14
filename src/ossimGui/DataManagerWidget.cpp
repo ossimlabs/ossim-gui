@@ -409,6 +409,10 @@ namespace
       return "all_pairs";
    }
 
+   void appendBundlePairPolicyDiagnostics(
+      std::ostream& out,
+      const ossim_autoreg::BundlePairPolicyDiagnostics& diagnostics);
+
    std::string bundleRegistrationAcceptanceTier(
       const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
          result,
@@ -1011,6 +1015,9 @@ namespace
                  std::string("unspecified")) << "\n";
       out << "bundle_pair_policy: "
           << bundleRegistrationPairPolicy(source) << "\n";
+      appendBundlePairPolicyDiagnostics(
+         out,
+         result.pairPolicyDiagnostics());
       if(source)
       {
          const ossim_autoreg::AutoRegistrationOptions options =
@@ -1188,6 +1195,34 @@ namespace
       if(policy == BUNDLE_PAIR_POLICY_AUTO)
          return "auto_all_pairs";
       return bundlePairPolicyDescription(span);
+   }
+
+   void appendBundlePairPolicyDiagnostics(
+      std::ostream& out,
+      const ossim_autoreg::BundlePairPolicyDiagnostics& diagnostics)
+   {
+      out << "bundle_pair_policy_requested: "
+          << diagnostics.requestedPolicy() << "\n";
+      out << "bundle_pair_policy_resolved: "
+          << diagnostics.resolvedPolicy() << "\n";
+      out << "bundle_pair_policy_resolution_reason: "
+          << diagnostics.resolutionReason() << "\n";
+      out << "bundle_pair_policy_strip_candidate: "
+          << (diagnostics.stripCandidate() ? "true" : "false") << "\n";
+      out << "bundle_pair_policy_strip_reason: "
+          << diagnostics.stripCandidateReason() << "\n";
+      out << "bundle_pair_policy_image_count: "
+          << diagnostics.imageCount() << "\n";
+      out << "bundle_pair_policy_pair_count: "
+          << diagnostics.pairCount() << "\n";
+      out << "bundle_pair_policy_adjacent_pair_count: "
+          << diagnostics.adjacentPairCount() << "\n";
+      out << "bundle_pair_policy_non_adjacent_pair_count: "
+          << diagnostics.nonAdjacentPairCount() << "\n";
+      out << "bundle_pair_policy_adjacent_overlap_area_pixels: "
+          << diagnostics.adjacentOverlapAreaPixels() << "\n";
+      out << "bundle_pair_policy_non_adjacent_overlap_area_pixels: "
+          << diagnostics.nonAdjacentOverlapAreaPixels() << "\n";
    }
 
    struct RegistrationSetupOptions
