@@ -64,8 +64,12 @@ All notable changes to `ossim-gui` are documented here.
 > `ossim-autoreg` source options instead of staying as a local GUI-only label.
 > GeoCell bundle reports now show the shared Auto pair-policy diagnostics and
 > advisory strip-candidate evidence used by CLI/source runs.
+> GeoCell bundle reports now headline the resolved pair graph, so promoted Auto
+> strip runs show `neighbor_span_1` instead of the requested placeholder.
 
 ### Added
+- Report the resolved bundle pair graph in GeoCell bundle quality reports when
+  shared Auto policy diagnostics promote a run to a bounded strip graph.
 - Show shared bundle pair-policy diagnostics in GeoCell bundle quality reports,
   including requested/resolved policy, resolution reason, and advisory
   strip-candidate overlap evidence.

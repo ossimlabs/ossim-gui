@@ -1013,11 +1013,15 @@ namespace
           << (source && !source->launchPreset().empty() ?
                  source->launchPreset() :
                  std::string("unspecified")) << "\n";
+      const ossim_autoreg::BundlePairPolicyDiagnostics&
+         pairPolicyDiagnostics = result.pairPolicyDiagnostics();
       out << "bundle_pair_policy: "
-          << bundleRegistrationPairPolicy(source) << "\n";
+          << (pairPolicyDiagnostics.resolvedPolicy().empty()
+                 ? bundleRegistrationPairPolicy(source)
+                 : pairPolicyDiagnostics.resolvedPolicy()) << "\n";
       appendBundlePairPolicyDiagnostics(
          out,
-         result.pairPolicyDiagnostics());
+         pairPolicyDiagnostics);
       if(source)
       {
          const ossim_autoreg::AutoRegistrationOptions options =
