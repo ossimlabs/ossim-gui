@@ -383,6 +383,11 @@ namespace
       {
          return "unknown";
       }
+      if(source->bundlePairPolicy() ==
+         ossim_autoreg::BUNDLE_PAIR_POLICY_AUTO)
+      {
+         return "auto_all_pairs";
+      }
       const std::size_t span = source->bundleNeighborSpan();
       if(span)
       {
@@ -1165,6 +1170,16 @@ namespace
       BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN = 1,
       BUNDLE_PAIR_POLICY_AUTO = 2
    };
+
+   ossim_autoreg::BundlePairPolicy sharedBundlePairPolicy(
+      BundlePairPolicy policy)
+   {
+      if(policy == BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN)
+         return ossim_autoreg::BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN;
+      if(policy == BUNDLE_PAIR_POLICY_AUTO)
+         return ossim_autoreg::BUNDLE_PAIR_POLICY_AUTO;
+      return ossim_autoreg::BUNDLE_PAIR_POLICY_ALL_PAIRS;
+   }
 
    std::string bundlePairPolicyDescription(
       BundlePairPolicy policy,
@@ -5911,6 +5926,8 @@ ossimGui::DataManagerWidget::createDefaultBundleNativeAffineAutoRegistrationItem
       registrationOptions.generator();
    applyRegistrationSetupTieOptions(tiePointOptions, setupOptions);
    registrationOptions.setGenerator(tiePointOptions);
+   registrationOptions.setBundlePairPolicy(
+      sharedBundlePairPolicy(setupOptions.bundlePairPolicy));
    registrationOptions.setBundleNeighborSpan(
       setupOptions.bundleNeighborSpan);
    registrationOptions.overrides().setAutoDenseGridSeedBudget(true);
@@ -6104,6 +6121,8 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
          registrationOptions.generator();
       applyRegistrationSetupTieOptions(tiePointOptions, setupOptions);
       registrationOptions.setGenerator(tiePointOptions);
+      registrationOptions.setBundlePairPolicy(
+         sharedBundlePairPolicy(setupOptions.bundlePairPolicy));
       registrationOptions.setBundleNeighborSpan(
          setupOptions.bundleNeighborSpan);
       registrationOptions.overrides().setAutoDenseGridSeedBudget(true);

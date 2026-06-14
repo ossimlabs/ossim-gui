@@ -60,8 +60,13 @@ All notable changes to `ossim-gui` are documented here.
 > Bundle reports now include the GeoCell launch preset, and the setup dialog
 > has an `Auto` pair-policy placeholder that currently resolves conservatively
 > to all pairs.
+> That GeoCell `Auto` pair-policy choice now flows through the shared
+> `ossim-autoreg` source options instead of staying as a local GUI-only label.
 
 ### Added
+- Flow GeoCell's bundle pair policy selector through shared
+  `ossim-autoreg` bundle pair policy options, keeping `Auto` reportable as
+  `auto_all_pairs` while it remains conservative.
 - Add `bundle_launch_preset` to GeoCell bundle quality reports and tag
   default, setup-dialog, native-affine, and native-affine strip bundle sources
   with stable launch labels.
