@@ -57,8 +57,17 @@ All notable changes to `ossim-gui` are documented here.
 > GeoCell now has an explicit native-affine strip bundle preset, so ordered
 > strip datasets can start from the tested `neighbor_span_1` graph without
 > hand-editing the numeric source property.
+> Bundle reports now include the GeoCell launch preset, and the setup dialog
+> has an `Auto` pair-policy placeholder that currently resolves conservatively
+> to all pairs.
 
 ### Added
+- Add `bundle_launch_preset` to GeoCell bundle quality reports and tag
+  default, setup-dialog, native-affine, and native-affine strip bundle sources
+  with stable launch labels.
+- Add an `Auto` option to the GeoCell bundle pair policy selector, currently
+  resolving to the conservative all-pairs policy until strip detection is
+  taught to pick a bounded graph.
 - Add `Bundle Native Affine Strip Auto` actions for Registration-folder and
   selected image-chain context menus, using the shared `neighbor_span_1`
   bundle pair policy.

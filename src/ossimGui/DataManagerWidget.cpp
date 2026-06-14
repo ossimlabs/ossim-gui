@@ -1000,6 +1000,10 @@ namespace
       out << "bundle_mode: " << bundleRegistrationModeName(source) << "\n";
       out << "bundle_motion_policy: "
           << bundleRegistrationMotionPolicy(source) << "\n";
+      out << "bundle_launch_preset: "
+          << (source && !source->launchPreset().empty() ?
+                 source->launchPreset() :
+                 std::string("unspecified")) << "\n";
       out << "bundle_pair_policy: "
           << bundleRegistrationPairPolicy(source) << "\n";
       if(source)
@@ -1158,8 +1162,18 @@ namespace
    enum BundlePairPolicy
    {
       BUNDLE_PAIR_POLICY_ALL_PAIRS = 0,
-      BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN = 1
+      BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN = 1,
+      BUNDLE_PAIR_POLICY_AUTO = 2
    };
+
+   std::string bundlePairPolicyDescription(
+      BundlePairPolicy policy,
+      std::size_t span)
+   {
+      if(policy == BUNDLE_PAIR_POLICY_AUTO)
+         return "auto_all_pairs";
+      return bundlePairPolicyDescription(span);
+   }
 
    struct RegistrationSetupOptions
    {
@@ -1567,9 +1581,12 @@ namespace
                                      BUNDLE_PAIR_POLICY_ALL_PAIRS);
          m_bundlePairPolicy->addItem("Neighbor span",
                                      BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN);
+         m_bundlePairPolicy->addItem("Auto",
+                                     BUNDLE_PAIR_POLICY_AUTO);
          m_bundlePairPolicy->setToolTip(
             "Bundle only: choose whether to test every image pair or only "
-            "nearby image-index neighbors.");
+            "nearby image-index neighbors. Auto is currently conservative "
+            "and resolves to all pairs.");
 
          m_bundleNeighborSpan = new QSpinBox(this);
          m_bundleNeighborSpan->setRange(1, 100000);
@@ -5828,7 +5845,8 @@ void ossimGui::DataManagerWidget::createBundleNativeAffineStripAutoRegistration(
 #ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
    createDefaultBundleNativeAffineAutoRegistrationItem(
       1,
-      "Bundle Native Affine Strip Auto Registration");
+      "Bundle Native Affine Strip Auto Registration",
+      "native_affine_strip_auto");
 #else
    QMessageBox::information(this,
                             "Registration",
@@ -5843,6 +5861,7 @@ ossimGui::DataManagerWidget::createDefaultBundleFloatingRegistrationItem()
    ossimRefPtr<ossimBundleAdjustmentRegistrationSource> bundle =
       new ossimBundleAdjustmentRegistrationSource();
    bundle->setAllInputsFloating(true);
+   bundle->setLaunchPreset("default_bundle_all_floating");
    applyBundleDefaultsToSource(bundle.get(), false);
    ossimRefPtr<ossimObject> obj = bundle.get();
    if(obj.valid())
@@ -5868,7 +5887,8 @@ ossimGui::DataManagerWidget::createDefaultBundleFloatingRegistrationItem()
 ossimGui::DataManagerRegistrationItem*
 ossimGui::DataManagerWidget::createDefaultBundleNativeAffineAutoRegistrationItem(
    std::size_t bundleNeighborSpan,
-   const QString& nodeName)
+   const QString& nodeName,
+   const std::string& launchPreset)
 {
 #ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
    RegistrationSetupOptions setupOptions =
@@ -5882,6 +5902,7 @@ ossimGui::DataManagerWidget::createDefaultBundleNativeAffineAutoRegistrationItem
    ossimRefPtr<ossimBundleAdjustmentRegistrationSource> bundle =
       new ossimBundleAdjustmentRegistrationSource();
    bundle->setAllInputsFloating(true);
+   bundle->setLaunchPreset(launchPreset);
    applyBundleDefaultsToSource(bundle.get(), false);
 
    ossim_autoreg::AutoRegistrationOptions registrationOptions =
@@ -5913,7 +5934,8 @@ ossimGui::DataManagerWidget::createDefaultBundleNativeAffineAutoRegistrationItem
          item->setFlags(item->flags()|Qt::ItemIsEditable);
          item->setToolTip(
             0,
-            QString("Matcher: %1\nResampler: %2\nView GSD: %3\nMin score margin: %4\nDense seed budget: %5\nAuto dense seed budget: %6\nBundle pair policy: %7")
+            QString("Launch preset: %1\nMatcher: %2\nResampler: %3\nView GSD: %4\nMin score margin: %5\nDense seed budget: %6\nAuto dense seed budget: %7\nBundle pair policy: %8")
+               .arg(QString::fromStdString(launchPreset))
                .arg(QString::fromStdString(setupOptions.matchMethod))
                .arg(QString::fromStdString(setupOptions.resamplerType))
                .arg(setupOptions.viewGsd)
@@ -6027,7 +6049,8 @@ void ossimGui::DataManagerWidget::createBundleNativeAffineStripAutoRegistrationF
    connectAndExecuteSelectedRegistration(
       createDefaultBundleNativeAffineAutoRegistrationItem(
          1,
-         "Bundle Native Affine Strip Auto Registration"));
+         "Bundle Native Affine Strip Auto Registration",
+         "native_affine_strip_auto"));
 #else
    QMessageBox::information(this,
                             "Registration",
@@ -6068,6 +6091,10 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
          new ossimBundleAdjustmentRegistrationSource();
       bundle->setAllInputsFloating(
          setupOptions.approach == REGISTRATION_SETUP_BUNDLE_ALL_FLOATING);
+      bundle->setLaunchPreset(
+         setupOptions.approach == REGISTRATION_SETUP_BUNDLE_ALL_FLOATING ?
+            "registration_setup_bundle_all_floating" :
+            "registration_setup_bundle_anchored");
       applyBundleDefaultsToSource(
          bundle.get(),
          setupOptions.approach == REGISTRATION_SETUP_BUNDLE_ANCHORED);
@@ -6090,7 +6117,8 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
          "Bundle All-Floating Registration" :
          "Bundle Anchored Registration";
       toolTip =
-         QString("Matcher: %1\nResampler: %2\nView GSD: %3\nMin score margin: %4\nDense seed budget: %5\nAuto dense seed budget: %6\nTie timing diagnostics: %7\nBundle pair policy: %8\nOpenCV RANSAC prefilter: %9\nOpenCV RANSAC threshold: %10")
+         QString("Launch preset: %1\nMatcher: %2\nResampler: %3\nView GSD: %4\nMin score margin: %5\nDense seed budget: %6\nAuto dense seed budget: %7\nTie timing diagnostics: %8\nBundle pair policy: %9\nOpenCV RANSAC prefilter: %10\nOpenCV RANSAC threshold: %11")
+            .arg(bundle->launchPreset().c_str())
             .arg(QString::fromStdString(setupOptions.matchMethod))
             .arg(QString::fromStdString(setupOptions.resamplerType))
             .arg(setupOptions.viewGsd)
@@ -6100,6 +6128,7 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
             .arg(setupOptions.tiePointTimingDiagnostics ? "true" : "false")
             .arg(QString::fromStdString(
                bundlePairPolicyDescription(
+                  setupOptions.bundlePairPolicy,
                   setupOptions.bundleNeighborSpan)))
             .arg(setupOptions.opencvRansacPrefilter ? "true" : "false")
             .arg(setupOptions.opencvRansacThresholdPixels);
