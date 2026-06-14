@@ -549,9 +549,42 @@ namespace
       summary += diagnostics.requestedPolicy().c_str();
       summary += " -> ";
       summary += diagnostics.resolvedPolicy().c_str();
-      if(!diagnostics.resolutionReason().empty())
+      if(diagnostics.pairCount() || diagnostics.generatedPairCount())
       {
          summary += " (";
+         summary += ossimString::toString(
+            static_cast<ossim_uint32>(diagnostics.generatedPairCount()));
+         summary += "/";
+         summary += ossimString::toString(
+            static_cast<ossim_uint32>(diagnostics.pairCount()));
+         summary += " pairs";
+         if(diagnostics.pairCount() >= diagnostics.generatedPairCount())
+         {
+            summary += ", saved ";
+            summary += ossimString::toString(
+               static_cast<ossim_uint32>(
+                  diagnostics.pairCount() -
+                  diagnostics.generatedPairCount()));
+         }
+         if(diagnostics.pairGenerationWallSeconds() > 0.0)
+         {
+            summary += ", ";
+            summary += ossimString::toString(
+               diagnostics.pairGenerationWallSeconds());
+            summary += "s";
+         }
+         if(diagnostics.fallbackAttempted())
+         {
+            summary += ", fallback ";
+            summary += (diagnostics.fallbackResult().empty() ?
+                           std::string("attempted") :
+                           diagnostics.fallbackResult()).c_str();
+         }
+         summary += ")";
+      }
+      if(!diagnostics.resolutionReason().empty())
+      {
+         summary += " [";
          summary += diagnostics.resolutionReason().c_str();
          if(!diagnostics.stripCandidateReason().empty() &&
             diagnostics.stripCandidate())
@@ -559,7 +592,7 @@ namespace
             summary += ", ";
             summary += diagnostics.stripCandidateReason().c_str();
          }
-         summary += ")";
+         summary += "]";
       }
       return summary;
    }
@@ -1270,8 +1303,18 @@ namespace
                  diagnostics.fallbackResult()) << "\n";
       out << "bundle_pair_policy_image_count: "
           << diagnostics.imageCount() << "\n";
-      out << "bundle_pair_policy_pair_count: "
+      out << "bundle_pair_policy_planned_full_pair_count: "
           << diagnostics.pairCount() << "\n";
+      out << "bundle_pair_policy_generated_pair_count: "
+          << diagnostics.generatedPairCount() << "\n";
+      out << "bundle_pair_policy_saved_pair_count: "
+          << diagnostics.savedPairCount() << "\n";
+      out << "bundle_pair_policy_saved_pair_delta: "
+          << (diagnostics.pairCount() >= diagnostics.generatedPairCount() ?
+                 diagnostics.pairCount() - diagnostics.generatedPairCount() :
+                 0) << "\n";
+      out << "bundle_pair_policy_pair_generation_wall_seconds: "
+          << diagnostics.pairGenerationWallSeconds() << "\n";
       out << "bundle_pair_policy_adjacent_pair_count: "
           << diagnostics.adjacentPairCount() << "\n";
       out << "bundle_pair_policy_non_adjacent_pair_count: "

@@ -70,8 +70,13 @@ All notable changes to `ossim-gui` are documented here.
 > calls out all-pairs fallback recovery when it happens.
 > GeoCell bundle quality reports now include explicit Auto pair-policy fallback
 > attempted, reason, and result fields.
+> GeoCell bundle completion text now includes compact Auto pair-policy speed
+> evidence, including generated/full pairs, saved pairs, timing, and fallback
+> result when present.
 
 ### Added
+- Add generated/full pair counts, saved pair count, pair-generation timing, and
+  fallback result to GeoCell's compact bundle pair-policy completion summary.
 - Add explicit Auto bundle pair-policy fallback fields to GeoCell quality
   reports, matching the shared `ossim-autoreg` diagnostics.
 - Show the resolved Auto bundle pair-policy decision in GeoCell completion
