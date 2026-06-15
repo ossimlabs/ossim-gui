@@ -81,6 +81,8 @@ All notable changes to `ossim-gui` are documented here.
 > GeoCell bundle reports now include the same native matcher policy diagnostic
 > as CLI runs, so visual swipe testing can see when native-affine stood alone
 > or needed recovery.
+> GeoCell now uses the shared native matcher policy helper and reports the
+> matcher Auto would choose before the UI starts applying that decision.
 
 ### Added
 - Add generated/full pair counts, saved pair count, pair-generation timing, and

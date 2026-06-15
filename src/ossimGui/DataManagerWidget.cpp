@@ -632,18 +632,6 @@ namespace
       return count;
    }
 
-   struct BundleNativeMatcherPolicySummary
-   {
-      std::size_t totalEdges = 0;
-      std::size_t nativeEdges = 0;
-      std::size_t nativeSupportedEdges = 0;
-      std::size_t nativeSparseEdges = 0;
-      std::size_t matcherAlternateEvaluatedEdges = 0;
-      std::size_t matcherAlternateUsedEdges = 0;
-      std::size_t denseAlternateUsedEdges = 0;
-      std::string lastMatcherAlternateMethod;
-   };
-
    bool bundleRegistrationPairUsesNativeAffine(
       const ossimBundleAdjustmentRegistrationSource::PairResult& pair)
    {
@@ -652,84 +640,49 @@ namespace
              path.find("native_affine") != std::string::npos;
    }
 
-   BundleNativeMatcherPolicySummary bundleRegistrationNativeMatcherPolicy(
+   ossim_autoreg::BundleNativeMatcherPolicyEvidence
+   bundleRegistrationNativeMatcherPolicy(
       const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
          result,
       std::size_t minimumTiePointCount)
    {
-      BundleNativeMatcherPolicySummary summary;
-      summary.totalEdges = result.pairResults().size();
+      ossim_autoreg::BundleNativeMatcherPolicyEvidence evidence;
+      evidence.totalEdges = result.pairResults().size();
       for(const ossimBundleAdjustmentRegistrationSource::PairResult& pair :
           result.pairResults())
       {
          const std::size_t tieCount = pair.tiePoints().size();
          if(bundleRegistrationPairUsesNativeAffine(pair))
          {
-            ++summary.nativeEdges;
+            ++evidence.nativeEdges;
             if(tieCount >= minimumTiePointCount)
             {
-               ++summary.nativeSupportedEdges;
+               ++evidence.nativeSupportedEdges;
             }
             else if(tieCount > 0)
             {
-               ++summary.nativeSparseEdges;
+               ++evidence.nativeSparseEdges;
             }
          }
          if(pair.matcherAlternateEvaluated())
          {
-            ++summary.matcherAlternateEvaluatedEdges;
+            ++evidence.matcherAlternateEvaluatedEdges;
          }
          if(pair.matcherAlternateUsed())
          {
-            ++summary.matcherAlternateUsedEdges;
+            ++evidence.matcherAlternateUsedEdges;
             if(!pair.matcherAlternateMethod().empty())
             {
-               summary.lastMatcherAlternateMethod =
+               evidence.lastMatcherAlternateMethod =
                   pair.matcherAlternateMethod();
             }
          }
          if(pair.denseAlternateUsed())
          {
-            ++summary.denseAlternateUsedEdges;
+            ++evidence.denseAlternateUsedEdges;
          }
       }
-      return summary;
-   }
-
-   std::string nativeMatcherPolicyAdvisory(
-      const BundleNativeMatcherPolicySummary& summary)
-   {
-      if(!summary.nativeEdges)
-      {
-         return "no_native_edges";
-      }
-      if(summary.matcherAlternateUsedEdges || summary.denseAlternateUsedEdges)
-      {
-         return "native_needs_rescue";
-      }
-      if(summary.nativeSparseEdges)
-      {
-         return "native_sparse";
-      }
-      return "native_ok";
-   }
-
-   std::string nativeMatcherPolicySuggestion(
-      const BundleNativeMatcherPolicySummary& summary)
-   {
-      if(!summary.nativeEdges)
-      {
-         return "insufficient_native_evidence";
-      }
-      if(summary.matcherAlternateUsedEdges)
-      {
-         return "consider_mixed_phase_orb";
-      }
-      if(summary.denseAlternateUsedEdges || summary.nativeSparseEdges)
-      {
-         return "keep_native_affine_with_recovery";
-      }
-      return "keep_native_affine";
+      return evidence;
    }
 
    std::string bundleRegistrationPairRoute(
@@ -831,12 +784,14 @@ namespace
       {
          out << ", " << matcherAlternateSummary;
       }
-      const BundleNativeMatcherPolicySummary nativeMatcherPolicy =
+      const ossim_autoreg::BundleNativeMatcherPolicyEvidence
+         nativeMatcherPolicy =
          bundleRegistrationNativeMatcherPolicy(
             result,
             bundleRegistrationMinimumEdgeTiePointCount(result));
       out << ", native matcher "
-          << nativeMatcherPolicyAdvisory(nativeMatcherPolicy);
+          << ossim_autoreg::bundleNativeMatcherPolicyAdvisory(
+                nativeMatcherPolicy);
 
       return out.str().c_str();
    }
@@ -1220,7 +1175,8 @@ namespace
                                            source ? source->
                                               autoRegistrationOptions().
                                               minInliers() : 6);
-      const BundleNativeMatcherPolicySummary nativeMatcherPolicy =
+      const ossim_autoreg::BundleNativeMatcherPolicyEvidence
+         nativeMatcherPolicy =
          bundleRegistrationNativeMatcherPolicy(
             result,
             source ? source->autoRegistrationOptions().minInliers() : 6);
@@ -1278,9 +1234,14 @@ namespace
                  ? std::string("none")
                  : nativeMatcherPolicy.lastMatcherAlternateMethod) << "\n";
       out << "native_matcher_policy_advisory: "
-          << nativeMatcherPolicyAdvisory(nativeMatcherPolicy) << "\n";
+          << ossim_autoreg::bundleNativeMatcherPolicyAdvisory(
+                nativeMatcherPolicy) << "\n";
       out << "native_matcher_policy_suggestion: "
-          << nativeMatcherPolicySuggestion(nativeMatcherPolicy) << "\n";
+          << ossim_autoreg::bundleNativeMatcherPolicySuggestion(
+                nativeMatcherPolicy) << "\n";
+      out << "native_matcher_policy_would_choose: "
+          << ossim_autoreg::bundleNativeMatcherPolicyWouldChoose(
+                nativeMatcherPolicy) << "\n";
       for(std::size_t idx = 0; idx < result.pairResults().size(); ++idx)
       {
          const ossimBundleAdjustmentRegistrationSource::PairResult& pair =
