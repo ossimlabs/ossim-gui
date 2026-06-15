@@ -685,6 +685,38 @@ namespace
       return evidence;
    }
 
+   bool bundleRegistrationNativeMatcherPolicyApplied(
+      const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
+         result)
+   {
+      for(const ossimBundleAdjustmentRegistrationSource::PairResult& pair :
+          result.pairResults())
+      {
+         if(pair.executionPath().find("native-policy-auto") !=
+            std::string::npos)
+         {
+            return true;
+         }
+      }
+      return false;
+   }
+
+   std::string bundleRegistrationNativeMatcherPolicyAction(
+      const ossimBundleAdjustmentRegistrationSource* source,
+      const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
+         result)
+   {
+      if(!source ||
+         source->autoRegistrationOptions().bundleNativeMatcherPolicy() !=
+            ossim_autoreg::BUNDLE_NATIVE_MATCHER_POLICY_AUTO)
+      {
+         return "report_only";
+      }
+      return bundleRegistrationNativeMatcherPolicyApplied(result) ?
+                std::string("promoted_to_mixed-phase-orb") :
+                std::string("auto_no_change");
+   }
+
    std::string bundleRegistrationPairRoute(
       const ossimBundleAdjustmentRegistrationSource::PairResult& pair)
    {
@@ -794,7 +826,11 @@ namespace
                 nativeMatcherPolicy)
           << ", would choose "
           << ossim_autoreg::bundleNativeMatcherPolicyWouldChoose(
-                nativeMatcherPolicy);
+                nativeMatcherPolicy)
+          << ", action "
+          << (bundleRegistrationNativeMatcherPolicyApplied(result)
+                 ? std::string("promoted_to_mixed-phase-orb")
+                 : std::string("none"));
 
       return out.str().c_str();
    }
@@ -1251,6 +1287,13 @@ namespace
       out << "native_matcher_policy_would_choose: "
           << ossim_autoreg::bundleNativeMatcherPolicyWouldChoose(
                 nativeMatcherPolicy) << "\n";
+      out << "native_matcher_policy_applied: "
+          << (bundleRegistrationNativeMatcherPolicyApplied(result)
+                 ? "true"
+                 : "false") << "\n";
+      out << "native_matcher_policy_action: "
+          << bundleRegistrationNativeMatcherPolicyAction(source, result)
+          << "\n";
       for(std::size_t idx = 0; idx < result.pairResults().size(); ++idx)
       {
          const ossimBundleAdjustmentRegistrationSource::PairResult& pair =
