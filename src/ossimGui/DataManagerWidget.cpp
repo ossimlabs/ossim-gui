@@ -6144,6 +6144,22 @@ void ossimGui::DataManagerWidget::createBundleNativeAffineAutoRegistration()
 #endif
 }
 
+void ossimGui::DataManagerWidget::createBundleNativeAffineMatcherAutoRegistration()
+{
+#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+   createDefaultBundleNativeAffineAutoRegistrationItem(
+      0,
+      "Bundle Native Affine Matcher Auto Registration",
+      "native_affine_matcher_auto",
+      false,
+      true);
+#else
+   QMessageBox::information(this,
+                            "Registration",
+                            "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
 void ossimGui::DataManagerWidget::createBundleNativeAffineStripAutoRegistration()
 {
 #ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
@@ -6194,7 +6210,8 @@ ossimGui::DataManagerWidget::createDefaultBundleNativeAffineAutoRegistrationItem
    std::size_t bundleNeighborSpan,
    const QString& nodeName,
    const std::string& launchPreset,
-   bool autoPairPolicy)
+   bool autoPairPolicy,
+   bool nativeMatcherAuto)
 {
 #ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
    RegistrationSetupOptions setupOptions =
@@ -6221,6 +6238,11 @@ ossimGui::DataManagerWidget::createDefaultBundleNativeAffineAutoRegistrationItem
    registrationOptions.setGenerator(tiePointOptions);
    registrationOptions.setBundlePairPolicy(
       sharedBundlePairPolicy(setupOptions.bundlePairPolicy));
+   const ossim_autoreg::BundleNativeMatcherPolicy nativeMatcherPolicy =
+      nativeMatcherAuto ?
+         ossim_autoreg::BUNDLE_NATIVE_MATCHER_POLICY_AUTO :
+         ossim_autoreg::BUNDLE_NATIVE_MATCHER_POLICY_REPORT_ONLY;
+   registrationOptions.setBundleNativeMatcherPolicy(nativeMatcherPolicy);
    registrationOptions.setBundleNeighborSpan(
       setupOptions.bundlePairPolicy == BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN ?
          setupOptions.bundleNeighborSpan :
@@ -6246,7 +6268,7 @@ ossimGui::DataManagerWidget::createDefaultBundleNativeAffineAutoRegistrationItem
          item->setFlags(item->flags()|Qt::ItemIsEditable);
          item->setToolTip(
             0,
-            QString("Launch preset: %1\nMatcher: %2\nResampler: %3\nView GSD: %4\nMin score margin: %5\nDense seed budget: %6\nAuto dense seed budget: %7\nBundle pair policy: %8")
+            QString("Launch preset: %1\nMatcher: %2\nResampler: %3\nView GSD: %4\nMin score margin: %5\nDense seed budget: %6\nAuto dense seed budget: %7\nBundle pair policy: %8\nNative matcher policy: %9")
                .arg(QString::fromStdString(launchPreset))
                .arg(QString::fromStdString(setupOptions.matchMethod))
                .arg(QString::fromStdString(setupOptions.resamplerType))
@@ -6257,7 +6279,10 @@ ossimGui::DataManagerWidget::createDefaultBundleNativeAffineAutoRegistrationItem
                .arg(QString::fromStdString(
                   bundlePairPolicyDescription(
                      setupOptions.bundlePairPolicy,
-                     setupOptions.bundleNeighborSpan))));
+                     setupOptions.bundleNeighborSpan)))
+               .arg(QString::fromStdString(
+                  ossim_autoreg::bundleNativeMatcherPolicyName(
+                     nativeMatcherPolicy))));
          m_registrationSources->addChild(item);
          m_activeItems.insert(item);
          return item;
@@ -6349,6 +6374,23 @@ void ossimGui::DataManagerWidget::createBundleNativeAffineAutoRegistrationFromSe
 #ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
    connectAndExecuteSelectedRegistration(
       createDefaultBundleNativeAffineAutoRegistrationItem());
+#else
+   QMessageBox::information(this,
+                            "Registration",
+                            "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
+void ossimGui::DataManagerWidget::createBundleNativeAffineMatcherAutoRegistrationFromSelection()
+{
+#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+   connectAndExecuteSelectedRegistration(
+      createDefaultBundleNativeAffineAutoRegistrationItem(
+         0,
+         "Bundle Native Affine Matcher Auto Registration",
+         "native_affine_matcher_auto",
+         false,
+         true));
 #else
    QMessageBox::information(this,
                             "Registration",
@@ -7445,12 +7487,18 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
          registrationMenu->addAction("Bundle/Floating");
       QAction* bundleNativeAffineAction =
          registrationMenu->addAction("Bundle Native Affine (General)");
+      QAction* bundleNativeAffineMatcherAutoAction =
+         registrationMenu->addAction("Bundle Native Affine (Matcher Auto)");
       QAction* bundleNativeAffineStripAction =
          registrationMenu->addAction("Bundle Native Affine (Ordered Strip)");
       bundleNativeAffineAction->setToolTip(
          "General native-affine bundle default for mixed overlap sets.");
       bundleNativeAffineAction->setStatusTip(
          "General native-affine bundle default for mixed overlap sets.");
+      bundleNativeAffineMatcherAutoAction->setToolTip(
+         "Native-affine bundle with automatic native matcher fallback selection.");
+      bundleNativeAffineMatcherAutoAction->setStatusTip(
+         "Native-affine bundle with automatic native matcher fallback selection.");
       bundleNativeAffineStripAction->setToolTip(
          "Use when selected images are ordered along a strip or flightline.");
       bundleNativeAffineStripAction->setStatusTip(
@@ -7462,6 +7510,7 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
       fixedNativeAffineAction->setEnabled(false);
       bundleFloatingAction->setEnabled(false);
       bundleNativeAffineAction->setEnabled(false);
+      bundleNativeAffineMatcherAutoAction->setEnabled(false);
       bundleNativeAffineStripAction->setEnabled(false);
 #endif
       menu->addMenu(registrationMenu);
@@ -7486,6 +7535,10 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
               SIGNAL(triggered(bool)),
               this,
               SLOT(createBundleNativeAffineAutoRegistration()));
+      connect(bundleNativeAffineMatcherAutoAction,
+              SIGNAL(triggered(bool)),
+              this,
+              SLOT(createBundleNativeAffineMatcherAutoRegistration()));
       connect(bundleNativeAffineStripAction,
               SIGNAL(triggered(bool)),
               this,
@@ -7622,12 +7675,18 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
            registrationMenu->addAction("Default Bundle All-Floating");
         QAction* bundleNativeAffineAction =
            registrationMenu->addAction("Bundle Native Affine (General)");
+        QAction* bundleNativeAffineMatcherAutoAction =
+           registrationMenu->addAction("Bundle Native Affine (Matcher Auto)");
         QAction* bundleNativeAffineStripAction =
            registrationMenu->addAction("Bundle Native Affine (Ordered Strip)");
         bundleNativeAffineAction->setToolTip(
            "General native-affine bundle default for mixed overlap sets.");
         bundleNativeAffineAction->setStatusTip(
            "General native-affine bundle default for mixed overlap sets.");
+        bundleNativeAffineMatcherAutoAction->setToolTip(
+           "Native-affine bundle with automatic native matcher fallback selection.");
+        bundleNativeAffineMatcherAutoAction->setStatusTip(
+           "Native-affine bundle with automatic native matcher fallback selection.");
         bundleNativeAffineStripAction->setToolTip(
            "Use when selected images are ordered along a strip or flightline.");
         bundleNativeAffineStripAction->setStatusTip(
@@ -7637,6 +7696,7 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
         fixedNativeAffineAction->setEnabled(false);
         bundleRegistrationAction->setEnabled(false);
         bundleNativeAffineAction->setEnabled(false);
+        bundleNativeAffineMatcherAutoAction->setEnabled(false);
         bundleNativeAffineStripAction->setEnabled(false);
 #endif
         menu->addMenu(registrationMenu);
@@ -7656,6 +7716,10 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
                 SIGNAL(triggered(bool)),
                 this,
                 SLOT(createBundleNativeAffineAutoRegistrationFromSelection()));
+        connect(bundleNativeAffineMatcherAutoAction,
+                SIGNAL(triggered(bool)),
+                this,
+                SLOT(createBundleNativeAffineMatcherAutoRegistrationFromSelection()));
         connect(bundleNativeAffineStripAction,
                 SIGNAL(triggered(bool)),
                 this,
