@@ -83,6 +83,9 @@ All notable changes to `ossim-gui` are documented here.
 > or needed recovery.
 > GeoCell now uses the shared native matcher policy helper and reports the
 > matcher Auto would choose before the UI starts applying that decision.
+> GeoCell bundle completion text now surfaces the native matcher would-choose
+> result, while bundle reports include the shared native matcher policy mode and
+> reason fields.
 
 ### Added
 - Add generated/full pair counts, saved pair count, pair-generation timing, and

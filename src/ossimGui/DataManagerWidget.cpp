@@ -791,6 +791,9 @@ namespace
             bundleRegistrationMinimumEdgeTiePointCount(result));
       out << ", native matcher "
           << ossim_autoreg::bundleNativeMatcherPolicyAdvisory(
+                nativeMatcherPolicy)
+          << ", would choose "
+          << ossim_autoreg::bundleNativeMatcherPolicyWouldChoose(
                 nativeMatcherPolicy);
 
       return out.str().c_str();
@@ -1167,6 +1170,9 @@ namespace
              << options.targetRmsePixels() << "\n";
          out << "bundle_registration_passes: "
              << options.registrationPasses() << "\n";
+         out << "bundle_native_matcher_policy: "
+             << ossim_autoreg::bundleNativeMatcherPolicyName(
+                   options.bundleNativeMatcherPolicy()) << "\n";
          out << "bundle_floating_datum_prior_weight: "
              << source->floatingDatumPriorWeight() << "\n";
       }
@@ -1235,6 +1241,9 @@ namespace
                  : nativeMatcherPolicy.lastMatcherAlternateMethod) << "\n";
       out << "native_matcher_policy_advisory: "
           << ossim_autoreg::bundleNativeMatcherPolicyAdvisory(
+                nativeMatcherPolicy) << "\n";
+      out << "native_matcher_policy_reason: "
+          << ossim_autoreg::bundleNativeMatcherPolicyReason(
                 nativeMatcherPolicy) << "\n";
       out << "native_matcher_policy_suggestion: "
           << ossim_autoreg::bundleNativeMatcherPolicySuggestion(
