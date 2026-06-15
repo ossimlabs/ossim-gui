@@ -386,7 +386,7 @@ namespace
       if(source->bundlePairPolicy() ==
          ossim_autoreg::BUNDLE_PAIR_POLICY_AUTO)
       {
-         return "auto_all_pairs";
+         return "auto";
       }
       const std::size_t span = source->bundleNeighborSpan();
       if(span)
@@ -1273,7 +1273,7 @@ namespace
       std::size_t span)
    {
       if(policy == BUNDLE_PAIR_POLICY_AUTO)
-         return "auto_all_pairs";
+         return "auto";
       return bundlePairPolicyDescription(span);
    }
 
@@ -1323,6 +1323,8 @@ namespace
           << diagnostics.adjacentOverlapAreaPixels() << "\n";
       out << "bundle_pair_policy_non_adjacent_overlap_area_pixels: "
           << diagnostics.nonAdjacentOverlapAreaPixels() << "\n";
+      out << "bundle_pair_policy_adjacent_overlap_dominance_ratio: "
+          << diagnostics.adjacentOverlapDominanceRatio() << "\n";
    }
 
    struct RegistrationSetupOptions
@@ -1735,8 +1737,8 @@ namespace
                                      BUNDLE_PAIR_POLICY_AUTO);
          m_bundlePairPolicy->setToolTip(
             "Bundle only: choose whether to test every image pair or only "
-            "nearby image-index neighbors. Auto is currently conservative "
-            "and resolves to all pairs.");
+            "nearby image-index neighbors. Auto promotes clear strip-like "
+            "overlap chains and falls back to all pairs when needed.");
 
          m_bundleNeighborSpan = new QSpinBox(this);
          m_bundleNeighborSpan->setRange(1, 100000);
@@ -6002,8 +6004,9 @@ void ossimGui::DataManagerWidget::createBundleNativeAffineStripAutoRegistration(
 #ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
    createDefaultBundleNativeAffineAutoRegistrationItem(
       1,
-      "Bundle Native Affine Strip Auto Registration",
-      "native_affine_strip_auto");
+      "Bundle Native Affine Ordered Strip Registration",
+      "native_affine_strip_auto",
+      true);
 #else
    QMessageBox::information(this,
                             "Registration",
@@ -6045,7 +6048,8 @@ ossimGui::DataManagerRegistrationItem*
 ossimGui::DataManagerWidget::createDefaultBundleNativeAffineAutoRegistrationItem(
    std::size_t bundleNeighborSpan,
    const QString& nodeName,
-   const std::string& launchPreset)
+   const std::string& launchPreset,
+   bool autoPairPolicy)
 {
 #ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
    RegistrationSetupOptions setupOptions =
@@ -6053,9 +6057,11 @@ ossimGui::DataManagerWidget::createDefaultBundleNativeAffineAutoRegistrationItem
                                 "native-affine-ncc");
    setupOptions.bundleNeighborSpan = bundleNeighborSpan;
    setupOptions.bundlePairPolicy =
-      bundleNeighborSpan ?
-         BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN :
-         BUNDLE_PAIR_POLICY_ALL_PAIRS;
+      autoPairPolicy ?
+         BUNDLE_PAIR_POLICY_AUTO :
+         (bundleNeighborSpan ?
+             BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN :
+             BUNDLE_PAIR_POLICY_ALL_PAIRS);
    ossimRefPtr<ossimBundleAdjustmentRegistrationSource> bundle =
       new ossimBundleAdjustmentRegistrationSource();
    bundle->setAllInputsFloating(true);
@@ -6071,7 +6077,9 @@ ossimGui::DataManagerWidget::createDefaultBundleNativeAffineAutoRegistrationItem
    registrationOptions.setBundlePairPolicy(
       sharedBundlePairPolicy(setupOptions.bundlePairPolicy));
    registrationOptions.setBundleNeighborSpan(
-      setupOptions.bundleNeighborSpan);
+      setupOptions.bundlePairPolicy == BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN ?
+         setupOptions.bundleNeighborSpan :
+         0);
    registrationOptions.overrides().setAutoDenseGridSeedBudget(true);
    registrationOptions.setOpencvRansacPrefilter(
       setupOptions.opencvRansacPrefilter);
@@ -6103,6 +6111,7 @@ ossimGui::DataManagerWidget::createDefaultBundleNativeAffineAutoRegistrationItem
                .arg(setupOptions.autoDenseGridSeedBudget ? "true" : "false")
                .arg(QString::fromStdString(
                   bundlePairPolicyDescription(
+                     setupOptions.bundlePairPolicy,
                      setupOptions.bundleNeighborSpan))));
          m_registrationSources->addChild(item);
          m_activeItems.insert(item);
@@ -6208,8 +6217,9 @@ void ossimGui::DataManagerWidget::createBundleNativeAffineStripAutoRegistrationF
    connectAndExecuteSelectedRegistration(
       createDefaultBundleNativeAffineAutoRegistrationItem(
          1,
-         "Bundle Native Affine Strip Auto Registration",
-         "native_affine_strip_auto"));
+         "Bundle Native Affine Ordered Strip Registration",
+         "native_affine_strip_auto",
+         true));
 #else
    QMessageBox::information(this,
                             "Registration",
@@ -7289,9 +7299,17 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
       QAction* bundleFloatingAction =
          registrationMenu->addAction("Bundle/Floating");
       QAction* bundleNativeAffineAction =
-         registrationMenu->addAction("Bundle Native Affine Auto");
+         registrationMenu->addAction("Bundle Native Affine (General)");
       QAction* bundleNativeAffineStripAction =
-         registrationMenu->addAction("Bundle Native Affine Strip Auto");
+         registrationMenu->addAction("Bundle Native Affine (Ordered Strip)");
+      bundleNativeAffineAction->setToolTip(
+         "General native-affine bundle default for mixed overlap sets.");
+      bundleNativeAffineAction->setStatusTip(
+         "General native-affine bundle default for mixed overlap sets.");
+      bundleNativeAffineStripAction->setToolTip(
+         "Use when selected images are ordered along a strip or flightline.");
+      bundleNativeAffineStripAction->setStatusTip(
+         "Use when selected images are ordered along a strip or flightline.");
 #ifndef OSSIM_REGISTRATION_SOURCE_ENABLED
       setupAction->setEnabled(false);
       fixedAction->setEnabled(false);
@@ -7458,9 +7476,17 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
         QAction* bundleRegistrationAction =
            registrationMenu->addAction("Default Bundle All-Floating");
         QAction* bundleNativeAffineAction =
-           registrationMenu->addAction("Bundle Native Affine Auto");
+           registrationMenu->addAction("Bundle Native Affine (General)");
         QAction* bundleNativeAffineStripAction =
-           registrationMenu->addAction("Bundle Native Affine Strip Auto");
+           registrationMenu->addAction("Bundle Native Affine (Ordered Strip)");
+        bundleNativeAffineAction->setToolTip(
+           "General native-affine bundle default for mixed overlap sets.");
+        bundleNativeAffineAction->setStatusTip(
+           "General native-affine bundle default for mixed overlap sets.");
+        bundleNativeAffineStripAction->setToolTip(
+           "Use when selected images are ordered along a strip or flightline.");
+        bundleNativeAffineStripAction->setStatusTip(
+           "Use when selected images are ordered along a strip or flightline.");
 #ifndef OSSIM_REGISTRATION_SOURCE_ENABLED
         fixedRegistrationAction->setEnabled(false);
         fixedNativeAffineAction->setEnabled(false);

@@ -761,9 +761,10 @@ namespace ossimGui{
          createDefaultBundleNativeAffineAutoRegistrationItem(
             std::size_t bundleNeighborSpan = 0,
             const QString& nodeName =
-               QString("Bundle Native Affine Auto Registration"),
+               QString("Bundle Native Affine General Registration"),
             const std::string& launchPreset =
-               std::string("native_affine_auto"));
+               std::string("native_affine_auto"),
+            bool autoPairPolicy = false);
       QList<DataManagerItem*> selectedRegistrationInputItems() const;
       void connectAndExecuteSelectedRegistration(
          DataManagerRegistrationItem* item);

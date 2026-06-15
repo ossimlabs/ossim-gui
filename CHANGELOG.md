@@ -73,6 +73,11 @@ All notable changes to `ossim-gui` are documented here.
 > GeoCell bundle completion text now includes compact Auto pair-policy speed
 > evidence, including generated/full pairs, saved pairs, timing, and fallback
 > result when present.
+> The native-affine strip bundle action now requests the shared Auto pair
+> policy, so clear strips still promote to `neighbor_span_1` while ambiguous
+> cases can fall back to all pairs without changing the menu workflow.
+> Native-affine bundle menu labels now present the choice as General versus
+> Ordered Strip, keeping advanced pair-policy details in setup/properties.
 
 ### Added
 - Add generated/full pair counts, saved pair count, pair-generation timing, and
