@@ -78,6 +78,9 @@ All notable changes to `ossim-gui` are documented here.
 > cases can fall back to all pairs without changing the menu workflow.
 > Native-affine bundle menu labels now present the choice as General versus
 > Ordered Strip, keeping advanced pair-policy details in setup/properties.
+> GeoCell bundle reports now include the same native matcher policy diagnostic
+> as CLI runs, so visual swipe testing can see when native-affine stood alone
+> or needed recovery.
 
 ### Added
 - Add generated/full pair counts, saved pair count, pair-generation timing, and
