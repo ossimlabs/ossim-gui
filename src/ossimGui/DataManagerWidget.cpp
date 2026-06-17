@@ -6192,7 +6192,7 @@ void ossimGui::DataManagerWidget::createBundleNativeAffineStripAutoRegistration(
       1,
       BUNDLE_NATIVE_AFFINE_STRIP_AUTO_LABEL,
       "native_affine_strip_auto",
-      true);
+      false);
 #else
    QMessageBox::information(this,
                             "Registration",
@@ -6443,7 +6443,7 @@ void ossimGui::DataManagerWidget::createBundleNativeAffineStripAutoRegistrationF
          1,
          BUNDLE_NATIVE_AFFINE_STRIP_AUTO_LABEL,
          "native_affine_strip_auto",
-         true));
+         false));
 #else
    QMessageBox::information(this,
                             "Registration",
@@ -7538,9 +7538,9 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
       bundleNativeAffineMatcherAutoAction->setStatusTip(
          "Native-affine bundle with automatic native matcher fallback selection.");
       bundleNativeAffineStripAction->setToolTip(
-         "Use when selected images are ordered along a strip or flightline.");
+         "Use adjacent pairs when selected images are ordered along a strip or flightline.");
       bundleNativeAffineStripAction->setStatusTip(
-         "Use when selected images are ordered along a strip or flightline.");
+         "Use adjacent pairs when selected images are ordered along a strip or flightline.");
 #ifndef OSSIM_REGISTRATION_SOURCE_ENABLED
       setupAction->setEnabled(false);
       fixedAction->setEnabled(false);
@@ -7729,9 +7729,9 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
         bundleNativeAffineMatcherAutoAction->setStatusTip(
            "Native-affine bundle with automatic native matcher fallback selection.");
         bundleNativeAffineStripAction->setToolTip(
-           "Use when selected images are ordered along a strip or flightline.");
+           "Use adjacent pairs when selected images are ordered along a strip or flightline.");
         bundleNativeAffineStripAction->setStatusTip(
-           "Use when selected images are ordered along a strip or flightline.");
+           "Use adjacent pairs when selected images are ordered along a strip or flightline.");
 #ifndef OSSIM_REGISTRATION_SOURCE_ENABLED
         fixedRegistrationAction->setEnabled(false);
         fixedOpenCvAction->setEnabled(false);
