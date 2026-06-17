@@ -656,6 +656,7 @@ namespace ossimGui{
       virtual void createBundleNativeAffineMatcherAutoRegistration();
       virtual void createBundleNativeAffineStripAutoRegistration();
       virtual void createFixedRegistrationFromSelection();
+      virtual void createFixedOpenCvAutoRegistrationFromSelection();
       virtual void createFixedNativeAffineAutoRegistrationFromSelection();
       virtual void createBundleFloatingRegistrationFromSelection();
       virtual void createBundleNativeAffineAutoRegistrationFromSelection();
@@ -756,6 +757,8 @@ namespace ossimGui{
       void createWriterFromType(const QString& classType);
       DataManagerRegistrationItem* createDefaultFixedRegistrationItem();
       DataManagerRegistrationItem*
+         createDefaultFixedOpenCvAutoRegistrationItem();
+      DataManagerRegistrationItem*
          createDefaultFixedNativeAffineAutoRegistrationItem();
       DataManagerRegistrationItem*
          createDefaultBundleFloatingRegistrationItem();
@@ -763,7 +766,7 @@ namespace ossimGui{
          createDefaultBundleNativeAffineAutoRegistrationItem(
             std::size_t bundleNeighborSpan = 0,
             const QString& nodeName =
-               QString("Bundle Native Affine General Registration"),
+               QString("Bundle Native Affine Auto"),
             const std::string& launchPreset =
                std::string("native_affine_auto"),
             bool autoPairPolicy = false,

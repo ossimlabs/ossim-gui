@@ -86,6 +86,21 @@
 #include <ossim_autoreg/TiePointGenerator.h>
 #endif
 
+namespace
+{
+   const char* FIXED_AUTO_LABEL = "Fixed Auto";
+   const char* FIXED_OPENCV_AUTO_LABEL = "Fixed OpenCV Auto";
+   const char* FIXED_NATIVE_AFFINE_AUTO_LABEL = "Fixed Native Affine Auto";
+   const char* BUNDLE_ALL_FLOATING_AUTO_LABEL =
+      "Bundle All-Floating Auto";
+   const char* BUNDLE_NATIVE_AFFINE_AUTO_LABEL =
+      "Bundle Native Affine Auto";
+   const char* BUNDLE_NATIVE_AFFINE_MATCHER_AUTO_LABEL =
+      "Bundle Native Affine Matcher Auto";
+   const char* BUNDLE_NATIVE_AFFINE_STRIP_AUTO_LABEL =
+      "Bundle Native Affine Strip Auto";
+}
+
 #ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
 namespace
 {
@@ -6012,7 +6027,7 @@ ossimGui::DataManagerWidget::createDefaultFixedRegistrationItem()
       ossimRefPtr<DataManager::Node> node = m_dataManager->addSource(obj.get(), false);
       if(node.valid())
       {
-         node->setName("Registered: adaptive fixed auto");
+         node->setName(FIXED_AUTO_LABEL);
          DataManagerRegistrationItem* item = new DataManagerRegistrationItem(node.get());
          item->setFlags(item->flags()|Qt::ItemIsEditable);
          m_registrationSources->addChild(item);
@@ -6027,6 +6042,18 @@ ossimGui::DataManagerWidget::createDefaultFixedRegistrationItem()
 void ossimGui::DataManagerWidget::createFixedOpenCvAutoRegistration()
 {
 #ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+   createDefaultFixedOpenCvAutoRegistrationItem();
+#else
+   QMessageBox::warning(this,
+                        "Registration",
+                        "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
+ossimGui::DataManagerRegistrationItem*
+ossimGui::DataManagerWidget::createDefaultFixedOpenCvAutoRegistrationItem()
+{
+#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
    if(!ossim_autoreg::TiePointGeneratorFactory::instance()->
          create("opencv-phase-correlation"))
    {
@@ -6034,7 +6061,7 @@ void ossimGui::DataManagerWidget::createFixedOpenCvAutoRegistration()
          this,
          "Registration",
          "The OpenCV phase-correlation tie-point generator is not available.");
-      return;
+      return 0;
    }
 
    ossimRefPtr<ossimFixedRegistrationSource> registration =
@@ -6059,13 +6086,11 @@ void ossimGui::DataManagerWidget::createFixedOpenCvAutoRegistration()
                .arg(tiePointGeneratorSummary()));
          m_registrationSources->addChild(item);
          m_activeItems.insert(item);
+         return item;
       }
    }
-#else
-   QMessageBox::warning(this,
-                        "Registration",
-                        "ossim-registration-source is not enabled in this build.");
 #endif
+   return 0;
 }
 
 void ossimGui::DataManagerWidget::createFixedNativeAffineAutoRegistration()
@@ -6104,7 +6129,7 @@ ossimGui::DataManagerWidget::createDefaultFixedNativeAffineAutoRegistrationItem(
          m_dataManager->addSource(obj.get(), false);
       if(node.valid())
       {
-         node->setName("Registered: native affine auto");
+         node->setName(FIXED_NATIVE_AFFINE_AUTO_LABEL);
          DataManagerRegistrationItem* item =
             new DataManagerRegistrationItem(node.get());
          item->setFlags(item->flags()|Qt::ItemIsEditable);
@@ -6149,7 +6174,7 @@ void ossimGui::DataManagerWidget::createBundleNativeAffineMatcherAutoRegistratio
 #ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
    createDefaultBundleNativeAffineAutoRegistrationItem(
       0,
-      "Bundle Native Affine Matcher Auto Registration",
+      BUNDLE_NATIVE_AFFINE_MATCHER_AUTO_LABEL,
       "native_affine_matcher_auto",
       false,
       true);
@@ -6165,7 +6190,7 @@ void ossimGui::DataManagerWidget::createBundleNativeAffineStripAutoRegistration(
 #ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
    createDefaultBundleNativeAffineAutoRegistrationItem(
       1,
-      "Bundle Native Affine Ordered Strip Registration",
+      BUNDLE_NATIVE_AFFINE_STRIP_AUTO_LABEL,
       "native_affine_strip_auto",
       true);
 #else
@@ -6192,7 +6217,7 @@ ossimGui::DataManagerWidget::createDefaultBundleFloatingRegistrationItem()
          m_dataManager->addSource(obj.get(), false);
       if(node.valid())
       {
-         node->setName("Bundle All-Floating Registration");
+         node->setName(BUNDLE_ALL_FLOATING_AUTO_LABEL);
          DataManagerRegistrationItem* item =
             new DataManagerRegistrationItem(node.get());
          item->setFlags(item->flags()|Qt::ItemIsEditable);
@@ -6345,6 +6370,18 @@ void ossimGui::DataManagerWidget::createFixedRegistrationFromSelection()
 #endif
 }
 
+void ossimGui::DataManagerWidget::createFixedOpenCvAutoRegistrationFromSelection()
+{
+#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+   connectAndExecuteSelectedRegistration(
+      createDefaultFixedOpenCvAutoRegistrationItem());
+#else
+   QMessageBox::warning(this,
+                        "Registration",
+                        "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
 void ossimGui::DataManagerWidget::createFixedNativeAffineAutoRegistrationFromSelection()
 {
 #ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
@@ -6387,7 +6424,7 @@ void ossimGui::DataManagerWidget::createBundleNativeAffineMatcherAutoRegistratio
    connectAndExecuteSelectedRegistration(
       createDefaultBundleNativeAffineAutoRegistrationItem(
          0,
-         "Bundle Native Affine Matcher Auto Registration",
+         BUNDLE_NATIVE_AFFINE_MATCHER_AUTO_LABEL,
          "native_affine_matcher_auto",
          false,
          true));
@@ -6404,7 +6441,7 @@ void ossimGui::DataManagerWidget::createBundleNativeAffineStripAutoRegistrationF
    connectAndExecuteSelectedRegistration(
       createDefaultBundleNativeAffineAutoRegistrationItem(
          1,
-         "Bundle Native Affine Ordered Strip Registration",
+         BUNDLE_NATIVE_AFFINE_STRIP_AUTO_LABEL,
          "native_affine_strip_auto",
          true));
 #else
@@ -6545,7 +6582,7 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
          setupOptions.adaptiveFullPostBankRefinement);
       obj = registration.get();
       nodeName = setupOptions.matchMethod.empty() ?
-         QString("Registered: adaptive fixed auto") :
+         QString(FIXED_AUTO_LABEL) :
          registeredNodeName(setupOptions.matchMethod);
       toolTip =
          QString("%1\nMatcher: %2\nResampler: %3\nSupport pass resampler: %4\nView GSD: %5\nMin score margin: %6\nNative low-grid policy: %7\nParallel floating inputs: %8\nAdaptive bank threads: %9\nDense seed budget: %10\nAuto dense seed budget: %11\nTie timing diagnostics: %12\nOpenCV RANSAC prefilter: %13\nOpenCV RANSAC threshold: %14")
@@ -7478,19 +7515,20 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
       QMenu* registrationMenu = new QMenu("Registration");
       QAction* setupAction = registrationMenu->addAction("Setup...");
       registrationMenu->addSeparator();
-      QAction* fixedAction = registrationMenu->addAction("Fixed");
+      QAction* fixedAction = registrationMenu->addAction(FIXED_AUTO_LABEL);
       QAction* fixedOpenCvAction =
-         registrationMenu->addAction("Fixed OpenCV Auto");
+         registrationMenu->addAction(FIXED_OPENCV_AUTO_LABEL);
       QAction* fixedNativeAffineAction =
-         registrationMenu->addAction("Fixed Native Affine Auto");
+         registrationMenu->addAction(FIXED_NATIVE_AFFINE_AUTO_LABEL);
       QAction* bundleFloatingAction =
-         registrationMenu->addAction("Bundle/Floating");
+         registrationMenu->addAction(BUNDLE_ALL_FLOATING_AUTO_LABEL);
       QAction* bundleNativeAffineAction =
-         registrationMenu->addAction("Bundle Native Affine (General)");
+         registrationMenu->addAction(BUNDLE_NATIVE_AFFINE_AUTO_LABEL);
       QAction* bundleNativeAffineMatcherAutoAction =
-         registrationMenu->addAction("Bundle Native Affine (Matcher Auto)");
+         registrationMenu->addAction(
+            BUNDLE_NATIVE_AFFINE_MATCHER_AUTO_LABEL);
       QAction* bundleNativeAffineStripAction =
-         registrationMenu->addAction("Bundle Native Affine (Ordered Strip)");
+         registrationMenu->addAction(BUNDLE_NATIVE_AFFINE_STRIP_AUTO_LABEL);
       bundleNativeAffineAction->setToolTip(
          "General native-affine bundle default for mixed overlap sets.");
       bundleNativeAffineAction->setStatusTip(
@@ -7668,17 +7706,20 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
      {
         QMenu* registrationMenu = new QMenu("Registration");
         QAction* fixedRegistrationAction =
-           registrationMenu->addAction("Default Fixed");
+           registrationMenu->addAction(FIXED_AUTO_LABEL);
+        QAction* fixedOpenCvAction =
+           registrationMenu->addAction(FIXED_OPENCV_AUTO_LABEL);
         QAction* fixedNativeAffineAction =
-           registrationMenu->addAction("Fixed Native Affine Auto");
+           registrationMenu->addAction(FIXED_NATIVE_AFFINE_AUTO_LABEL);
         QAction* bundleRegistrationAction =
-           registrationMenu->addAction("Default Bundle All-Floating");
+           registrationMenu->addAction(BUNDLE_ALL_FLOATING_AUTO_LABEL);
         QAction* bundleNativeAffineAction =
-           registrationMenu->addAction("Bundle Native Affine (General)");
+           registrationMenu->addAction(BUNDLE_NATIVE_AFFINE_AUTO_LABEL);
         QAction* bundleNativeAffineMatcherAutoAction =
-           registrationMenu->addAction("Bundle Native Affine (Matcher Auto)");
+           registrationMenu->addAction(
+              BUNDLE_NATIVE_AFFINE_MATCHER_AUTO_LABEL);
         QAction* bundleNativeAffineStripAction =
-           registrationMenu->addAction("Bundle Native Affine (Ordered Strip)");
+           registrationMenu->addAction(BUNDLE_NATIVE_AFFINE_STRIP_AUTO_LABEL);
         bundleNativeAffineAction->setToolTip(
            "General native-affine bundle default for mixed overlap sets.");
         bundleNativeAffineAction->setStatusTip(
@@ -7693,6 +7734,7 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
            "Use when selected images are ordered along a strip or flightline.");
 #ifndef OSSIM_REGISTRATION_SOURCE_ENABLED
         fixedRegistrationAction->setEnabled(false);
+        fixedOpenCvAction->setEnabled(false);
         fixedNativeAffineAction->setEnabled(false);
         bundleRegistrationAction->setEnabled(false);
         bundleNativeAffineAction->setEnabled(false);
@@ -7704,6 +7746,10 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
                 SIGNAL(triggered(bool)),
                 this,
                 SLOT(createFixedRegistrationFromSelection()));
+        connect(fixedOpenCvAction,
+                SIGNAL(triggered(bool)),
+                this,
+                SLOT(createFixedOpenCvAutoRegistrationFromSelection()));
         connect(fixedNativeAffineAction,
                 SIGNAL(triggered(bool)),
                 this,
