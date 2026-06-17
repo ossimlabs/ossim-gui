@@ -1204,6 +1204,10 @@ namespace
           << (source && !source->launchPreset().empty() ?
                  source->launchPreset() :
                  std::string("unspecified")) << "\n";
+      out << "bundle_pair_policy_configured: "
+          << bundleRegistrationPairPolicy(source) << "\n";
+      out << "bundle_neighbor_span_configured: "
+          << (source ? source->bundleNeighborSpan() : 0) << "\n";
       const ossim_autoreg::BundlePairPolicyDiagnostics&
          pairPolicyDiagnostics = result.pairPolicyDiagnostics();
       out << "bundle_pair_policy: "
