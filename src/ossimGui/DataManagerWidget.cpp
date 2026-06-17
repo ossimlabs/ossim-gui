@@ -427,6 +427,9 @@ namespace
    void appendBundlePairPolicyDiagnostics(
       std::ostream& out,
       const ossim_autoreg::BundlePairPolicyDiagnostics& diagnostics);
+   void appendBundleStripEdgeQualityAdvisory(
+      std::ostream& out,
+      const ossim_autoreg::BundleStripEdgeQualityAdvisory& advisory);
 
    std::string bundleRegistrationAcceptanceTier(
       const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
@@ -521,6 +524,22 @@ namespace
          }
          summary += "Edge support: ";
          summary += result.edgeQualityIssue().reason().c_str();
+      }
+      if(result.stripEdgeQualityAdvisory().weak())
+      {
+         const ossim_autoreg::BundleStripEdgeQualityAdvisory& advisory =
+            result.stripEdgeQualityAdvisory();
+         if(!summary.empty())
+         {
+            summary += "\n";
+         }
+         summary += "Strip edge support: ";
+         summary += advisory.reason().c_str();
+         summary += " (";
+         summary += ossimString::toString(
+            static_cast<ossim_uint32>(
+               advisory.sparseAdjacentEdges()));
+         summary += " sparse adjacent edge(s))";
       }
 
       const std::string matcherAlternateSummary =
@@ -1217,6 +1236,9 @@ namespace
       appendBundlePairPolicyDiagnostics(
          out,
          pairPolicyDiagnostics);
+      appendBundleStripEdgeQualityAdvisory(
+         out,
+         result.stripEdgeQualityAdvisory());
       if(source)
       {
          const ossim_autoreg::AutoRegistrationOptions options =
@@ -1489,6 +1511,33 @@ namespace
           << diagnostics.nonAdjacentOverlapAreaPixels() << "\n";
       out << "bundle_pair_policy_adjacent_overlap_dominance_ratio: "
           << diagnostics.adjacentOverlapDominanceRatio() << "\n";
+   }
+
+   void appendBundleStripEdgeQualityAdvisory(
+      std::ostream& out,
+      const ossim_autoreg::BundleStripEdgeQualityAdvisory& advisory)
+   {
+      out << "bundle_strip_edge_quality_applicable: "
+          << (advisory.applicable() ? "true" : "false") << "\n";
+      out << "bundle_strip_edge_quality: "
+          << (advisory.applicable()
+                 ? (advisory.weak() ? "weak" : "ok")
+                 : "not_applicable") << "\n";
+      out << "bundle_strip_edge_quality_reason: "
+          << advisory.reason() << "\n";
+      out << "bundle_strip_edge_expected_adjacent_edges: "
+          << advisory.expectedAdjacentEdges() << "\n";
+      out << "bundle_strip_edge_observed_adjacent_edges: "
+          << advisory.observedAdjacentEdges() << "\n";
+      out << "bundle_strip_edge_sparse_adjacent_edges: "
+          << advisory.sparseAdjacentEdges() << "\n";
+      out << "bundle_strip_edge_worst_edge: image["
+          << advisory.worstFirstImageIndex() << "]->image["
+          << advisory.worstSecondImageIndex() << "]\n";
+      out << "bundle_strip_edge_worst_tie_points: "
+          << advisory.worstTiePointCount() << "\n";
+      out << "bundle_strip_edge_required_tie_points: "
+          << advisory.requiredTiePointCount() << "\n";
    }
 
    struct RegistrationSetupOptions
