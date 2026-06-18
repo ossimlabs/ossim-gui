@@ -91,6 +91,15 @@ All notable changes to `ossim-gui` are documented here.
 > Registration and chain context menus now use the same Auto action names, the
 > ordered strip preset really uses adjacent strip pairs, and bundle reports
 > show both the configured pair policy and strip-edge support.
+> GeoCell shutdown now cancels and detaches registration job callbacks before
+> the data manager widget disappears, so closing during a long registration
+> should be much less exciting.
+
+### Fixed
+- Prevent GeoCell shutdown crashes when a registration, image-open, or staging
+  job is still running by detaching widget callbacks, canceling queued work,
+  draining pending widget events, and waiting for the worker queue from the
+  main window close path (`06576ee`).
 
 ### Added
 - Show shared strip-edge quality advisories in GeoCell bundle summaries and
