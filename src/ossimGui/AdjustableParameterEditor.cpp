@@ -7,10 +7,11 @@
 #include <QTableWidgetItem>
 #include <QFileDialog>
 static const int NAME_INDEX       = 0;
-static const int SIGMA_INDEX      = 1;
-static const int PARAMETER_INDEX  = 2;
-static const int SLIDER_INDEX     = 3;
-static const int VALUE_INDEX      = 4;
+static const int LOCK_INDEX       = 1;
+static const int SIGMA_INDEX      = 2;
+static const int PARAMETER_INDEX  = 3;
+static const int SLIDER_INDEX     = 4;
+static const int VALUE_INDEX      = 5;
 
 namespace
 {
@@ -171,6 +172,7 @@ void ossimGui::AdjustableParameterEditor::transferToTable()
             double sigma            = m_interface->getParameterSigma(idx);
             double parameter         = m_interface->getAdjustableParameter(idx);
             double offset           = m_interface->computeParameterOffset(idx);
+            bool lockFlag            = m_interface->getParameterLockFlag(idx);
             
             if(!m_adjustableParameterTable->item(idx, NAME_INDEX))
             {
@@ -179,6 +181,25 @@ void ossimGui::AdjustableParameterEditor::transferToTable()
             else 
             {
                m_adjustableParameterTable->item(idx, NAME_INDEX)->setText(description.c_str());
+            }
+
+            AdjustableParameterLockCheckBox* lockBox = 0;
+            if(!m_adjustableParameterTable->cellWidget(idx, LOCK_INDEX))
+            {
+               lockBox = new AdjustableParameterLockCheckBox(idx, LOCK_INDEX);
+               connect(lockBox, SIGNAL(parameterChanged(int, int)), this, SLOT(valueChanged(int, int)));
+               m_adjustableParameterTable->setCellWidget(idx, LOCK_INDEX, lockBox);
+            }
+            else
+            {
+               lockBox = dynamic_cast<AdjustableParameterLockCheckBox*>(m_adjustableParameterTable->cellWidget(idx, LOCK_INDEX));
+            }
+
+            if(lockBox)
+            {
+               lockBox->blockSignals(true);
+               lockBox->setChecked(lockFlag);
+               lockBox->blockSignals(false);
             }
             
             if(!m_adjustableParameterTable->item(idx, SIGMA_INDEX))
@@ -351,28 +372,44 @@ void ossimGui::AdjustableParameterEditor::selectionListChanged()
 
 void ossimGui::AdjustableParameterEditor::valueChanged(int row, int col)
 {
+   if(!m_interface) return;
+
    m_adjustableParameterTable->blockSignals(true);
-   QSlider* slider = dynamic_cast<QSlider*>(m_adjustableParameterTable->cellWidget(row, SLIDER_INDEX));
-   if(!slider) return;
-   if(col == SLIDER_INDEX)
+
+   if(col == LOCK_INDEX)
    {
-      m_interface->setDirtyFlag(true);
+      AdjustableParameterLockCheckBox* lockBox =
+         dynamic_cast<AdjustableParameterLockCheckBox*>(m_adjustableParameterTable->cellWidget(row, LOCK_INDEX));
+      if(lockBox)
+      {
+         m_interface->setDirtyFlag(true);
+         m_interface->setParameterLockFlag(row, lockBox->isChecked());
+         fireRefreshEvent();
+         transferToTable();
+      }
+   }
+   else if(col == SLIDER_INDEX)
+   {
       QSlider* slider = (QSlider*)m_adjustableParameterTable->cellWidget(row, col);
-      
-      int value = slider->value();
-      double multiplier = (double)value/100.0;
-      m_interface->setAdjustableParameter(row, multiplier, true);
-      ossimString parameterValue = ossimString::toString(m_interface->getAdjustableParameter(row));
-      if(parameterValue == ".") parameterValue = "0";
-      
-      m_adjustableParameterTable->item(row, PARAMETER_INDEX)->setText(parameterValue.c_str());
-      
-      ossimString valueOffset    = ossimString::toString(m_interface->computeParameterOffset(row));
-      
-      //if(valueOffset == ".") valueOffset = "0";
-      
-      m_adjustableParameterTable->item(row, VALUE_INDEX)->setText(valueOffset.c_str());
-      fireRefreshEvent();
+      if(slider)
+      {
+         m_interface->setDirtyFlag(true);
+
+         int value = slider->value();
+         double multiplier = (double)value/100.0;
+         m_interface->setAdjustableParameter(row, multiplier, true);
+         ossimString parameterValue = ossimString::toString(m_interface->getAdjustableParameter(row));
+         if(parameterValue == ".") parameterValue = "0";
+
+         m_adjustableParameterTable->item(row, PARAMETER_INDEX)->setText(parameterValue.c_str());
+
+         ossimString valueOffset    = ossimString::toString(m_interface->computeParameterOffset(row));
+
+         //if(valueOffset == ".") valueOffset = "0";
+
+         m_adjustableParameterTable->item(row, VALUE_INDEX)->setText(valueOffset.c_str());
+         fireRefreshEvent();
+      }
    }
    else if(col == SIGMA_INDEX)
    {

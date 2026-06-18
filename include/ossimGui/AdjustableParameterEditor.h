@@ -2,6 +2,7 @@
 #define ossimGuiAdjustableParameterEditor_HEADER
 #include <ui_AdjustableParameterEditor.h>
 // #include <QtGui/QDialog>
+#include <QCheckBox>
 #include <QDialog>
 #include <QSlider>
 #include <ossimGui/Export.h>
@@ -31,6 +32,32 @@ namespace ossimGui
       {
          emit parameterChanged(m_row, m_col);
       }
+   protected:
+      int m_row;
+      int m_col;
+   };
+
+   class AdjustableParameterLockCheckBox : public QCheckBox
+   {
+      Q_OBJECT
+   public:
+      AdjustableParameterLockCheckBox(int row, int col)
+      :QCheckBox(),
+      m_row(row),
+      m_col(col)
+      {
+         connect(this, SIGNAL(toggled(bool)), SLOT(valueChanged(bool)));
+      }
+
+   signals:
+      void parameterChanged(int rowIdx, int colIdx);
+
+   public slots:
+      void valueChanged(bool /* value */)
+      {
+         emit parameterChanged(m_row, m_col);
+      }
+
    protected:
       int m_row;
       int m_col;

@@ -69,6 +69,11 @@
      </column>
      <column>
       <property name="text">
+       <string>Lock</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
        <string>Sigma</string>
       </property>
      </column>
