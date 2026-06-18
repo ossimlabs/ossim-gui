@@ -2350,13 +2350,20 @@ namespace ossimGui
    class ImageStagerJobCallback : public ossimJobCallback
    {
    public:
-      ImageStagerJobCallback(DataManagerWidget* w, DataManagerNodeItem* i=0)
+      ImageStagerJobCallback(DataManagerWidget* w,
+                             std::shared_ptr<std::atomic_bool> shutdownRequested,
+                             DataManagerNodeItem* i=0)
       :m_dataManagerWidget(w),
+      m_shutdownRequested(shutdownRequested),
       m_item(i)
       {
       }
       virtual void finished(std::shared_ptr<ossimJob> job)
       {
+         if(m_shutdownRequested && m_shutdownRequested->load())
+         {
+            return;
+         }
          std::shared_ptr<ImageStagerJob> stagerJob = std::dynamic_pointer_cast<ImageStagerJob> (job);
          
          if(stagerJob)
@@ -2374,6 +2381,7 @@ namespace ossimGui
       
    protected:
       DataManagerWidget* m_dataManagerWidget;  
+      std::shared_ptr<std::atomic_bool> m_shutdownRequested;
       DataManagerNodeItem* m_item;
       
    };
@@ -2384,9 +2392,11 @@ namespace ossimGui
    public:
       RegistrationSourceJob(ossimFixedRegistrationSource* registrationSource,
                             DataManagerWidget* dataManagerWidget,
+                            std::shared_ptr<std::atomic_bool> shutdownRequested,
                             const ossimString& label)
       :m_registrationSource(registrationSource),
        m_dataManagerWidget(dataManagerWidget),
+       m_shutdownRequested(shutdownRequested),
        m_label(label),
        m_launchInputStatus(registrationSource
                               ? registrationSource->inputStatusSummary()
@@ -2406,6 +2416,10 @@ namespace ossimGui
       const DataManagerWidgetEvent::HandlerListType& sourceHandlersToReload()const
       {
          return m_sourceHandlersToReload;
+      }
+      bool widgetShutdownRequested()const
+      {
+         return m_shutdownRequested && m_shutdownRequested->load();
       }
 
       virtual void start()
@@ -2508,14 +2522,16 @@ namespace ossimGui
       bool applyResultOnGuiThread(
          const ossimFixedRegistrationSource::RegistrationResult& result)
       {
-         if(!m_registrationSource.valid() || !m_dataManagerWidget)
+         if(!m_registrationSource.valid() || !m_dataManagerWidget ||
+            widgetShutdownRequested())
          {
             return false;
          }
 
          bool applied = false;
          const auto apply = [this, &result, &applied]() {
-            if(!m_registrationSource.valid())
+            if(!m_registrationSource.valid() ||
+               widgetShutdownRequested())
             {
                applied = false;
                return;
@@ -2562,14 +2578,16 @@ namespace ossimGui
          const ossimFixedRegistrationSource::RegistrationResult& result,
          const ossimFilename& outputFile)
       {
-         if(!m_registrationSource.valid() || !m_dataManagerWidget)
+         if(!m_registrationSource.valid() || !m_dataManagerWidget ||
+            widgetShutdownRequested())
          {
             return false;
          }
 
          bool saved = false;
          const auto saveGeometry = [this, &result, &outputFile, &saved]() {
-            if(!m_registrationSource.valid())
+            if(!m_registrationSource.valid() ||
+               widgetShutdownRequested())
             {
                saved = false;
                return;
@@ -2612,7 +2630,10 @@ namespace ossimGui
             m_registrationSource->setProgressCallback(
                [this](
                   const ossimFixedRegistrationSource::ProgressInfo& progress) {
-                  updateProgressName(progress);
+                  if(!widgetShutdownRequested())
+                  {
+                     updateProgressName(progress);
+                  }
                });
             m_registrationSource->setApplyResultsToInputs(false);
             m_registrationSource->setApplyResultCallback(
@@ -2824,6 +2845,7 @@ namespace ossimGui
 
       ossimRefPtr<ossimFixedRegistrationSource> m_registrationSource;
       DataManagerWidget* m_dataManagerWidget;
+      std::shared_ptr<std::atomic_bool> m_shutdownRequested;
       ossimString m_label;
       std::string m_launchInputStatus;
       std::string m_launchSettings;
@@ -2840,9 +2862,11 @@ namespace ossimGui
       BundleRegistrationSourceJob(
          ossimBundleAdjustmentRegistrationSource* registrationSource,
          DataManagerWidget* dataManagerWidget,
+         std::shared_ptr<std::atomic_bool> shutdownRequested,
          const ossimString& label)
       :m_registrationSource(registrationSource),
        m_dataManagerWidget(dataManagerWidget),
+       m_shutdownRequested(shutdownRequested),
        m_label(label),
        m_success(false)
       {
@@ -2864,6 +2888,10 @@ namespace ossimGui
       const DataManagerWidgetEvent::HandlerListType& sourceHandlersToReload()const
       {
          return m_sourceHandlersToReload;
+      }
+      bool widgetShutdownRequested()const
+      {
+         return m_shutdownRequested && m_shutdownRequested->load();
       }
 
       virtual void start()
@@ -2931,9 +2959,14 @@ namespace ossimGui
       bool saveGeometriesOnGuiThread(
          const std::vector<ossimFilename>& outputGeometryFiles)
       {
+         if(widgetShutdownRequested())
+         {
+            return false;
+         }
          bool saved = false;
          auto saveGeometry = [this, &outputGeometryFiles, &saved]() {
-            saved = m_registrationSource.valid() &&
+            saved = !widgetShutdownRequested() &&
+                    m_registrationSource.valid() &&
                     m_registrationSource->saveGeometries(outputGeometryFiles);
          };
 
@@ -2970,7 +3003,10 @@ namespace ossimGui
             m_registrationSource->setProgressCallback(
                [this](const ossimBundleAdjustmentRegistrationSource::
                          ProgressInfo& progress) {
-                  updateProgressName(progress);
+                  if(!widgetShutdownRequested())
+                  {
+                     updateProgressName(progress);
+                  }
                });
             m_success = m_registrationSource->executeRegistration();
             m_registrationSource->setCancelCallback(
@@ -3150,6 +3186,7 @@ namespace ossimGui
       ossimRefPtr<ossimBundleAdjustmentRegistrationSource>
          m_registrationSource;
       DataManagerWidget* m_dataManagerWidget;
+      std::shared_ptr<std::atomic_bool> m_shutdownRequested;
       ossimString m_label;
       ossimString m_resultSummary;
       ossimString m_advisorySummary;
@@ -3161,14 +3198,21 @@ namespace ossimGui
    {
    public:
       RegistrationSourceJobCallback(DataManagerWidget* widget,
+                                    std::shared_ptr<std::atomic_bool> shutdownRequested,
                                     DataManagerNodeItem* item)
       :m_dataManagerWidget(widget),
+       m_shutdownRequested(shutdownRequested),
        m_item(item)
       {
       }
 
       virtual void finished(std::shared_ptr<ossimJob> job)
       {
+         if(m_shutdownRequested && m_shutdownRequested->load())
+         {
+            ossimJobCallback::finished(job);
+            return;
+         }
          if(m_dataManagerWidget&&m_item)
          {
             DataManagerWidgetEvent* evt =
@@ -3217,6 +3261,7 @@ namespace ossimGui
 
    protected:
       DataManagerWidget* m_dataManagerWidget;
+      std::shared_ptr<std::atomic_bool> m_shutdownRequested;
       DataManagerNodeItem* m_item;
    };
 #endif
@@ -3259,9 +3304,19 @@ namespace ossimGui
    class ImageOpenJobCallback : public ossimJobCallback
    {
    public:
-      ImageOpenJobCallback(DataManagerWidget* widget, ossimRefPtr<DataManager> manager):m_dataManagerWidget(widget),m_dataManager(manager){}
+      ImageOpenJobCallback(DataManagerWidget* widget,
+                           std::shared_ptr<std::atomic_bool> shutdownRequested,
+                           ossimRefPtr<DataManager> manager)
+      :m_dataManagerWidget(widget),
+       m_shutdownRequested(shutdownRequested),
+       m_dataManager(manager)
+      {}
       virtual void finished(std::shared_ptr<ossimJob> job)
       {
+         if(m_shutdownRequested && m_shutdownRequested->load())
+         {
+            return;
+         }
          if(m_dataManager.valid())
          {
             std::shared_ptr<ossimGui::OpenImageUrlJob> imageOpenJob = std::dynamic_pointer_cast<ossimGui::OpenImageUrlJob> (job);
@@ -3295,6 +3350,7 @@ namespace ossimGui
       
    protected:
       DataManagerWidget*       m_dataManagerWidget;
+      std::shared_ptr<std::atomic_bool> m_shutdownRequested;
       ossimRefPtr<DataManager> m_dataManager;
    };
 }
@@ -3814,10 +3870,12 @@ void ossimGui::DataManagerRegistrationItem::execute()
                std::make_shared<RegistrationSourceJob>(
                   registration,
                   dataManagerWidget(),
+                  dataManagerWidget()->shutdownRequested(),
                   ossimString(text(0).toStdString()));
             job->setCallback(
                std::make_shared<RegistrationSourceJobCallback>(
                   dataManagerWidget(),
+                  dataManagerWidget()->shutdownRequested(),
                   this));
             job->ready();
             q->add(job);
@@ -3828,10 +3886,12 @@ void ossimGui::DataManagerRegistrationItem::execute()
                std::make_shared<BundleRegistrationSourceJob>(
                   bundleRegistration,
                   dataManagerWidget(),
+                  dataManagerWidget()->shutdownRequested(),
                   ossimString(text(0).toStdString()));
             job->setCallback(
                std::make_shared<RegistrationSourceJobCallback>(
                   dataManagerWidget(),
+                  dataManagerWidget()->shutdownRequested(),
                   this));
             job->ready();
             q->add(job);
@@ -4469,7 +4529,7 @@ ossimGui::DataManagerJobItem::DataManagerJobItem()
 
 ossimGui::DataManagerJobItem::~DataManagerJobItem()
 {
-   if(m_job)
+   if(m_job&&m_jobCallback)
    {
       m_job->setCallback(m_jobCallback->callback());
    }
@@ -4510,8 +4570,27 @@ void ossimGui::DataManagerJobItem::cancel()
    }
 }
 
+void ossimGui::DataManagerJobItem::prepareForShutdown()
+{
+   if(m_jobCallback)
+   {
+      m_jobCallback->detach();
+   }
+   if(m_job)
+   {
+      m_job->cancel();
+      m_job->setCallback(std::shared_ptr<ossimJobCallback>());
+   }
+   m_jobCallback.reset();
+}
+
 void ossimGui::DataManagerJobItem::JobCallback::ready(std::shared_ptr<ossimJob> job)
 {
+   if(!m_jobItem)
+   {
+      ossimJobCallback::ready(job);
+      return;
+   }
    DataManagerJobsFolder* folder = m_jobItem->findParentItemAs<DataManagerJobsFolder>();
    if(folder)
    {
@@ -4524,6 +4603,11 @@ void ossimGui::DataManagerJobItem::JobCallback::ready(std::shared_ptr<ossimJob> 
 
 void ossimGui::DataManagerJobItem::JobCallback::started(std::shared_ptr<ossimJob> job)
 {
+   if(!m_jobItem)
+   {
+      ossimJobCallback::started(job);
+      return;
+   }
    DataManagerJobsFolder* folder = m_jobItem->findParentItemAs<DataManagerJobsFolder>();
    if(folder)
    {
@@ -4536,6 +4620,11 @@ void ossimGui::DataManagerJobItem::JobCallback::started(std::shared_ptr<ossimJob
 
 void ossimGui::DataManagerJobItem::JobCallback::finished(std::shared_ptr<ossimJob> job)
 {
+   if(!m_jobItem)
+   {
+      ossimJobCallback::finished(job);
+      return;
+   }
    DataManagerJobsFolder* folder = m_jobItem->findParentItemAs<DataManagerJobsFolder>();
    if(folder)
    {
@@ -4548,6 +4637,11 @@ void ossimGui::DataManagerJobItem::JobCallback::finished(std::shared_ptr<ossimJo
 
 void ossimGui::DataManagerJobItem::JobCallback::canceled(std::shared_ptr<ossimJob> job)
 {
+   if(!m_jobItem)
+   {
+      ossimJobCallback::canceled(job);
+      return;
+   }
    DataManagerWidgetJobEvent* e = new DataManagerWidgetJobEvent(DataManagerWidgetJobEvent::COMMAND_JOB_STATE_CHANGED);
    e->setJobList(job);
    QCoreApplication::postEvent(m_jobItem->treeWidget(), e);
@@ -4556,6 +4650,11 @@ void ossimGui::DataManagerJobItem::JobCallback::canceled(std::shared_ptr<ossimJo
 
 void ossimGui::DataManagerJobItem::JobCallback::nameChanged(const ossimString& name, std::shared_ptr<ossimJob> job)
 {
+   if(!m_jobItem)
+   {
+      ossimJobCallback::nameChanged(name, job);
+      return;
+   }
    DataManagerWidgetJobEvent* e = new DataManagerWidgetJobEvent(DataManagerWidgetJobEvent::COMMAND_JOB_PROPERTY_CHANGED);
    e->setJobList(job);
    QCoreApplication::postEvent(m_jobItem->treeWidget(), e);
@@ -4565,6 +4664,11 @@ void ossimGui::DataManagerJobItem::JobCallback::nameChanged(const ossimString& n
 
 void ossimGui::DataManagerJobItem::JobCallback::descriptionChanged(const ossimString& description, std::shared_ptr<ossimJob> job)
 {
+   if(!m_jobItem)
+   {
+      ossimJobCallback::descriptionChanged(description, job);
+      return;
+   }
    DataManagerWidgetJobEvent* e = new DataManagerWidgetJobEvent(DataManagerWidgetJobEvent::COMMAND_JOB_PROPERTY_CHANGED);
    e->setJobList(job);
    QCoreApplication::postEvent(m_jobItem->treeWidget(), e);
@@ -4574,6 +4678,11 @@ void ossimGui::DataManagerJobItem::JobCallback::descriptionChanged(const ossimSt
 
 void ossimGui::DataManagerJobItem::JobCallback::idChanged(const ossimString& id, std::shared_ptr<ossimJob> job)
 {
+   if(!m_jobItem)
+   {
+      ossimJobCallback::idChanged(id, job);
+      return;
+   }
    DataManagerWidgetJobEvent* e = new DataManagerWidgetJobEvent(DataManagerWidgetJobEvent::COMMAND_JOB_PROPERTY_CHANGED);
    e->setJobList(job);
    QCoreApplication::postEvent(m_jobItem->treeWidget(), e);
@@ -4583,6 +4692,11 @@ void ossimGui::DataManagerJobItem::JobCallback::idChanged(const ossimString& id,
 
 void ossimGui::DataManagerJobItem::JobCallback::percentCompleteChanged(double percentValue, std::shared_ptr<ossimJob> job)
 {
+   if(!m_jobItem)
+   {
+      ossimJobCallback::percentCompleteChanged(percentValue, job);
+      return;
+   }
    ossimJobCallback::percentCompleteChanged(percentValue, job);
    DataManagerWidgetJobEvent* e = new DataManagerWidgetJobEvent(DataManagerWidgetJobEvent::COMMAND_JOB_PERCENT_COMPLETE);
    e->setJobList(percentValue, job);
@@ -4615,6 +4729,38 @@ ossimGui::DataManagerJobsFolder::DataManagerJobsFolder(QTreeWidgetItem* parent)
 
 ossimGui::DataManagerJobsFolder::~DataManagerJobsFolder()
 {
+   prepareForShutdown();
+}
+
+void ossimGui::DataManagerJobsFolder::prepareForShutdown()
+{
+   std::lock_guard<std::mutex> lock(m_jobsFolderMutex);
+   if(m_jobQueueCallback)
+   {
+      m_jobQueueCallback->detach();
+   }
+   QueueListType::iterator queueIter = m_queues.begin();
+   while(queueIter != m_queues.end())
+   {
+      if(*queueIter)
+      {
+         (*queueIter)->setCallback(std::shared_ptr<ossimJobQueue::Callback>());
+         (*queueIter)->clear();
+         (*queueIter)->releaseBlock();
+      }
+      ++queueIter;
+   }
+   JobMapType::iterator jobIter = m_jobItemMap.begin();
+   while(jobIter != m_jobItemMap.end())
+   {
+      DataManagerJobItem* jobItem =
+         dynamic_cast<DataManagerJobItem*>((*jobIter).second);
+      if(jobItem)
+      {
+         jobItem->prepareForShutdown();
+      }
+      ++jobIter;
+   }
 }
 
 void ossimGui::DataManagerJobsFolder::removeStoppedJobs()
@@ -4633,8 +4779,11 @@ void ossimGui::DataManagerJobsFolder::setQueue(std::shared_ptr<ossimJobQueue> q)
 {
    std::lock_guard<std::mutex> lock(m_jobsFolderMutex);
    m_queues.clear();
-   m_queues.push_back(q);
-   q->setCallback(m_jobQueueCallback);
+   if(q)
+   {
+      m_queues.push_back(q);
+      q->setCallback(m_jobQueueCallback);
+   }
 }
 
 
@@ -4645,6 +4794,11 @@ ossimGui::DataManagerWidget::DataManagerCallback::DataManagerCallback(DataManage
 
 void ossimGui::DataManagerWidget::DataManagerCallback::nodesRemoved(DataManager::NodeListType& nodes)
 {
+   if(!m_dataManagerWidget ||
+      m_dataManagerWidget->isPreparingForShutdown())
+   {
+      return;
+   }
    QTreeWidgetItemIterator iter(m_dataManagerWidget);
    
    // see if we are removing the planetary node
@@ -4675,6 +4829,11 @@ void ossimGui::DataManagerWidget::DataManagerCallback::nodesRemoved(DataManager:
 
 void ossimGui::DataManagerWidget::DataManagerCallback::nodesAdded(DataManager::NodeListType& nodes)
 {
+   if(!m_dataManagerWidget ||
+      m_dataManagerWidget->isPreparingForShutdown())
+   {
+      return;
+   }
    DataManagerEvent* e = new DataManagerEvent(DataManagerEvent::COMMAND_NODE_ADDED);
    e->setNodeList(nodes);
    QCoreApplication::postEvent(m_dataManagerWidget, e);
@@ -4686,6 +4845,7 @@ ossimGui::DataManagerWidget::DataManagerWidget(QWidget* parent)
      m_dataManagerCallback( std::make_shared<DataManagerCallback>(this) ),
      m_jobQueue(0),
      m_displayQueue(std::make_shared<DisplayTimerJobQueue>()),
+     m_shutdownRequested(std::make_shared<std::atomic_bool>(false)),
      m_rootImageFolder(0),
      m_rootJobsFolder(0),
      m_rawImageSources(0),
@@ -4721,6 +4881,42 @@ ossimGui::DataManagerWidget::DataManagerWidget(QWidget* parent)
    connect(this, SIGNAL(itemCollapsed(QTreeWidgetItem*)), this, SLOT(itemCollapsed(QTreeWidgetItem*)));
    connect(this, SIGNAL(itemExpanded(QTreeWidgetItem*)), this, SLOT(itemExpanded(QTreeWidgetItem*)));
 
+}
+
+ossimGui::DataManagerWidget::~DataManagerWidget()
+{
+   prepareForShutdown();
+}
+
+bool ossimGui::DataManagerWidget::isPreparingForShutdown()const
+{
+   return m_shutdownRequested && m_shutdownRequested->load();
+}
+
+void ossimGui::DataManagerWidget::prepareForShutdown()
+{
+   if(m_shutdownRequested && m_shutdownRequested->exchange(true))
+   {
+      return;
+   }
+
+   if(m_dataManager.valid())
+   {
+      m_dataManager->setCallback(std::shared_ptr<DataManager::Callback>());
+   }
+   if(m_rootJobsFolder)
+   {
+      m_rootJobsFolder->prepareForShutdown();
+   }
+   if(m_jobQueue)
+   {
+      m_jobQueue->setCallback(std::shared_ptr<ossimJobQueue::Callback>());
+      m_jobQueue->clear();
+      m_jobQueue->releaseBlock();
+   }
+
+   QCoreApplication::sendPostedEvents(this, QEvent::MetaCall);
+   QCoreApplication::removePostedEvents(this);
 }
 
 bool ossimGui::DataManagerWidget::openDataManager(const ossimFilename& file)
@@ -5223,7 +5419,11 @@ void ossimGui::DataManagerWidget::buildOverviewsForSelected(const QString& type)
             if(isource.valid())
             {
                std::shared_ptr<ImageStagerJob> stagerJob = std::make_shared<ImageStagerJob>(isource.get(), ImageStagerJob::STAGE_OVERVIEWS);
-               stagerJob->setCallback(std::make_shared<ImageStagerJobCallback>(this, (*item)));
+               stagerJob->setCallback(
+                  std::make_shared<ImageStagerJobCallback>(
+                     this,
+                     m_shutdownRequested,
+                     (*item)));
                stagerJob->setOverviewType(type.toStdString());
                m_jobQueue->add(stagerJob);
                stagerJob = 0; isource = 0;
@@ -5807,7 +6007,11 @@ void ossimGui::DataManagerWidget::openLocalImage()
             QUrl url = QUrl::fromLocalFile(fileNames.at(i));
             std::shared_ptr<OpenImageUrlJob> job = std::make_shared<OpenImageUrlJob>(url);
             job->setName(ossimString("open ") + url.toString().toStdString());
-            std::shared_ptr<ImageOpenJobCallback> callback = std::make_shared<ImageOpenJobCallback>(this, m_dataManager);
+            std::shared_ptr<ImageOpenJobCallback> callback =
+               std::make_shared<ImageOpenJobCallback>(
+                  this,
+                  m_shutdownRequested,
+                  m_dataManager);
             job->setCallback(callback);
             m_jobQueue->add(job);
 
@@ -7109,6 +7313,18 @@ void	ossimGui::DataManagerWidget::itemExpanded (QTreeWidgetItem* item)
 
 bool	ossimGui::DataManagerWidget::event( QEvent * e )
 {
+   if(isPreparingForShutdown())
+   {
+      const int eventType = e->type();
+      if(eventType == DATA_MANAGER_WIDGET_JOB_EVENT_ID ||
+         eventType == DATA_MANAGER_WIDGET_EVENT_ID ||
+         eventType == DATA_MANAGER_EVENT_ID)
+      {
+         e->accept();
+         return true;
+      }
+   }
+
    switch(e->type())
    {
       case DATA_MANAGER_WIDGET_JOB_EVENT_ID:

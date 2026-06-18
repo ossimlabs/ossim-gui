@@ -10,6 +10,7 @@
 #include <ossimGui/DisplayTimerJobQueue.h>
 
 class QMdiArea;
+class QCloseEvent;
 namespace ossimGui
 {
    class ImageScrollWidget;
@@ -19,6 +20,7 @@ namespace ossimGui
       Q_OBJECT
    public:
       MainWindow(QWidget* parent=0);
+      virtual ~MainWindow();
       
       /**
        * This method will create and set a default menu bar.  This will destroy the
@@ -52,6 +54,8 @@ namespace ossimGui
       void about(bool checked=false);
    protected:
       ImageMdiSubWindow* createImageWindow();
+      virtual void closeEvent(QCloseEvent* event);
+      void shutdownJobQueues();
       //QMdiArea *mdiArea;
       std::shared_ptr<ossimJobMultiThreadQueue>       m_stagerQueue;
       std::shared_ptr<ossimGui::DisplayTimerJobQueue> m_displayQueue;

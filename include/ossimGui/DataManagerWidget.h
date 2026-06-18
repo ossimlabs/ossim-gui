@@ -10,6 +10,7 @@
 #include <QtCore/QModelIndex>
 #include <QCheckBox>
 #include <QComboBox>
+#include <atomic>
 //#include <QProgressBar>
 #include <ossimGui/Export.h>
 #include <ossimGui/Event.h>
@@ -402,6 +403,7 @@ namespace ossimGui{
       virtual ~DataManagerJobItem();
       virtual void setJob(std::shared_ptr<ossimJob> job);
       virtual void cancel();
+      virtual void prepareForShutdown();
       void setPercentComplete(double value)
       {
          if(m_progressBar)
@@ -424,6 +426,7 @@ namespace ossimGui{
          virtual void idChanged(const ossimString& id, std::shared_ptr<ossimJob> job);
          
          virtual void percentCompleteChanged(double percentValue, std::shared_ptr<ossimJob> job);
+         void detach(){m_jobItem = 0;}
          
          DataManagerJobItem* m_jobItem;
       };
@@ -444,6 +447,7 @@ namespace ossimGui{
       DataManagerJobsFolder(QTreeWidgetItem* parent);
       virtual ~DataManagerJobsFolder();
       void setQueue(std::shared_ptr<ossimJobQueue> q);
+      void prepareForShutdown();
       void removeStoppedJobs();
       void addJob(std::shared_ptr<ossimJob> job)
       {
@@ -554,6 +558,7 @@ namespace ossimGui{
          virtual void added(std::shared_ptr<ossimJobQueue> /*q*/, 
                             std::shared_ptr<ossimJob> /*job*/)
          {}
+         void detach(){m_folder = 0;}
          
          DataManagerJobsFolder* m_folder;
       };
@@ -570,6 +575,7 @@ namespace ossimGui{
    public:
       friend class DataManagerNodeItem;
       DataManagerWidget(QWidget* parent=0);
+      virtual ~DataManagerWidget();
       
       //virtual void setDataManager(ossimRefPtr<DataManager> manager);
       DataManager* dataManager(){return m_dataManager.get();}
@@ -581,6 +587,9 @@ namespace ossimGui{
       std::shared_ptr<ossimJobQueue> jobQueue(){return m_jobQueue;}
       std::shared_ptr<ossimJobQueue> displayQueue(){return m_displayQueue;}
       void setDisplayQueue(std::shared_ptr<ossimJobQueue> q){m_displayQueue = q;}
+      void prepareForShutdown();
+      bool isPreparingForShutdown()const;
+      std::shared_ptr<std::atomic_bool> shutdownRequested()const{return m_shutdownRequested;}
       bool openDataManager(const ossimFilename& file);
       void refresh();
       QModelIndex indexFromDataManagerItem(DataManagerItem* item, int col=0);
@@ -798,6 +807,7 @@ namespace ossimGui{
       std::shared_ptr<DataManagerCallback> m_dataManagerCallback;
       std::shared_ptr<ossimJobQueue>       m_jobQueue;
       std::shared_ptr<ossimJobQueue>       m_displayQueue;
+      std::shared_ptr<std::atomic_bool>    m_shutdownRequested;
 
       DataManagerImageFolder*          m_rootImageFolder;
       DataManagerJobsFolder*           m_rootJobsFolder;
