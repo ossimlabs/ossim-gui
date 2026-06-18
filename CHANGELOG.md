@@ -88,8 +88,17 @@ All notable changes to `ossim-gui` are documented here.
 > reason fields.
 > GeoCell bundle reports now state whether explicit native matcher Auto policy
 > applied and what action it took.
+> Registration and chain context menus now use the same Auto action names, the
+> ordered strip preset really uses adjacent strip pairs, and bundle reports
+> show both the configured pair policy and strip-edge support.
 
 ### Added
+- Show shared strip-edge quality advisories in GeoCell bundle summaries and
+  reports, including sparse adjacent edge counts and the weakest adjacent edge
+  tie support (`2f1b644`).
+- Add configured bundle pair policy and neighbor-span fields to GeoCell bundle
+  reports so the selected preset is visible beside the resolved graph
+  diagnostics (`c9cfc94`).
 - Add generated/full pair counts, saved pair count, pair-generation timing, and
   fallback result to GeoCell's compact bundle pair-policy completion summary.
 - Add explicit Auto bundle pair-policy fallback fields to GeoCell quality
@@ -208,6 +217,12 @@ All notable changes to `ossim-gui` are documented here.
   checkbox/combobox editors that no longer fight the table paint layer.
 
 ### Changed
+- Make `Bundle Native Affine Strip Auto` request explicit adjacent strip pairs
+  and update its tooltip so ordered flightline runs use the graph promised by
+  the menu label (`4770ff6`).
+- Align GeoCell Registration-folder and selected chain/source context-menu Auto
+  labels and creation paths, including adding the missing `Fixed OpenCV Auto`
+  selected-chain action (`47ef0b1`).
 - Keep the latest fixed-registration geometry progress label visible through
   generic tie-generation updates so RMSE/tie-count feedback remains readable
   during long GeoCell runs.
