@@ -93,7 +93,9 @@ All notable changes to `ossim-gui` are documented here.
 > show both the configured pair policy and strip-edge support.
 > GeoCell shutdown now cancels and detaches registration job callbacks before
 > the data manager widget disappears, so closing during a long registration
-> should be much less exciting.
+> should be much less exciting. Adjustable parameters can now be locked and
+> unlocked directly from GeoCell, so that persistent flag no longer requires
+> a side quest outside the dialog.
 
 ### Fixed
 - Prevent GeoCell shutdown crashes when a registration, image-open, or staging
@@ -102,6 +104,9 @@ All notable changes to `ossim-gui` are documented here.
   main window close path (`06576ee`).
 
 ### Added
+- Add a `Lock` checkbox column to the Adjustable Parameter dialog so GeoCell
+  users can toggle each parameter lock flag and persist the change through the
+  existing OSSIM adjustment interface (`708edb2`).
 - Show shared strip-edge quality advisories in GeoCell bundle summaries and
   reports, including sparse adjacent edge counts and the weakest adjacent edge
   tie support (`2f1b644`).
