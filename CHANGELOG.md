@@ -286,13 +286,19 @@ All notable changes to `ossim-gui` are documented here.
 ## [2026-07-18]
 
 > **TL;DR:** OSSIM GUI builds now continue without registration support when
-> the optional `ossim-autoreg` bridge is unavailable, even if registration was
-> requested by a shared build configuration.
+> the optional `ossim-autoreg` bridge is unavailable. The parent OSSIM build
+> now owns whether that bridge is included, leaving GUI to consume it when
+> present instead of running a second round of package discovery.
 
 ### Fixed
 - Keep `ossim-registration-source` optional by warning and disabling its GUI
   integration when the imported bridge target cannot be found, and avoid stale
   CMake package-registry entries during discovery (`066e56d`).
+
+### Changed
+- Remove GUI-owned registration build controls and package discovery, consume
+  the bridge target supplied by the parent build, and use
+  `OSSIM_AUTOREGISTRATION_ENABLED` for conditional GUI code (`a570ccf`).
 
 ## [2026-05-03]
 
