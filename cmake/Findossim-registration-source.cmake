@@ -30,7 +30,8 @@ list(APPEND _OSSIM_REGISTRATION_SOURCE_HINTS
 
 find_package(ossim-autoreg CONFIG QUIET
   HINTS ${_OSSIM_REGISTRATION_SOURCE_HINTS}
-  PATH_SUFFIXES lib/cmake/ossim-autoreg)
+  PATH_SUFFIXES lib/cmake/ossim-autoreg
+  NO_DEFAULT_PATH)
 
 if(TARGET ossim_registration_source::ossim-registration-source)
   set(ossim-registration-source_FOUND TRUE)
