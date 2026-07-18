@@ -283,6 +283,17 @@ All notable changes to `ossim-gui` are documented here.
   reload path as the new button instead of leaving stale adjustment state in
   the editor.
 
+## [2026-07-18]
+
+> **TL;DR:** OSSIM GUI builds now continue without registration support when
+> the optional `ossim-autoreg` bridge is unavailable, even if registration was
+> requested by a shared build configuration.
+
+### Fixed
+- Keep `ossim-registration-source` optional by warning and disabling its GUI
+  integration when the imported bridge target cannot be found, and avoid stale
+  CMake package-registry entries during discovery (`066e56d`).
+
 ## [2026-05-03]
 
 > **TL;DR:** Bundle/Floating registration now starts with explicit tie-point
