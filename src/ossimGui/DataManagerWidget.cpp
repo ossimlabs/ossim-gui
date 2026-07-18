@@ -78,7 +78,7 @@
 #include <sstream>
 #include <string>
 
-#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
 #include <ossim/registration/ossimBundleAdjustmentRegistrationSource.h>
 #include <ossim/registration/ossimFixedRegistrationSource.h>
 #include <ossim/registration/ossimRegistrationSourceFactory.h>
@@ -101,7 +101,7 @@ namespace
       "Bundle Native Affine Strip Auto";
 }
 
-#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
 namespace
 {
    void ensureRegistrationSourceFactoryRegistered()
@@ -2386,7 +2386,7 @@ namespace ossimGui
       
    };
 
-#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
    class RegistrationSourceJob : public ossimJob
    {
    public:
@@ -3829,7 +3829,7 @@ void ossimGui::DataManagerRegistrationItem::dropItems(
 
 void ossimGui::DataManagerRegistrationItem::execute()
 {
-#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
    if(!objectAsNode())
    {
       return;
@@ -4867,7 +4867,7 @@ ossimGui::DataManagerWidget::DataManagerWidget(QWidget* parent)
      m_planetaryDisplayNode(),
      m_lastOpenedDirectory()
 {
-#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
    ensureRegistrationSourceFactoryRegistered();
 #endif
 
@@ -6239,7 +6239,7 @@ void ossimGui::DataManagerWidget::createWriterFromType(const QString& type)
 
 void ossimGui::DataManagerWidget::createFixedRegistration()
 {
-#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
    createDefaultFixedRegistrationItem();
 #else
    QMessageBox::warning(this,
@@ -6251,7 +6251,7 @@ void ossimGui::DataManagerWidget::createFixedRegistration()
 ossimGui::DataManagerRegistrationItem*
 ossimGui::DataManagerWidget::createDefaultFixedRegistrationItem()
 {
-#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
    ossimRefPtr<ossimFixedRegistrationSource> registration =
       new ossimFixedRegistrationSource();
    ossim_autoreg::AutoRegistrationOptions registrationOptions =
@@ -6298,7 +6298,7 @@ ossimGui::DataManagerWidget::createDefaultFixedRegistrationItem()
 
 void ossimGui::DataManagerWidget::createFixedOpenCvAutoRegistration()
 {
-#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
    createDefaultFixedOpenCvAutoRegistrationItem();
 #else
    QMessageBox::warning(this,
@@ -6310,7 +6310,7 @@ void ossimGui::DataManagerWidget::createFixedOpenCvAutoRegistration()
 ossimGui::DataManagerRegistrationItem*
 ossimGui::DataManagerWidget::createDefaultFixedOpenCvAutoRegistrationItem()
 {
-#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
    if(!ossim_autoreg::TiePointGeneratorFactory::instance()->
          create("opencv-phase-correlation"))
    {
@@ -6352,7 +6352,7 @@ ossimGui::DataManagerWidget::createDefaultFixedOpenCvAutoRegistrationItem()
 
 void ossimGui::DataManagerWidget::createFixedNativeAffineAutoRegistration()
 {
-#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
    createDefaultFixedNativeAffineAutoRegistrationItem();
 #else
    QMessageBox::warning(this,
@@ -6364,7 +6364,7 @@ void ossimGui::DataManagerWidget::createFixedNativeAffineAutoRegistration()
 ossimGui::DataManagerRegistrationItem*
 ossimGui::DataManagerWidget::createDefaultFixedNativeAffineAutoRegistrationItem()
 {
-#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
    if(!ossim_autoreg::TiePointGeneratorFactory::instance()->
          create("native-affine-ncc"))
    {
@@ -6406,7 +6406,7 @@ ossimGui::DataManagerWidget::createDefaultFixedNativeAffineAutoRegistrationItem(
 
 void ossimGui::DataManagerWidget::createBundleFloatingRegistration()
 {
-#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
    createDefaultBundleFloatingRegistrationItem();
 #else
    QMessageBox::information(this,
@@ -6417,7 +6417,7 @@ void ossimGui::DataManagerWidget::createBundleFloatingRegistration()
 
 void ossimGui::DataManagerWidget::createBundleNativeAffineAutoRegistration()
 {
-#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
    createDefaultBundleNativeAffineAutoRegistrationItem();
 #else
    QMessageBox::information(this,
@@ -6428,7 +6428,7 @@ void ossimGui::DataManagerWidget::createBundleNativeAffineAutoRegistration()
 
 void ossimGui::DataManagerWidget::createBundleNativeAffineMatcherAutoRegistration()
 {
-#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
    createDefaultBundleNativeAffineAutoRegistrationItem(
       0,
       BUNDLE_NATIVE_AFFINE_MATCHER_AUTO_LABEL,
@@ -6444,7 +6444,7 @@ void ossimGui::DataManagerWidget::createBundleNativeAffineMatcherAutoRegistratio
 
 void ossimGui::DataManagerWidget::createBundleNativeAffineStripAutoRegistration()
 {
-#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
    createDefaultBundleNativeAffineAutoRegistrationItem(
       1,
       BUNDLE_NATIVE_AFFINE_STRIP_AUTO_LABEL,
@@ -6460,7 +6460,7 @@ void ossimGui::DataManagerWidget::createBundleNativeAffineStripAutoRegistration(
 ossimGui::DataManagerRegistrationItem*
 ossimGui::DataManagerWidget::createDefaultBundleFloatingRegistrationItem()
 {
-#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
    ossimRefPtr<ossimBundleAdjustmentRegistrationSource> bundle =
       new ossimBundleAdjustmentRegistrationSource();
    bundle->setAllInputsFloating(true);
@@ -6495,7 +6495,7 @@ ossimGui::DataManagerWidget::createDefaultBundleNativeAffineAutoRegistrationItem
    bool autoPairPolicy,
    bool nativeMatcherAuto)
 {
-#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
    RegistrationSetupOptions setupOptions =
       registrationSetupDefaults(REGISTRATION_SETUP_BUNDLE_ALL_FLOATING,
                                 "native-affine-ncc");
@@ -6618,7 +6618,7 @@ void ossimGui::DataManagerWidget::connectAndExecuteSelectedRegistration(
 
 void ossimGui::DataManagerWidget::createFixedRegistrationFromSelection()
 {
-#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
    connectAndExecuteSelectedRegistration(createDefaultFixedRegistrationItem());
 #else
    QMessageBox::warning(this,
@@ -6629,7 +6629,7 @@ void ossimGui::DataManagerWidget::createFixedRegistrationFromSelection()
 
 void ossimGui::DataManagerWidget::createFixedOpenCvAutoRegistrationFromSelection()
 {
-#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
    connectAndExecuteSelectedRegistration(
       createDefaultFixedOpenCvAutoRegistrationItem());
 #else
@@ -6641,7 +6641,7 @@ void ossimGui::DataManagerWidget::createFixedOpenCvAutoRegistrationFromSelection
 
 void ossimGui::DataManagerWidget::createFixedNativeAffineAutoRegistrationFromSelection()
 {
-#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
    connectAndExecuteSelectedRegistration(
       createDefaultFixedNativeAffineAutoRegistrationItem());
 #else
@@ -6653,7 +6653,7 @@ void ossimGui::DataManagerWidget::createFixedNativeAffineAutoRegistrationFromSel
 
 void ossimGui::DataManagerWidget::createBundleFloatingRegistrationFromSelection()
 {
-#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
    connectAndExecuteSelectedRegistration(
       createDefaultBundleFloatingRegistrationItem());
 #else
@@ -6665,7 +6665,7 @@ void ossimGui::DataManagerWidget::createBundleFloatingRegistrationFromSelection(
 
 void ossimGui::DataManagerWidget::createBundleNativeAffineAutoRegistrationFromSelection()
 {
-#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
    connectAndExecuteSelectedRegistration(
       createDefaultBundleNativeAffineAutoRegistrationItem());
 #else
@@ -6677,7 +6677,7 @@ void ossimGui::DataManagerWidget::createBundleNativeAffineAutoRegistrationFromSe
 
 void ossimGui::DataManagerWidget::createBundleNativeAffineMatcherAutoRegistrationFromSelection()
 {
-#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
    connectAndExecuteSelectedRegistration(
       createDefaultBundleNativeAffineAutoRegistrationItem(
          0,
@@ -6694,7 +6694,7 @@ void ossimGui::DataManagerWidget::createBundleNativeAffineMatcherAutoRegistratio
 
 void ossimGui::DataManagerWidget::createBundleNativeAffineStripAutoRegistrationFromSelection()
 {
-#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
    connectAndExecuteSelectedRegistration(
       createDefaultBundleNativeAffineAutoRegistrationItem(
          1,
@@ -6710,7 +6710,7 @@ void ossimGui::DataManagerWidget::createBundleNativeAffineStripAutoRegistrationF
 
 void ossimGui::DataManagerWidget::createRegistrationFromDialog()
 {
-#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
    RegistrationSetupDialog dialog(this);
    if(dialog.exec() != QDialog::Accepted)
       return;
@@ -6893,7 +6893,7 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
 
 void ossimGui::DataManagerWidget::setSelectedBundleAllFloating(bool enabled)
 {
-#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
    QList<DataManagerRegistrationItem*> result =
       grabSelectedChildItemsOfType<DataManagerRegistrationItem>();
    QList<DataManagerRegistrationItem*>::iterator iter = result.begin();
@@ -7709,7 +7709,7 @@ void ossimGui::DataManagerWidget::populateTreeWithNodes(DataManager::NodeListTyp
          m_activeItems.insert(item);
          m_activeItemsMutex.unlock();
       }
-#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
       else if(node->getObjectAs<ossimFixedRegistrationSource>() ||
               node->getObjectAs<ossimBundleAdjustmentRegistrationSource>())
       {
@@ -7810,7 +7810,7 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
          "Use adjacent pairs when selected images are ordered along a strip or flightline.");
       bundleNativeAffineStripAction->setStatusTip(
          "Use adjacent pairs when selected images are ordered along a strip or flightline.");
-#ifndef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifndef OSSIM_AUTOREGISTRATION_ENABLED
       setupAction->setEnabled(false);
       fixedAction->setEnabled(false);
       fixedOpenCvAction->setEnabled(false);
@@ -7856,7 +7856,7 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
       QAction* registerAction = menu->addAction("Register");
       connect(registerAction, SIGNAL(triggered(bool)), this, SLOT(registerSelected()));
       activeItem->setSelected(true);
-#ifdef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
       DataManagerRegistrationItem* registrationItem =
          dynamic_cast<DataManagerRegistrationItem*> (activeItem);
       ossimBundleAdjustmentRegistrationSource* bundleRegistration = 0;
@@ -8001,7 +8001,7 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
            "Use adjacent pairs when selected images are ordered along a strip or flightline.");
         bundleNativeAffineStripAction->setStatusTip(
            "Use adjacent pairs when selected images are ordered along a strip or flightline.");
-#ifndef OSSIM_REGISTRATION_SOURCE_ENABLED
+#ifndef OSSIM_AUTOREGISTRATION_ENABLED
         fixedRegistrationAction->setEnabled(false);
         fixedOpenCvAction->setEnabled(false);
         fixedNativeAffineAction->setEnabled(false);
