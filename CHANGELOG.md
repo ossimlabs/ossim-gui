@@ -295,11 +295,15 @@ All notable changes to `ossim-gui` are documented here.
 
 > **TL;DR:** Registration Setup now discovers available matchers and their
 > recommended settings from `ossim-autoreg`, so GeoCell no longer maintains a
-> private list of algorithms or OpenCV-specific defaults.
+> private list of algorithms or OpenCV-specific defaults. Bundle reports now
+> explain each ordered factory-candidate attempt without moving algorithm
+> policy into the GUI.
 
 ### Changed
 - Populate Registration Setup from autoregistration factory descriptors and
   apply factory-owned recommendations for explicit matcher choices (`dfd647a`).
+- Report the shared candidate limit and per-attempt matcher, decision, tie, and
+  RMS evidence for bounded bundle edge fallback (`e3892ab`).
 
 ## [2026-07-18]
 
