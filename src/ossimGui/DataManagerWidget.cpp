@@ -1656,47 +1656,6 @@ namespace
          return result;
       }
 
-      if(approach == REGISTRATION_SETUP_FIXED_AUTO &&
-         result.matchMethod == "native-affine-ncc")
-      {
-         ossim_autoreg::AutoRegistrationOptions defaults;
-         defaults.setAutoRegister(true);
-         ossim_autoreg::applyAutoRegistrationDefaults(defaults);
-         std::ostringstream presetErrors;
-         ossim_autoreg::applyAutoRegistrationPreset(
-            defaults,
-            "fixed:native-affine",
-            presetErrors);
-         result.resamplerType = defaults.generator().resamplerType();
-         result.supportPassMatcherResampler =
-            defaults.supportPassMatcherResampler();
-         result.chipSize = defaults.generator().chipSize();
-         result.searchRadius = defaults.generator().searchRadius();
-         result.gridSpacing = defaults.generator().gridSpacing();
-         result.minScore = defaults.generator().minScore();
-         result.minScoreMargin = defaults.generator().minScoreMargin();
-         result.viewGsd = defaults.generator().viewGsd();
-         result.maxTiePoints = defaults.generator().maxTiePoints();
-         result.denseGridSeedBudget =
-            defaults.generator().denseGridSeedBudget();
-         result.autoDenseGridSeedBudget =
-            defaults.generator().autoDenseGridSeedBudget();
-         result.tiePointTimingDiagnostics =
-            defaults.generator().timingDiagnostics();
-         result.maxConcurrentRegistrations = defaults.threadCount();
-         result.adaptiveBankThreadCount =
-            defaults.adaptiveBankThreadCount();
-         result.adaptiveFullPostBankRefinement =
-            defaults.adaptiveFullPostBankRefinement();
-         result.nativeLowGridPolicy =
-            defaults.nativeLowGridPolicy();
-         result.opencvRansacPrefilter =
-            defaults.opencvRansacPrefilter();
-         result.opencvRansacThresholdPixels =
-            defaults.opencvRansacThresholdPixels();
-         return result;
-      }
-
       if(bundle)
       {
          ossim_autoreg::AutoRegistrationOptions defaults;
@@ -1729,68 +1688,67 @@ namespace
          return result;
       }
 
-      if(result.matchMethod == "mixed-phase-orb" ||
-         result.matchMethod == "mixed-hybrid-orb")
-      {
-         result.searchRadius = 96;
-         result.gridSpacing = 128;
-         result.maxTiePoints = bundle ? 200 : 300;
-      }
-      else if(result.matchMethod == "phase-correlation" ||
-              result.matchMethod == "opencv-phase-correlation")
-      {
-         result.searchRadius = 36;
-         result.gridSpacing = 96;
-         result.maxTiePoints = 200;
-      }
-      else if(result.matchMethod == "hybrid-phase-ncc")
-      {
-         result.searchRadius = 64;
-         result.gridSpacing = 128;
-         result.maxTiePoints = bundle ? 200 : 300;
-      }
-      else if(result.matchMethod == "spatial-ncc")
-      {
-         result.searchRadius = 96;
-         result.gridSpacing = 192;
-         result.minScore = 0.65;
-         result.maxTiePoints = bundle ? 150 : 250;
-      }
-      else if(result.matchMethod == "opencv-sift")
-      {
-         result.searchRadius = 128;
-         result.gridSpacing = 128;
-         result.minScore = 0.6;
-         result.maxTiePoints = bundle ? 250 : 500;
-      }
-      else if(result.matchMethod == "opencv-orb")
-      {
-         result.searchRadius = 128;
-         result.gridSpacing = 128;
-         result.minScore = 0.55;
-         result.maxTiePoints = bundle ? 300 : 750;
-      }
-      else if(result.matchMethod == "opencv-akaze")
-      {
-         result.searchRadius = 128;
-         result.gridSpacing = 128;
-         result.minScore = 0.55;
-         result.maxTiePoints = bundle ? 250 : 500;
-      }
-      else if(result.matchMethod == "opencv-brisk")
-      {
-         result.searchRadius = 128;
-         result.gridSpacing = 128;
-         result.minScore = 0.55;
-         result.maxTiePoints = bundle ? 250 : 500;
-      }
-      else if(result.matchMethod == "opencv-gftt-lk")
-      {
-         result.searchRadius = 96;
-         result.gridSpacing = 96;
-         result.minScore = 0.55;
-         result.maxTiePoints = bundle ? 250 : 500;
-      }
+      ossim_autoreg::AutoRegistrationOptions recommended;
+      recommended.generator().setMatchMethod(result.matchMethod);
+      recommended.generator().setResamplerType(result.resamplerType);
+      recommended.generator().setChipSize(result.chipSize);
+      recommended.generator().setSearchRadius(result.searchRadius);
+      recommended.generator().setGridSpacing(result.gridSpacing);
+      recommended.generator().setMinScore(result.minScore);
+      recommended.generator().setMinScoreMargin(result.minScoreMargin);
+      recommended.generator().setViewGsd(result.viewGsd);
+      recommended.generator().setMaxTiePoints(result.maxTiePoints);
+      recommended.generator().setDenseGridSeedBudget(
+         result.denseGridSeedBudget);
+      recommended.generator().setAutoDenseGridSeedBudget(
+         result.autoDenseGridSeedBudget);
+      recommended.generator().setTimingDiagnostics(
+         result.tiePointTimingDiagnostics);
+      recommended.setThreadCount(result.maxConcurrentRegistrations);
+      recommended.setAdaptiveBankThreadCount(
+         result.adaptiveBankThreadCount);
+      recommended.setAdaptiveFullPostBankRefinement(
+         result.adaptiveFullPostBankRefinement);
+      recommended.setSupportPassMatcherResampler(
+         result.supportPassMatcherResampler);
+      recommended.setNativeLowGridPolicy(result.nativeLowGridPolicy);
+      recommended.setOpencvRansacPrefilter(
+         result.opencvRansacPrefilter);
+      recommended.setOpencvRansacThresholdPixels(
+         result.opencvRansacThresholdPixels);
+      ossim_autoreg::TiePointGeneratorFactory::instance()->
+         configureRecommendedOptions(
+            result.matchMethod,
+            approach == REGISTRATION_SETUP_FIXED_AUTO ?
+               "fixed-setup-auto" : "fixed-manual",
+            recommended);
+
+      result.resamplerType = recommended.generator().resamplerType();
+      result.supportPassMatcherResampler =
+         recommended.supportPassMatcherResampler();
+      result.chipSize = recommended.generator().chipSize();
+      result.searchRadius = recommended.generator().searchRadius();
+      result.gridSpacing = recommended.generator().gridSpacing();
+      result.minScore = recommended.generator().minScore();
+      result.minScoreMargin = recommended.generator().minScoreMargin();
+      result.viewGsd = recommended.generator().viewGsd();
+      result.maxTiePoints = recommended.generator().maxTiePoints();
+      result.denseGridSeedBudget =
+         recommended.generator().denseGridSeedBudget();
+      result.autoDenseGridSeedBudget =
+         recommended.generator().autoDenseGridSeedBudget();
+      result.tiePointTimingDiagnostics =
+         recommended.generator().timingDiagnostics();
+      result.maxConcurrentRegistrations = recommended.threadCount();
+      result.adaptiveBankThreadCount =
+         recommended.adaptiveBankThreadCount();
+      result.adaptiveFullPostBankRefinement =
+         recommended.adaptiveFullPostBankRefinement();
+      result.nativeLowGridPolicy = recommended.nativeLowGridPolicy();
+      result.opencvRansacPrefilter =
+         recommended.opencvRansacPrefilter();
+      result.opencvRansacThresholdPixels =
+         recommended.opencvRansacThresholdPixels();
 
       if(approach == REGISTRATION_SETUP_FIXED_MANUAL)
       {
@@ -1846,28 +1804,26 @@ namespace
 
          m_matchMethod = new QComboBox(this);
          addMatchMethod("Adaptive Auto (Recommended)", "");
-         addAvailableMatchMethod("Adaptive Mixed Phase/ORB", "mixed-phase-orb");
-         addAvailableMatchMethod("Adaptive Mixed Hybrid/ORB", "mixed-hybrid-orb");
-         addAvailableMatchMethod("OpenCV SIFT", "opencv-sift");
-         addAvailableMatchMethod("OpenCV ORB", "opencv-orb");
-         addAvailableMatchMethod("OpenCV AKAZE", "opencv-akaze");
-         addAvailableMatchMethod("OpenCV BRISK", "opencv-brisk");
-         addAvailableMatchMethod("OpenCV GFTT/LK", "opencv-gftt-lk");
-         addAvailableMatchMethod("OpenCV Phase", "opencv-phase-correlation");
-         addAvailableMatchMethod("Native Affine Auto", "native-affine-ncc");
-         addMatchMethod("Phase Correlation", "phase-correlation");
-         addMatchMethod("Hybrid Phase/NCC", "hybrid-phase-ncc");
-         addMatchMethod("Spatial NCC", "spatial-ncc");
 
-         std::vector<std::string> typeNames =
-            ossim_autoreg::TiePointGeneratorFactory::instance()->typeNames();
-         for(const std::string& typeName : typeNames)
+         const std::vector<ossim_autoreg::RegistrationComponentDescriptor>
+            matcherTypes = ossim_autoreg::TiePointGeneratorFactory::instance()->
+               typeDescriptors();
+         for(const ossim_autoreg::RegistrationComponentDescriptor& matcherType :
+             matcherTypes)
          {
-            if(m_matchMethod->findData(
-                  QString::fromStdString(typeName)) < 0)
+            const QString typeName =
+               QString::fromStdString(matcherType.typeName());
+            const QString displayName = QString::fromStdString(
+               matcherType.displayName().empty() ? matcherType.typeName() :
+                                                   matcherType.displayName());
+            addMatchMethod(displayName, typeName);
+            const int itemIndex = m_matchMethod->count() - 1;
+            if(!matcherType.description().empty())
             {
-               addMatchMethod(QString::fromStdString(typeName),
-                              typeName.c_str());
+               m_matchMethod->setItemData(
+                  itemIndex,
+                  QString::fromStdString(matcherType.description()),
+                  Qt::ToolTipRole);
             }
          }
          const int preferredIndex = m_matchMethod->findData(QString());
@@ -2189,12 +2145,6 @@ namespace
       void addMatchMethod(const QString& label, const QString& method)
       {
          m_matchMethod->addItem(label, method);
-      }
-
-      void addAvailableMatchMethod(const QString& label, const QString& method)
-      {
-         if(registrationTieGeneratorAvailable(method.toStdString()))
-            addMatchMethod(label, method);
       }
 
       void updateBundlePairPolicyControls()
@@ -6793,15 +6743,15 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
          registration->autoRegistrationOptions();
       if(setupOptions.approach == REGISTRATION_SETUP_FIXED_AUTO)
       {
-         if(setupOptions.matchMethod == "opencv-phase-correlation")
-            registration->applyAutoRegistrationPreset(
-               "fixed:opencv-phase-ransac");
-         else if(setupOptions.matchMethod == "spatial-ncc")
-            registration->applyAutoRegistrationPreset("fixed:spatial-ncc");
-         else if(setupOptions.matchMethod == "hybrid-phase-ncc")
-            registration->applyAutoRegistrationPreset("fixed:hybrid");
-         else if(setupOptions.matchMethod == "phase-correlation")
-            registration->applyAutoRegistrationPreset("fixed:phase");
+         if(!setupOptions.matchMethod.empty())
+         {
+            ossim_autoreg::TiePointGeneratorFactory::instance()->
+               configureRecommendedOptions(
+                  setupOptions.matchMethod,
+                  "fixed-auto",
+                  registrationOptions);
+            registration->setAutoRegistrationOptions(registrationOptions);
+         }
          registration->setAutoRegistrationEnabled(true);
          registrationOptions = registration->autoRegistrationOptions();
       }
