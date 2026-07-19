@@ -98,6 +98,8 @@ All notable changes to `ossim-gui` are documented here.
 > a side quest outside the dialog.
 > Bundle reports now show the same per-edge value and guarded weakest-edge
 > refinement evidence as the CLI, without teaching GeoCell any algorithms.
+> They now include the full factory-priority candidate order and shared
+> selection reason too, so plugin participation is visible without GUI policy.
 
 ### Fixed
 - Prevent GeoCell shutdown crashes when a registration, image-open, or staging
@@ -106,6 +108,8 @@ All notable changes to `ossim-gui` are documented here.
   main window close path (`06576ee`).
 
 ### Added
+- Show the shared ordered weak-edge matcher candidates and factory selection
+  reason in GeoCell bundle quality reports (`5e023ba`).
 - Show shared bundle pair residual-value and bounded weakest-edge refinement
   diagnostics in GeoCell quality reports (`9a1a57c`).
 - Add a `Lock` checkbox column to the Adjustable Parameter dialog so GeoCell
