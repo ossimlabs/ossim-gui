@@ -283,6 +283,16 @@ All notable changes to `ossim-gui` are documented here.
   reload path as the new button instead of leaving stale adjustment state in
   the editor.
 
+## [2026-07-19]
+
+> **TL;DR:** Registration Setup now discovers available matchers and their
+> recommended settings from `ossim-autoreg`, so GeoCell no longer maintains a
+> private list of algorithms or OpenCV-specific defaults.
+
+### Changed
+- Populate Registration Setup from autoregistration factory descriptors and
+  apply factory-owned recommendations for explicit matcher choices (`dfd647a`).
+
 ## [2026-07-18]
 
 > **TL;DR:** OSSIM GUI builds now continue without registration support when
