@@ -1260,6 +1260,8 @@ namespace
          out << "bundle_native_matcher_policy: "
              << ossim_autoreg::bundleNativeMatcherPolicyName(
                    options.bundleNativeMatcherPolicy()) << "\n";
+         out << "bundle_edge_refinement_max_candidates: "
+             << options.bundleEdgeRefinementMaxCandidates() << "\n";
          out << "bundle_floating_datum_prior_weight: "
              << source->floatingDatumPriorWeight() << "\n";
       }
@@ -1667,11 +1669,46 @@ namespace
           << refinement.candidateSelectionReason() << "\n";
       out << "bundle_edge_refinement_candidate_matcher_count: "
           << refinement.candidateMatcherTypes().size() << "\n";
+      out << "bundle_edge_refinement_candidate_attempt_limit: "
+          << refinement.candidateAttemptLimit() << "\n";
+      out << "bundle_edge_refinement_attempt_count: "
+          << refinement.attempts().size() << "\n";
       for(std::size_t idx = 0;
           idx < refinement.candidateMatcherTypes().size(); ++idx)
       {
          out << "bundle_edge_refinement_candidate_matcher[" << idx << "]: "
              << refinement.candidateMatcherTypes()[idx] << "\n";
+      }
+      for(std::size_t idx = 0; idx < refinement.attempts().size(); ++idx)
+      {
+         const ossim_autoreg::BundleEdgeRefinementAttempt& attempt =
+            refinement.attempts()[idx];
+         out << "bundle_edge_refinement_attempt[" << idx
+             << "].matcher_type: " << attempt.matcherType() << "\n";
+         out << "bundle_edge_refinement_attempt[" << idx
+             << "].status: " << attempt.status() << "\n";
+         out << "bundle_edge_refinement_attempt[" << idx
+             << "].reason: " << attempt.reason() << "\n";
+         out << "bundle_edge_refinement_attempt[" << idx
+             << "].generated_ties: "
+             << attempt.generatedTiePointCount() << "\n";
+         out << "bundle_edge_refinement_attempt[" << idx
+             << "].coherent_ties: "
+             << attempt.coherentTiePointCount() << "\n";
+         out << "bundle_edge_refinement_attempt[" << idx
+             << "].accepted: "
+             << (attempt.accepted() ? "true" : "false") << "\n";
+         if(std::isfinite(attempt.edgeRmsPixels()))
+         {
+            out << "bundle_edge_refinement_attempt[" << idx
+                << "].edge_rms_pixels: " << attempt.edgeRmsPixels() << "\n";
+         }
+         if(std::isfinite(attempt.bundleRmsPixels()))
+         {
+            out << "bundle_edge_refinement_attempt[" << idx
+                << "].bundle_rms_pixels: "
+                << attempt.bundleRmsPixels() << "\n";
+         }
       }
       if(!refinement.eligible() && !refinement.attempted())
       {
