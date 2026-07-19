@@ -10,6 +10,8 @@
 #include <ossim/base/ossimStringProperty.h>
 #include <ossim/base/ossimUrl.h>
 #include <ossim/base/ossimObjectFactoryRegistry.h>
+#include <ossim/elevation/ossimElevationDatabase.h>
+#include <ossim/elevation/ossimElevManager.h>
 #include <ossim/imaging/ossimImageFileWriter.h>
 #include <ossim/imaging/ossimImageHandler.h>
 #include <ossim/imaging/ossimImageHandlerRegistry.h>
@@ -29,14 +31,26 @@
 #include <QScrollBar>
 #include <QMenu>
 #include <QAction>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QFileDialog>
+#include <QFormLayout>
+#include <QGroupBox>
 #include <QToolBar>
 #include <QItemDelegate>
 #include <QComboBox>
+#include <QCheckBox>
+#include <QDateTime>
+#include <QDoubleSpinBox>
+#include <QSpinBox>
 #include <QTableWidget>
 #include <QMessageBox>
+#include <QMetaObject>
 #include <QUrl>
+#include <QVBoxLayout>
 #include <QStandardItemModel>
+#include <QDir>
+#include <QThread>
 #include <ossimGui/Common.h>
 #include <ossimGui/Event.h>
 #include <ossimGui/OpenImageDialog.h>
@@ -55,7 +69,2147 @@
 #include <ossimGui/AutoMeasurementDialog.h>
 #include <ossimGui/RegistrationOverlay.h>
 #include <ossimGui/RegPoint.h>
+#include <algorithm>
+#include <cmath>
+#include <cstdlib>
+#include <fstream>
+#include <limits>
 #include <set>
+#include <sstream>
+#include <string>
+
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+#include <ossim/registration/ossimBundleAdjustmentRegistrationSource.h>
+#include <ossim/registration/ossimFixedRegistrationSource.h>
+#include <ossim/registration/ossimRegistrationSourceFactory.h>
+#include <ossim_autoreg/AutoRegistration.h>
+#include <ossim_autoreg/TiePointGenerator.h>
+#endif
+
+namespace
+{
+   const char* FIXED_AUTO_LABEL = "Fixed Auto";
+   const char* FIXED_OPENCV_AUTO_LABEL = "Fixed OpenCV Auto";
+   const char* FIXED_NATIVE_AFFINE_AUTO_LABEL = "Fixed Native Affine Auto";
+   const char* BUNDLE_ALL_FLOATING_AUTO_LABEL =
+      "Bundle All-Floating Auto";
+   const char* BUNDLE_NATIVE_AFFINE_AUTO_LABEL =
+      "Bundle Native Affine Auto";
+   const char* BUNDLE_NATIVE_AFFINE_MATCHER_AUTO_LABEL =
+      "Bundle Native Affine Matcher Auto";
+   const char* BUNDLE_NATIVE_AFFINE_STRIP_AUTO_LABEL =
+      "Bundle Native Affine Strip Auto";
+}
+
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+namespace
+{
+   void ensureRegistrationSourceFactoryRegistered()
+   {
+      ossimObjectFactoryRegistry::instance()->registerFactory(
+         ossimRegistrationSourceFactory::instance());
+   }
+
+   QString tiePointGeneratorSummary()
+   {
+      std::vector<std::string> typeNames =
+         ossim_autoreg::TiePointGeneratorFactory::instance()->typeNames();
+      QStringList names;
+      for(const std::string& typeName : typeNames)
+      {
+         names << QString::fromStdString(typeName);
+      }
+      return names.join(", ");
+   }
+
+   bool registrationTieGeneratorAvailable(const std::string& method)
+   {
+      return static_cast<bool>(
+         ossim_autoreg::TiePointGeneratorFactory::instance()->create(method));
+   }
+
+   bool containsText(const std::string& text, const std::string& pattern)
+   {
+      return text.find(pattern) != std::string::npos;
+   }
+
+   std::string registrationProgressPhaseMessage(const std::string& message)
+   {
+      if(message.empty())
+      {
+         return message;
+      }
+
+      std::string phase;
+      if(containsText(message, "adaptive trial") ||
+         containsText(message, "candidate bank") ||
+         containsText(message, "source candidate bank"))
+      {
+         phase = "candidate bank";
+      }
+      else if(containsText(message, "post-bank") ||
+              containsText(message, "guided probe") ||
+              containsText(message, "adaptive refinement"))
+      {
+         phase = "post-bank refinement";
+      }
+      else if(containsText(message, "final-quality") ||
+              containsText(message, "final quality") ||
+              containsText(message, "full-quality refinement"))
+      {
+         phase = "final quality";
+      }
+      else if(containsText(message, "coarse") ||
+              containsText(message, "Coarse"))
+      {
+         phase = "coarse";
+      }
+      else if(containsText(message, "generating ties") ||
+              containsText(message, "generating pair ties"))
+      {
+         phase = "tie generation";
+      }
+      else if(containsText(message, "optimizing"))
+      {
+         phase = "optimization";
+      }
+      else if(containsText(message, "filtering residuals"))
+      {
+         phase = "residual filtering";
+      }
+
+      if(phase.empty() || containsText(message, phase + ":"))
+      {
+         return message;
+      }
+      return phase + ": " + message;
+   }
+
+   std::string environmentValue(const char* name)
+   {
+      const char* value = std::getenv(name);
+      return value ? std::string(value) : std::string();
+   }
+
+   void appendRegistrationRuntimeContext(std::ostream& out)
+   {
+      out << "runtime.ossim_install_prefix: "
+          << environmentValue("OSSIM_INSTALL_PREFIX") << "\n";
+      out << "runtime.ossim_prefs_file: "
+          << environmentValue("OSSIM_PREFS_FILE") << "\n";
+      out << "runtime.ossim_data: "
+          << environmentValue("OSSIM_DATA") << "\n";
+      out << "runtime.ossim_plugin_path: "
+          << environmentValue("OSSIM_PLUGIN_PATH") << "\n";
+
+      ossimElevManager* elevationManager = ossimElevManager::instance();
+      out << "runtime.elevation_manager_available: "
+          << (elevationManager ? "true" : "false") << "\n";
+      if(!elevationManager)
+      {
+         return;
+      }
+
+      const ossim_uint32 databaseCount =
+         elevationManager->getNumberOfElevationDatabases();
+      out << "runtime.elevation_database_count: "
+          << databaseCount << "\n";
+      for(ossim_uint32 idx = 0; idx < databaseCount; ++idx)
+      {
+         const ossimElevationDatabase* database =
+            elevationManager->getElevationDatabase(idx);
+         out << "runtime.elevation_database[" << idx
+             << "].connection_string: "
+             << (database ? database->getConnectionString().string()
+                          : std::string())
+             << "\n";
+      }
+
+      std::vector<ossimFilename> openCells;
+      elevationManager->getOpenCellList(openCells);
+      out << "runtime.elevation_open_cell_count: "
+          << openCells.size() << "\n";
+      for(std::size_t idx = 0; idx < openCells.size(); ++idx)
+      {
+         out << "runtime.elevation_open_cell[" << idx << "]: "
+             << openCells[idx] << "\n";
+      }
+   }
+
+   std::string preferredRegistrationMatchMethod()
+   {
+      const char* orderedMethods[] = {
+         "mixed-phase-orb",
+         "opencv-sift",
+         "opencv-orb",
+         "opencv-phase-correlation",
+         "phase-correlation",
+         "hybrid-phase-ncc",
+         "spatial-ncc"
+      };
+      for(const char* method : orderedMethods)
+      {
+         if(registrationTieGeneratorAvailable(method))
+            return method;
+      }
+      return "hybrid-phase-ncc";
+   }
+
+   std::string preferredFixedAutoMatchMethod()
+   {
+      return preferredRegistrationMatchMethod();
+   }
+
+   std::string preferredBundleMatchMethod()
+   {
+      const std::string method =
+         ossim_autoreg::defaultRegistrationMatchMethod();
+      if(registrationTieGeneratorAvailable(method))
+         return method;
+      return preferredRegistrationMatchMethod();
+   }
+
+   void applyBundleDefaultsToSource(
+      ossimBundleAdjustmentRegistrationSource* bundle,
+      bool anchorEnabled)
+   {
+      if(!bundle)
+         return;
+
+      bundle->applyBundleRegistrationDefaults(anchorEnabled);
+   }
+
+   std::string bundleRegistrationDenseAlternateSummary(
+      const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
+         result)
+   {
+      std::size_t evaluatedCount = 0;
+      std::size_t usedCount = 0;
+      std::string lastReason;
+      for(std::size_t idx = 0; idx < result.pairResults().size(); ++idx)
+      {
+         const ossimBundleAdjustmentRegistrationSource::PairResult& pair =
+            result.pairResults()[idx];
+         if(pair.denseAlternateEvaluated())
+         {
+            ++evaluatedCount;
+            if(pair.denseAlternateUsed())
+            {
+               ++usedCount;
+            }
+            lastReason = pair.denseAlternateAcceptance().reason();
+         }
+      }
+
+      if(!evaluatedCount)
+      {
+         return std::string();
+      }
+
+      std::ostringstream out;
+      out << "dense alternates " << usedCount << "/" << evaluatedCount
+          << " used";
+      if(!lastReason.empty())
+      {
+         out << ", last reason " << lastReason;
+      }
+      return out.str();
+   }
+
+   std::string bundleRegistrationMatcherAlternateSummary(
+      const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
+         result)
+   {
+      std::size_t evaluatedCount = 0;
+      std::size_t usedCount = 0;
+      std::string lastMethod;
+      std::string lastReason;
+      for(std::size_t idx = 0; idx < result.pairResults().size(); ++idx)
+      {
+         const ossimBundleAdjustmentRegistrationSource::PairResult& pair =
+            result.pairResults()[idx];
+         if(pair.matcherAlternateEvaluated())
+         {
+            ++evaluatedCount;
+            if(pair.matcherAlternateUsed())
+            {
+               ++usedCount;
+               if(!pair.matcherAlternateMethod().empty())
+               {
+                  lastMethod = pair.matcherAlternateMethod();
+               }
+            }
+            lastReason = pair.matcherAlternateAcceptance().reason();
+         }
+      }
+
+      if(!evaluatedCount)
+      {
+         return std::string();
+      }
+
+      std::ostringstream out;
+      out << "matcher alternates " << usedCount << "/" << evaluatedCount
+          << " used";
+      if(!lastMethod.empty())
+      {
+         out << ", method " << lastMethod;
+      }
+      if(!lastReason.empty())
+      {
+         out << ", last reason " << lastReason;
+      }
+      return out.str();
+   }
+
+   std::string bundleRegistrationModeName(
+      const ossimBundleAdjustmentRegistrationSource* source)
+   {
+      if(!source)
+      {
+         return "unknown";
+      }
+      return source->allInputsFloating() ? "all-floating" : "anchored";
+   }
+
+   std::string bundleRegistrationMotionPolicy(
+      const ossimBundleAdjustmentRegistrationSource* source)
+   {
+      if(!source)
+      {
+         return "unknown";
+      }
+      if(source->allInputsFloating())
+      {
+         return "all connected images can move toward the relative bundle "
+                "solution";
+      }
+
+      std::ostringstream out;
+      out << "anchor input " << source->anchorInputIndex()
+          << " is held fixed; non-anchor inputs move";
+      return out.str();
+   }
+
+   std::string bundleRegistrationPairPolicy(
+      const ossimBundleAdjustmentRegistrationSource* source)
+   {
+      if(!source)
+      {
+         return "unknown";
+      }
+      if(source->bundlePairPolicy() ==
+         ossim_autoreg::BUNDLE_PAIR_POLICY_AUTO)
+      {
+         return "auto";
+      }
+      const std::size_t span = source->bundleNeighborSpan();
+      if(span)
+      {
+         std::ostringstream out;
+         out << "neighbor_span_" << span;
+         return out.str();
+      }
+      return "all_pairs";
+   }
+
+   std::string bundlePairPolicyDescription(std::size_t span)
+   {
+      if(span)
+      {
+         std::ostringstream out;
+         out << "neighbor_span_" << span;
+         return out.str();
+      }
+      return "all_pairs";
+   }
+
+   void appendBundlePairPolicyDiagnostics(
+      std::ostream& out,
+      const ossim_autoreg::BundlePairPolicyDiagnostics& diagnostics);
+   void appendBundleStripEdgeQualityAdvisory(
+      std::ostream& out,
+      const ossim_autoreg::BundleStripEdgeQualityAdvisory& advisory);
+
+   std::string bundleRegistrationAcceptanceTier(
+      const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
+         result,
+      const ossimBundleAdjustmentRegistrationSource* source)
+   {
+      const bool hasEdgeIssue = result.edgeQualityIssue().hasIssue();
+      const bool hasModelFreedomIssue =
+         !result.modelFreedomAdvisory().empty();
+      const bool hasBoundPressure =
+         !result.boundPressureAdvisory().empty();
+
+      if(!result.success())
+      {
+         if(hasEdgeIssue)
+         {
+            return "rejected_sparse";
+         }
+         if(hasModelFreedomIssue)
+         {
+            return "rejected_model_limited";
+         }
+         return "rejected";
+      }
+
+      const ossim_autoreg::BundleAdjustmentResult& optimization =
+         result.optimization();
+      const double targetRmse =
+         source ? source->autoRegistrationOptions().targetRmsePixels()
+                : std::numeric_limits<double>::quiet_NaN();
+      const bool targetReached =
+         !optimization.ran() ||
+         (std::isfinite(optimization.finalRmsPixels()) &&
+          (!std::isfinite(targetRmse) ||
+           optimization.finalRmsPixels() <= targetRmse));
+
+      if(hasEdgeIssue || hasModelFreedomIssue || hasBoundPressure ||
+         !targetReached)
+      {
+         return "accepted_advisory";
+      }
+
+      return result.searchSpanRecoveryMessage().empty()
+                ? std::string("accepted_precise")
+                : std::string("accepted_recovered");
+   }
+
+   ossimString bundleRegistrationAdvisorySummary(
+      const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
+         result)
+   {
+      ossimString summary;
+      const ossim_autoreg::BundlePairPolicyDiagnostics&
+         pairPolicyDiagnostics = result.pairPolicyDiagnostics();
+      if(pairPolicyDiagnostics.fallbackAttempted())
+      {
+         summary += "Bundle pair policy: Auto retried with all pairs after "
+                    "the promoted strip graph failed.";
+      }
+      if(!result.searchSpanRecoveryMessage().empty())
+      {
+         if(!summary.empty())
+         {
+            summary += "\n";
+         }
+         summary += "Search span recovery: ";
+         summary += result.searchSpanRecoveryMessage().c_str();
+      }
+      if(result.success() && !result.boundPressureAdvisory().empty())
+      {
+         if(!summary.empty())
+         {
+            summary += "\n";
+         }
+         summary += "Bound pressure: ";
+         summary += result.boundPressureAdvisory().c_str();
+      }
+      if(!result.modelFreedomAdvisory().empty())
+      {
+         if(!summary.empty())
+         {
+            summary += "\n";
+         }
+         summary += "Model freedom: ";
+         summary += result.modelFreedomAdvisory().c_str();
+      }
+      if(result.edgeQualityIssue().hasIssue())
+      {
+         if(!summary.empty())
+         {
+            summary += "\n";
+         }
+         summary += "Edge support: ";
+         summary += result.edgeQualityIssue().reason().c_str();
+      }
+      if(result.stripEdgeQualityAdvisory().weak())
+      {
+         const ossim_autoreg::BundleStripEdgeQualityAdvisory& advisory =
+            result.stripEdgeQualityAdvisory();
+         if(!summary.empty())
+         {
+            summary += "\n";
+         }
+         summary += "Strip edge support: ";
+         summary += advisory.reason().c_str();
+         summary += " (";
+         summary += ossimString::toString(
+            static_cast<ossim_uint32>(
+               advisory.sparseAdjacentEdges()));
+         summary += " sparse adjacent edge(s))";
+      }
+
+      const std::string matcherAlternateSummary =
+         bundleRegistrationMatcherAlternateSummary(result);
+      if(!matcherAlternateSummary.empty())
+      {
+         if(!summary.empty())
+         {
+            summary += "\n";
+         }
+         summary += "Matcher recovery: ";
+         summary += matcherAlternateSummary.c_str();
+      }
+      const std::string tier = bundleRegistrationAcceptanceTier(result, 0);
+      if(!tier.empty() && tier != "accepted_precise")
+      {
+         if(!summary.empty())
+         {
+            summary += "\n";
+         }
+         summary += "Acceptance: ";
+         summary += tier.c_str();
+      }
+      return summary;
+   }
+
+   ossimString bundlePairPolicyDecisionSummary(
+      const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
+         result)
+   {
+      const ossim_autoreg::BundlePairPolicyDiagnostics& diagnostics =
+         result.pairPolicyDiagnostics();
+      if(diagnostics.requestedPolicy().empty() ||
+         diagnostics.resolvedPolicy().empty())
+      {
+         return ossimString();
+      }
+
+      ossimString summary;
+      summary += "pair policy ";
+      summary += diagnostics.requestedPolicy().c_str();
+      summary += " -> ";
+      summary += diagnostics.resolvedPolicy().c_str();
+      if(diagnostics.pairCount() || diagnostics.generatedPairCount())
+      {
+         summary += " (";
+         summary += ossimString::toString(
+            static_cast<ossim_uint32>(diagnostics.generatedPairCount()));
+         summary += "/";
+         summary += ossimString::toString(
+            static_cast<ossim_uint32>(diagnostics.pairCount()));
+         summary += " pairs";
+         if(diagnostics.pairCount() >= diagnostics.generatedPairCount())
+         {
+            summary += ", saved ";
+            summary += ossimString::toString(
+               static_cast<ossim_uint32>(
+                  diagnostics.pairCount() -
+                  diagnostics.generatedPairCount()));
+         }
+         if(diagnostics.pairGenerationWallSeconds() > 0.0)
+         {
+            summary += ", ";
+            summary += ossimString::toString(
+               diagnostics.pairGenerationWallSeconds());
+            summary += "s";
+         }
+         if(diagnostics.fallbackAttempted())
+         {
+            summary += ", fallback ";
+            summary += (diagnostics.fallbackResult().empty() ?
+                           std::string("attempted") :
+                           diagnostics.fallbackResult()).c_str();
+         }
+         summary += ")";
+      }
+      if(!diagnostics.resolutionReason().empty())
+      {
+         summary += " [";
+         summary += diagnostics.resolutionReason().c_str();
+         if(!diagnostics.stripCandidateReason().empty() &&
+            diagnostics.stripCandidate())
+         {
+            summary += ", ";
+            summary += diagnostics.stripCandidateReason().c_str();
+         }
+         summary += "]";
+      }
+      return summary;
+   }
+
+   std::size_t bundleRegistrationMinimumEdgeTiePointCount(
+      const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
+         result)
+   {
+      std::size_t minimum = std::numeric_limits<std::size_t>::max();
+      for(const ossimBundleAdjustmentRegistrationSource::PairResult& pair :
+          result.pairResults())
+      {
+         if(pair.tiePoints().empty())
+         {
+            continue;
+         }
+         minimum = std::min(minimum, pair.tiePoints().size());
+      }
+      return minimum == std::numeric_limits<std::size_t>::max() ? 0 : minimum;
+   }
+
+   std::size_t bundleRegistrationSparseEdgeCount(
+      const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
+         result,
+      std::size_t minimumTiePointCount)
+   {
+      std::size_t count = 0;
+      for(const ossimBundleAdjustmentRegistrationSource::PairResult& pair :
+          result.pairResults())
+      {
+         if(!pair.tiePoints().empty() &&
+            pair.tiePoints().size() < minimumTiePointCount)
+         {
+            ++count;
+         }
+      }
+      return count;
+   }
+
+   bool bundleRegistrationPairUsesNativeAffine(
+      const ossimBundleAdjustmentRegistrationSource::PairResult& pair)
+   {
+      const std::string& path = pair.executionPath();
+      return path.find("native-affine-ncc") != std::string::npos ||
+             path.find("native_affine") != std::string::npos;
+   }
+
+   ossim_autoreg::BundleNativeMatcherPolicyEvidence
+   bundleRegistrationNativeMatcherPolicy(
+      const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
+         result,
+      std::size_t minimumTiePointCount)
+   {
+      ossim_autoreg::BundleNativeMatcherPolicyEvidence evidence;
+      evidence.totalEdges = result.pairResults().size();
+      for(const ossimBundleAdjustmentRegistrationSource::PairResult& pair :
+          result.pairResults())
+      {
+         const std::size_t tieCount = pair.tiePoints().size();
+         if(bundleRegistrationPairUsesNativeAffine(pair))
+         {
+            ++evidence.nativeEdges;
+            if(tieCount >= minimumTiePointCount)
+            {
+               ++evidence.nativeSupportedEdges;
+            }
+            else if(tieCount > 0)
+            {
+               ++evidence.nativeSparseEdges;
+            }
+         }
+         if(pair.matcherAlternateEvaluated())
+         {
+            ++evidence.matcherAlternateEvaluatedEdges;
+         }
+         if(pair.matcherAlternateUsed())
+         {
+            ++evidence.matcherAlternateUsedEdges;
+            if(!pair.matcherAlternateMethod().empty())
+            {
+               evidence.lastMatcherAlternateMethod =
+                  pair.matcherAlternateMethod();
+            }
+         }
+         if(pair.denseAlternateUsed())
+         {
+            ++evidence.denseAlternateUsedEdges;
+         }
+      }
+      return evidence;
+   }
+
+   bool bundleRegistrationNativeMatcherPolicyApplied(
+      const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
+         result)
+   {
+      for(const ossimBundleAdjustmentRegistrationSource::PairResult& pair :
+          result.pairResults())
+      {
+         if(pair.executionPath().find("native-policy-auto") !=
+            std::string::npos)
+         {
+            return true;
+         }
+      }
+      return false;
+   }
+
+   std::string bundleRegistrationNativeMatcherPolicyAction(
+      const ossimBundleAdjustmentRegistrationSource* source,
+      const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
+         result)
+   {
+      if(!source ||
+         source->autoRegistrationOptions().bundleNativeMatcherPolicy() !=
+            ossim_autoreg::BUNDLE_NATIVE_MATCHER_POLICY_AUTO)
+      {
+         return "report_only";
+      }
+      return bundleRegistrationNativeMatcherPolicyApplied(result) ?
+                std::string("promoted_to_mixed-phase-orb") :
+                std::string("auto_no_change");
+   }
+
+   std::string bundleRegistrationPairRoute(
+      const ossimBundleAdjustmentRegistrationSource::PairResult& pair)
+   {
+      const std::string& path = pair.executionPath();
+      if(path.find("mixed-phase-orb-post-filter") != std::string::npos)
+      {
+         return "native_sparse_recovery";
+      }
+      if(pair.matcherAlternateUsed() && !pair.matcherAlternateMethod().empty())
+      {
+         return std::string("matcher_fallback:") +
+                pair.matcherAlternateMethod();
+      }
+      if(path.find("mixed-phase-orb") != std::string::npos)
+      {
+         return "mixed_phase_orb";
+      }
+      if(path.find("native-affine-ncc") != std::string::npos)
+      {
+         return "native_affine";
+      }
+      return path.empty() ? std::string("unspecified") : path;
+   }
+
+   std::string bundleRegistrationPairSummary(
+      const ossimBundleAdjustmentRegistrationSource::PairResult& pair,
+      std::size_t minimumTiePointCount)
+   {
+      std::ostringstream out;
+      out << pair.firstInputIndex() << "->" << pair.secondInputIndex()
+          << " route=" << bundleRegistrationPairRoute(pair)
+          << " ties=" << pair.tiePoints().size();
+      if(pair.addedTiePointCount() != pair.tiePoints().size())
+      {
+         out << " added=" << pair.addedTiePointCount();
+      }
+      if(!pair.executionPath().empty())
+      {
+         out << " path=" << pair.executionPath();
+      }
+      if(pair.tiePoints().empty())
+      {
+         out << " support=empty";
+      }
+      else if(pair.tiePoints().size() < minimumTiePointCount)
+      {
+         out << " support=sparse";
+      }
+      else
+      {
+         out << " support=ok";
+      }
+      return out.str();
+   }
+
+   ossimString bundleRegistrationDiagnosticsSummary(
+      const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
+         result)
+   {
+      std::ostringstream out;
+      const ossim_autoreg::BundleAdjustmentResult& optimization =
+         result.optimization();
+      const ossim_autoreg::BundleConnectivityDiagnostics& connectivity =
+         result.connectivity();
+
+      out << "connectivity "
+          << connectivity.getEdges().size() << " edge(s)/"
+          << connectivity.getComponents().size() << " component(s)";
+      if(!connectivity.getConnected())
+      {
+         out << ", disconnected";
+      }
+
+      if(optimization.ran())
+      {
+         const std::string solverBackend =
+            optimization.solverBackendName().empty()
+               ? std::string("unknown")
+               : optimization.solverBackendName();
+         out << ", solver " << solverBackend
+             << ", active params " << optimization.activeParameterCount()
+             << ", image blocks " << optimization.activeImageBlockCount()
+             << ", normal blocks "
+             << optimization.normalEquationBlockPairCount()
+             << ", residuals " << optimization.validResidualCount();
+      }
+
+      const std::string denseAlternateSummary =
+         bundleRegistrationDenseAlternateSummary(result);
+      if(!denseAlternateSummary.empty())
+      {
+         out << ", " << denseAlternateSummary;
+      }
+      const std::string matcherAlternateSummary =
+         bundleRegistrationMatcherAlternateSummary(result);
+      if(!matcherAlternateSummary.empty())
+      {
+         out << ", " << matcherAlternateSummary;
+      }
+      const ossim_autoreg::BundleNativeMatcherPolicyEvidence
+         nativeMatcherPolicy =
+         bundleRegistrationNativeMatcherPolicy(
+            result,
+            bundleRegistrationMinimumEdgeTiePointCount(result));
+      out << ", native matcher "
+          << ossim_autoreg::bundleNativeMatcherPolicyAdvisory(
+                nativeMatcherPolicy)
+          << ", would choose "
+          << ossim_autoreg::bundleNativeMatcherPolicyWouldChoose(
+                nativeMatcherPolicy)
+          << ", action "
+          << (bundleRegistrationNativeMatcherPolicyApplied(result)
+                 ? std::string("promoted_to_mixed-phase-orb")
+                 : std::string("none"));
+
+      return out.str().c_str();
+   }
+
+   QString registrationReportSafeLabel(const ossimString& label)
+   {
+      QString result = QString::fromStdString(label.string()).trimmed();
+      if(result.isEmpty())
+      {
+         result = "registration";
+      }
+      for(int idx = 0; idx < result.size(); ++idx)
+      {
+         const QChar ch = result.at(idx);
+         if(!ch.isLetterOrNumber() && ch != '_' && ch != '-')
+         {
+            result[idx] = '_';
+         }
+      }
+      return result.left(80);
+   }
+
+   ossimFilename registrationQualityReportPath(const ossimString& label,
+                                               const QString& prefix)
+   {
+      QDir reportDir(QDir::temp().filePath(
+         "ossim-geocell-registration-reports"));
+      if(!reportDir.exists())
+      {
+         reportDir.mkpath(".");
+      }
+      const QString timestamp =
+         QDateTime::currentDateTimeUtc().toString("yyyyMMddTHHmmsszzzZ");
+      const QString filename =
+         prefix + "-" + registrationReportSafeLabel(label) + "-" +
+         timestamp + ".txt";
+      return ossimFilename(reportDir.filePath(filename).toStdString());
+   }
+
+   bool writeRegistrationQualityReport(const ossimFilename& path,
+                                       const std::string& text)
+   {
+      if(path.empty())
+      {
+         return false;
+      }
+      std::ofstream out(path.c_str());
+      if(!out)
+      {
+         return false;
+      }
+      out << text;
+      return static_cast<bool>(out);
+   }
+
+   void appendRegistrationQualityReportStatus(ossimString& summary,
+                                              const ossimFilename& path,
+                                              bool wroteReport)
+   {
+      summary += wroteReport ? ", quality report: " :
+                               ", failed to write quality report: ";
+      summary += path;
+   }
+
+   void appendTiePointSpreadQualityReport(
+      std::ostringstream& out,
+      const std::string& prefix,
+      const ossim_autoreg::TiePointSpreadQuality& quality)
+   {
+      out << prefix << ".valid: "
+          << (quality.valid() ? "true" : "false") << "\n";
+      if(!quality.valid())
+      {
+         return;
+      }
+      out << prefix << ".weak: "
+          << (quality.weak() ? "true" : "false") << "\n";
+      out << prefix << ".area_ratio: " << quality.areaRatio() << "\n";
+      out << prefix << ".fixed_aspect_ratio: "
+          << quality.fixedAspectRatio() << "\n";
+      out << prefix << ".moving_aspect_ratio: "
+          << quality.movingAspectRatio() << "\n";
+      out << prefix << ".reason: " << quality.reason() << "\n";
+   }
+
+   void appendTiePointTranslationConsistencyReport(
+      std::ostringstream& out,
+      const std::string& prefix,
+      const ossim_autoreg::TiePointTranslationConsistency& consistency)
+   {
+      out << prefix << ".valid: "
+          << (consistency.valid() ? "true" : "false") << "\n";
+      if(!consistency.valid())
+      {
+         return;
+      }
+      out << prefix << ".count: " << consistency.count() << "\n";
+      out << prefix << ".median_residual_pixels: "
+          << consistency.medianResidualPixels() << "\n";
+      out << prefix << ".rms_residual_pixels: "
+          << consistency.rmsResidualPixels() << "\n";
+      out << prefix << ".max_residual_pixels: "
+          << consistency.maxResidualPixels() << "\n";
+   }
+
+   void appendTiePointScoreQualityReport(
+      std::ostringstream& out,
+      const std::string& prefix,
+      const ossim_autoreg::TiePointScoreQuality& quality)
+   {
+      out << prefix << ".valid: "
+          << (quality.valid() ? "true" : "false") << "\n";
+      if(!quality.valid())
+      {
+         return;
+      }
+      out << prefix << ".count: " << quality.count() << "\n";
+      out << prefix << ".min_score: " << quality.minScore() << "\n";
+      out << prefix << ".mean_score: " << quality.meanScore() << "\n";
+      out << prefix << ".median_score: " << quality.medianScore() << "\n";
+      out << prefix << ".max_score: " << quality.maxScore() << "\n";
+   }
+
+   void appendDenseAlternateReport(
+      std::ostringstream& out,
+      const std::string& prefix,
+      const ossimBundleAdjustmentRegistrationSource::PairResult& pair)
+   {
+      out << prefix << ".dense_alternate_evaluated: "
+          << (pair.denseAlternateEvaluated() ? "true" : "false") << "\n";
+      if(!pair.denseAlternateEvaluated())
+      {
+         return;
+      }
+
+      const ossim_autoreg::TiePointAlternateAcceptance& acceptance =
+         pair.denseAlternateAcceptance();
+      out << prefix << ".dense_alternate_used: "
+          << (pair.denseAlternateUsed() ? "true" : "false") << "\n";
+      out << prefix << ".dense_alternate_accepted: "
+          << (acceptance.accepted() ? "true" : "false") << "\n";
+      out << prefix << ".dense_alternate_reason: "
+          << acceptance.reason() << "\n";
+      appendTiePointSpreadQualityReport(
+         out,
+         prefix + ".dense_base_spread",
+         acceptance.baseSpread());
+      appendTiePointSpreadQualityReport(
+         out,
+         prefix + ".dense_candidate_spread",
+         acceptance.candidateSpread());
+      appendTiePointTranslationConsistencyReport(
+         out,
+         prefix + ".dense_base_translation",
+         acceptance.baseConsistency());
+      appendTiePointTranslationConsistencyReport(
+         out,
+         prefix + ".dense_candidate_translation",
+         acceptance.candidateConsistency());
+      appendTiePointScoreQualityReport(
+         out,
+         prefix + ".dense_base_score",
+         acceptance.baseScoreQuality());
+      appendTiePointScoreQualityReport(
+         out,
+         prefix + ".dense_candidate_score",
+         acceptance.candidateScoreQuality());
+   }
+
+   void appendMatcherAlternateReport(
+      std::ostringstream& out,
+      const std::string& prefix,
+      const ossimBundleAdjustmentRegistrationSource::PairResult& pair)
+   {
+      out << prefix << ".matcher_alternate_evaluated: "
+          << (pair.matcherAlternateEvaluated() ? "true" : "false") << "\n";
+      if(!pair.matcherAlternateEvaluated())
+      {
+         return;
+      }
+
+      const ossim_autoreg::TiePointAlternateAcceptance& acceptance =
+         pair.matcherAlternateAcceptance();
+      out << prefix << ".matcher_alternate_used: "
+          << (pair.matcherAlternateUsed() ? "true" : "false") << "\n";
+      out << prefix << ".matcher_alternate_method: "
+          << pair.matcherAlternateMethod() << "\n";
+      out << prefix << ".matcher_alternate_accepted: "
+          << (acceptance.accepted() ? "true" : "false") << "\n";
+      out << prefix << ".matcher_alternate_reason: "
+          << acceptance.reason() << "\n";
+      appendTiePointSpreadQualityReport(
+         out,
+         prefix + ".matcher_alternate_base_spread",
+         acceptance.baseSpread());
+      appendTiePointSpreadQualityReport(
+         out,
+         prefix + ".matcher_alternate_candidate_spread",
+         acceptance.candidateSpread());
+      appendTiePointTranslationConsistencyReport(
+         out,
+         prefix + ".matcher_alternate_base_translation",
+         acceptance.baseConsistency());
+      appendTiePointTranslationConsistencyReport(
+         out,
+         prefix + ".matcher_alternate_candidate_translation",
+         acceptance.candidateConsistency());
+      appendTiePointScoreQualityReport(
+         out,
+         prefix + ".matcher_alternate_base_score",
+         acceptance.baseScoreQuality());
+      appendTiePointScoreQualityReport(
+         out,
+         prefix + ".matcher_alternate_candidate_score",
+         acceptance.candidateScoreQuality());
+   }
+
+   std::string fixedRegistrationQualityReportText(
+      const ossimString& label,
+      const ossimString& summary,
+      const std::string& launchInputStatus,
+      const std::string& launchSettings,
+      bool success,
+      const std::vector<ossimFixedRegistrationSource::RegistrationResult>&
+         results,
+      const std::vector<ossimFilename>& writtenGeometryFiles,
+      const std::vector<ossimFilename>& failedGeometryFiles)
+   {
+      std::ostringstream out;
+      out << "registration_type: fixed\n";
+      out << "label: " << label << "\n";
+      out << "success: " << (success ? "true" : "false") << "\n";
+      out << "summary: " << summary << "\n";
+      if(!launchInputStatus.empty())
+      {
+         out << "launch_input_status: " << launchInputStatus << "\n";
+      }
+      if(!launchSettings.empty())
+      {
+         out << "launch_settings: " << launchSettings << "\n";
+      }
+      appendRegistrationRuntimeContext(out);
+      out << "result_count: " << results.size() << "\n";
+      out << "written_geometry_count: " << writtenGeometryFiles.size()
+          << "\n";
+      for(std::size_t idx = 0; idx < writtenGeometryFiles.size(); ++idx)
+      {
+         out << "written_geometry[" << idx << "]: "
+             << writtenGeometryFiles[idx] << "\n";
+      }
+      out << "failed_geometry_count: " << failedGeometryFiles.size() << "\n";
+      for(std::size_t idx = 0; idx < failedGeometryFiles.size(); ++idx)
+      {
+         out << "failed_geometry[" << idx << "]: "
+             << failedGeometryFiles[idx] << "\n";
+      }
+      for(std::size_t idx = 0; idx < results.size(); ++idx)
+      {
+         const ossimFixedRegistrationSource::RegistrationResult& result =
+            results[idx];
+         const ossim_autoreg::OptimizationResult& optimization =
+            result.optimization();
+         out << "result[" << idx << "].input_index: "
+             << result.inputIndex() << "\n";
+         out << "result[" << idx << "].floating_input_index: "
+             << result.floatingInputIndex() << "\n";
+         out << "result[" << idx << "].success: "
+             << (result.success() ? "true" : "false") << "\n";
+         out << "result[" << idx << "].session_open: "
+             << (result.sessionOpen() ? "true" : "false") << "\n";
+         out << "result[" << idx << "].ran: "
+             << (result.ran() ? "true" : "false") << "\n";
+         out << "result[" << idx << "].tie_points: "
+             << result.tiePoints().size() << "\n";
+         out << "result[" << idx << "].message: "
+             << result.message() << "\n";
+         out << "result[" << idx << "].execution_path: "
+             << (result.executionPath().empty()
+                    ? std::string("unspecified")
+                    : result.executionPath()) << "\n";
+         out << "result[" << idx << "].quality_advisory: "
+             << (result.qualityAdvisory().empty()
+                    ? std::string("ok")
+                    : result.qualityAdvisory()) << "\n";
+         if(!result.detailLog().empty())
+         {
+            out << "result[" << idx << "].detail_log_begin\n";
+            out << result.detailLog();
+            if(result.detailLog()[result.detailLog().size() - 1] != '\n')
+            {
+               out << "\n";
+            }
+            out << "result[" << idx << "].detail_log_end\n";
+         }
+         if(std::isfinite(result.effectiveTargetRmsePixels()))
+         {
+            out << "result[" << idx
+                << "].effective_target_rmse_pixels: "
+                << result.effectiveTargetRmsePixels() << "\n";
+         }
+         if(std::isfinite(result.effectiveSearchSpan()))
+         {
+            out << "result[" << idx
+                << "].effective_search_span: "
+                << result.effectiveSearchSpan() << "\n";
+         }
+         out << "result[" << idx << "].fixed_scene_policy: "
+             << result.fixedScenePolicy() << "\n";
+         out << "result[" << idx << "].search_span_policy: "
+             << result.searchSpanPolicy() << "\n";
+         out << "result[" << idx << "].optimization.ran: "
+             << (optimization.ran() ? "true" : "false") << "\n";
+         if(optimization.ran())
+         {
+            out << "result[" << idx
+                << "].optimization.converged: "
+                << (optimization.converged() ? "true" : "false") << "\n";
+            out << "result[" << idx
+                << "].optimization.iterations: "
+                << optimization.iterations() << "\n";
+            out << "result[" << idx
+                << "].optimization.final_rmse_pixels: "
+                << optimization.finalRmsPixels() << "\n";
+            out << "result[" << idx
+                << "].optimization.active_parameters: "
+                << optimization.activeParameterCount() << "\n";
+         }
+      }
+      return out.str();
+   }
+
+   std::string bundleRegistrationQualityReportText(
+      const ossimString& label,
+      const ossimString& summary,
+      bool success,
+      const ossimBundleAdjustmentRegistrationSource* source,
+      const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
+         result,
+      const std::vector<ossimFilename>& writtenGeometryFiles)
+   {
+      std::ostringstream out;
+      const ossim_autoreg::BundleAdjustmentResult& optimization =
+         result.optimization();
+      const ossim_autoreg::BundleConnectivityDiagnostics& connectivity =
+         result.connectivity();
+
+      out << "registration_type: bundle\n";
+      out << "label: " << label << "\n";
+      out << "success: " << (success ? "true" : "false") << "\n";
+      out << "summary: " << summary << "\n";
+      appendRegistrationRuntimeContext(out);
+      out << "bundle_mode: " << bundleRegistrationModeName(source) << "\n";
+      out << "bundle_motion_policy: "
+          << bundleRegistrationMotionPolicy(source) << "\n";
+      out << "bundle_launch_preset: "
+          << (source && !source->launchPreset().empty() ?
+                 source->launchPreset() :
+                 std::string("unspecified")) << "\n";
+      out << "bundle_pair_policy_configured: "
+          << bundleRegistrationPairPolicy(source) << "\n";
+      out << "bundle_neighbor_span_configured: "
+          << (source ? source->bundleNeighborSpan() : 0) << "\n";
+      const ossim_autoreg::BundlePairPolicyDiagnostics&
+         pairPolicyDiagnostics = result.pairPolicyDiagnostics();
+      out << "bundle_pair_policy: "
+          << (pairPolicyDiagnostics.resolvedPolicy().empty()
+                 ? bundleRegistrationPairPolicy(source)
+                 : pairPolicyDiagnostics.resolvedPolicy()) << "\n";
+      appendBundlePairPolicyDiagnostics(
+         out,
+         pairPolicyDiagnostics);
+      appendBundleStripEdgeQualityAdvisory(
+         out,
+         result.stripEdgeQualityAdvisory());
+      if(source)
+      {
+         const ossim_autoreg::AutoRegistrationOptions options =
+            source->autoRegistrationOptions();
+         out << "bundle_target_rmse_pixels: "
+             << options.targetRmsePixels() << "\n";
+         out << "bundle_registration_passes: "
+             << options.registrationPasses() << "\n";
+         out << "bundle_native_matcher_policy: "
+             << ossim_autoreg::bundleNativeMatcherPolicyName(
+                   options.bundleNativeMatcherPolicy()) << "\n";
+         out << "bundle_floating_datum_prior_weight: "
+             << source->floatingDatumPriorWeight() << "\n";
+      }
+      const std::size_t sparseEdgeCount =
+         bundleRegistrationSparseEdgeCount(result,
+                                           source ? source->
+                                              autoRegistrationOptions().
+                                              minInliers() : 6);
+      const ossim_autoreg::BundleNativeMatcherPolicyEvidence
+         nativeMatcherPolicy =
+         bundleRegistrationNativeMatcherPolicy(
+            result,
+            source ? source->autoRegistrationOptions().minInliers() : 6);
+      out << "session_open: "
+          << (result.sessionOpen() ? "true" : "false") << "\n";
+      out << "ran: " << (result.ran() ? "true" : "false") << "\n";
+      out << "message: " << result.message() << "\n";
+      out << "stop_reason: "
+          << (result.stopReason().empty() ? std::string("unknown") :
+                                           result.stopReason()) << "\n";
+      out << "search_span_recovery: "
+          << (result.searchSpanRecoveryMessage().empty()
+                 ? std::string("not_attempted")
+                 : result.searchSpanRecoveryMessage()) << "\n";
+      out << "model_freedom_advisory: "
+          << (result.modelFreedomAdvisory().empty()
+                 ? std::string("ok")
+                 : result.modelFreedomAdvisory()) << "\n";
+      out << "bound_pressure_advisory: "
+          << (result.boundPressureAdvisory().empty()
+                 ? std::string("ok")
+                 : result.boundPressureAdvisory()) << "\n";
+      out << "acceptance_tier: "
+          << bundleRegistrationAcceptanceTier(result, source) << "\n";
+      out << "edge_prune_policy: "
+          << (result.edgePrunePolicyMessage().empty()
+                 ? std::string("not_attempted")
+                 : result.edgePrunePolicyMessage()) << "\n";
+      out << "edge_quality: "
+          << (result.edgeQualityIssue().hasIssue()
+                 ? result.edgeQualityIssue().reason()
+                 : std::string("ok")) << "\n";
+      out << "pair_count: " << result.pairResults().size() << "\n";
+      out << "bundle_edge_min_tie_points: "
+          << bundleRegistrationMinimumEdgeTiePointCount(result) << "\n";
+      out << "bundle_edge_sparse_count: " << sparseEdgeCount << "\n";
+      out << "bundle_edge_support_advisory: "
+          << (sparseEdgeCount ? "weak" : "ok") << "\n";
+      out << "native_matcher_policy_total_edges: "
+          << nativeMatcherPolicy.totalEdges << "\n";
+      out << "native_matcher_policy_native_edges: "
+          << nativeMatcherPolicy.nativeEdges << "\n";
+      out << "native_matcher_policy_native_supported_edges: "
+          << nativeMatcherPolicy.nativeSupportedEdges << "\n";
+      out << "native_matcher_policy_native_sparse_edges: "
+          << nativeMatcherPolicy.nativeSparseEdges << "\n";
+      out << "native_matcher_policy_matcher_alternate_evaluated_edges: "
+          << nativeMatcherPolicy.matcherAlternateEvaluatedEdges << "\n";
+      out << "native_matcher_policy_matcher_alternate_used_edges: "
+          << nativeMatcherPolicy.matcherAlternateUsedEdges << "\n";
+      out << "native_matcher_policy_dense_alternate_used_edges: "
+          << nativeMatcherPolicy.denseAlternateUsedEdges << "\n";
+      out << "native_matcher_policy_last_alternate_method: "
+          << (nativeMatcherPolicy.lastMatcherAlternateMethod.empty()
+                 ? std::string("none")
+                 : nativeMatcherPolicy.lastMatcherAlternateMethod) << "\n";
+      out << "native_matcher_policy_advisory: "
+          << ossim_autoreg::bundleNativeMatcherPolicyAdvisory(
+                nativeMatcherPolicy) << "\n";
+      out << "native_matcher_policy_reason: "
+          << ossim_autoreg::bundleNativeMatcherPolicyReason(
+                nativeMatcherPolicy) << "\n";
+      out << "native_matcher_policy_suggestion: "
+          << ossim_autoreg::bundleNativeMatcherPolicySuggestion(
+                nativeMatcherPolicy) << "\n";
+      out << "native_matcher_policy_would_choose: "
+          << ossim_autoreg::bundleNativeMatcherPolicyWouldChoose(
+                nativeMatcherPolicy) << "\n";
+      out << "native_matcher_policy_applied: "
+          << (bundleRegistrationNativeMatcherPolicyApplied(result)
+                 ? "true"
+                 : "false") << "\n";
+      out << "native_matcher_policy_action: "
+          << bundleRegistrationNativeMatcherPolicyAction(source, result)
+          << "\n";
+      for(std::size_t idx = 0; idx < result.pairResults().size(); ++idx)
+      {
+         const ossimBundleAdjustmentRegistrationSource::PairResult& pair =
+            result.pairResults()[idx];
+         out << "pair[" << idx << "].first_input_index: "
+             << pair.firstInputIndex() << "\n";
+         out << "pair[" << idx << "].second_input_index: "
+             << pair.secondInputIndex() << "\n";
+         out << "pair[" << idx << "].tie_points: "
+             << pair.tiePoints().size() << "\n";
+         out << "pair[" << idx << "].added_tie_points: "
+             << pair.addedTiePointCount() << "\n";
+         out << "pair[" << idx << "].route: "
+             << bundleRegistrationPairRoute(pair) << "\n";
+         out << "pair[" << idx << "].summary: "
+             << bundleRegistrationPairSummary(
+                   pair,
+                   source ? source->autoRegistrationOptions().minInliers()
+                          : 6)
+             << "\n";
+         out << "pair[" << idx << "].execution_path: "
+             << (pair.executionPath().empty()
+                    ? std::string("unspecified")
+                    : pair.executionPath()) << "\n";
+         appendDenseAlternateReport(
+            out,
+            std::string("pair[") +
+               ossimString::toString(static_cast<ossim_uint32>(idx)).string()
+               + "]",
+            pair);
+         appendMatcherAlternateReport(
+            out,
+            std::string("pair[") +
+               ossimString::toString(static_cast<ossim_uint32>(idx)).string()
+               + "]",
+            pair);
+      }
+      out << "connectivity.image_count: "
+          << connectivity.getImageCount() << "\n";
+      out << "connectivity.anchor_enabled: "
+          << (connectivity.getAnchorEnabled() ? "true" : "false") << "\n";
+      out << "connectivity.connected: "
+          << (connectivity.getConnected() ? "true" : "false") << "\n";
+      out << "connectivity.edge_count: "
+          << connectivity.getEdges().size() << "\n";
+      for(std::size_t idx = 0; idx < connectivity.getEdges().size(); ++idx)
+      {
+         const ossim_autoreg::BundleConnectivityEdge& edge =
+            connectivity.getEdges()[idx];
+         out << "connectivity.edge[" << idx << "]: image["
+             << edge.getFirstImageIndex() << "] -> image["
+             << edge.getSecondImageIndex() << "], tie_points="
+             << edge.getTiePointCount() << "\n";
+      }
+      out << "connectivity.component_count: "
+          << connectivity.getComponents().size() << "\n";
+      if(optimization.ran())
+      {
+         out << "optimization.ran: true\n";
+         out << "optimization.converged: "
+             << (optimization.converged() ? "true" : "false") << "\n";
+         out << "optimization.iterations: "
+             << optimization.iterations() << "\n";
+         out << "optimization.final_rmse_pixels: "
+             << optimization.finalRmsPixels() << "\n";
+         out << "optimization.valid_residuals: "
+             << optimization.validResidualCount() << "\n";
+         out << "optimization.active_parameters: "
+             << optimization.activeParameterCount() << "\n";
+         out << "optimization.active_image_blocks: "
+             << optimization.activeImageBlockCount() << "\n";
+         out << "optimization.normal_equation_block_pairs: "
+             << optimization.normalEquationBlockPairCount() << "\n";
+         out << "optimization.normal_equation_block_pair_capacity: "
+             << optimization.normalEquationBlockPairCapacity() << "\n";
+         out << "optimization.normal_equation_block_pair_density: "
+             << optimization.normalEquationBlockPairDensity() << "\n";
+         out << "optimization.solver_backend: "
+             << optimization.solverBackendName() << "\n";
+      }
+      else
+      {
+         out << "optimization.ran: false\n";
+      }
+      out << "written_geometry_count: " << writtenGeometryFiles.size()
+          << "\n";
+      for(std::size_t idx = 0; idx < writtenGeometryFiles.size(); ++idx)
+      {
+         out << "written_geometry[" << idx << "]: "
+             << writtenGeometryFiles[idx] << "\n";
+      }
+      return out.str();
+   }
+
+   enum RegistrationSetupApproach
+   {
+      REGISTRATION_SETUP_FIXED_AUTO = 0,
+      REGISTRATION_SETUP_FIXED_MANUAL = 1,
+      REGISTRATION_SETUP_BUNDLE_ALL_FLOATING = 2,
+      REGISTRATION_SETUP_BUNDLE_ANCHORED = 3
+   };
+
+   enum BundlePairPolicy
+   {
+      BUNDLE_PAIR_POLICY_ALL_PAIRS = 0,
+      BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN = 1,
+      BUNDLE_PAIR_POLICY_AUTO = 2
+   };
+
+   ossim_autoreg::BundlePairPolicy sharedBundlePairPolicy(
+      BundlePairPolicy policy)
+   {
+      if(policy == BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN)
+         return ossim_autoreg::BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN;
+      if(policy == BUNDLE_PAIR_POLICY_AUTO)
+         return ossim_autoreg::BUNDLE_PAIR_POLICY_AUTO;
+      return ossim_autoreg::BUNDLE_PAIR_POLICY_ALL_PAIRS;
+   }
+
+   std::string bundlePairPolicyDescription(
+      BundlePairPolicy policy,
+      std::size_t span)
+   {
+      if(policy == BUNDLE_PAIR_POLICY_AUTO)
+         return "auto";
+      return bundlePairPolicyDescription(span);
+   }
+
+   void appendBundlePairPolicyDiagnostics(
+      std::ostream& out,
+      const ossim_autoreg::BundlePairPolicyDiagnostics& diagnostics)
+   {
+      out << "bundle_pair_policy_requested: "
+          << diagnostics.requestedPolicy() << "\n";
+      out << "bundle_pair_policy_resolved: "
+          << diagnostics.resolvedPolicy() << "\n";
+      out << "bundle_pair_policy_resolution_reason: "
+          << diagnostics.resolutionReason() << "\n";
+      out << "bundle_pair_policy_strip_candidate: "
+          << (diagnostics.stripCandidate() ? "true" : "false") << "\n";
+      out << "bundle_pair_policy_strip_reason: "
+          << diagnostics.stripCandidateReason() << "\n";
+      out << "bundle_pair_policy_fallback_attempted: "
+          << (diagnostics.fallbackAttempted() ? "true" : "false") << "\n";
+      out << "bundle_pair_policy_fallback_reason: "
+          << (diagnostics.fallbackReason().empty() ?
+                 std::string("none") :
+                 diagnostics.fallbackReason()) << "\n";
+      out << "bundle_pair_policy_fallback_result: "
+          << (diagnostics.fallbackResult().empty() ?
+                 std::string("not_attempted") :
+                 diagnostics.fallbackResult()) << "\n";
+      out << "bundle_pair_policy_image_count: "
+          << diagnostics.imageCount() << "\n";
+      out << "bundle_pair_policy_planned_full_pair_count: "
+          << diagnostics.pairCount() << "\n";
+      out << "bundle_pair_policy_generated_pair_count: "
+          << diagnostics.generatedPairCount() << "\n";
+      out << "bundle_pair_policy_saved_pair_count: "
+          << diagnostics.savedPairCount() << "\n";
+      out << "bundle_pair_policy_saved_pair_delta: "
+          << (diagnostics.pairCount() >= diagnostics.generatedPairCount() ?
+                 diagnostics.pairCount() - diagnostics.generatedPairCount() :
+                 0) << "\n";
+      out << "bundle_pair_policy_pair_generation_wall_seconds: "
+          << diagnostics.pairGenerationWallSeconds() << "\n";
+      out << "bundle_pair_policy_adjacent_pair_count: "
+          << diagnostics.adjacentPairCount() << "\n";
+      out << "bundle_pair_policy_non_adjacent_pair_count: "
+          << diagnostics.nonAdjacentPairCount() << "\n";
+      out << "bundle_pair_policy_adjacent_overlap_area_pixels: "
+          << diagnostics.adjacentOverlapAreaPixels() << "\n";
+      out << "bundle_pair_policy_non_adjacent_overlap_area_pixels: "
+          << diagnostics.nonAdjacentOverlapAreaPixels() << "\n";
+      out << "bundle_pair_policy_adjacent_overlap_dominance_ratio: "
+          << diagnostics.adjacentOverlapDominanceRatio() << "\n";
+   }
+
+   void appendBundleStripEdgeQualityAdvisory(
+      std::ostream& out,
+      const ossim_autoreg::BundleStripEdgeQualityAdvisory& advisory)
+   {
+      out << "bundle_strip_edge_quality_applicable: "
+          << (advisory.applicable() ? "true" : "false") << "\n";
+      out << "bundle_strip_edge_quality: "
+          << (advisory.applicable()
+                 ? (advisory.weak() ? "weak" : "ok")
+                 : "not_applicable") << "\n";
+      out << "bundle_strip_edge_quality_reason: "
+          << advisory.reason() << "\n";
+      out << "bundle_strip_edge_expected_adjacent_edges: "
+          << advisory.expectedAdjacentEdges() << "\n";
+      out << "bundle_strip_edge_observed_adjacent_edges: "
+          << advisory.observedAdjacentEdges() << "\n";
+      out << "bundle_strip_edge_sparse_adjacent_edges: "
+          << advisory.sparseAdjacentEdges() << "\n";
+      out << "bundle_strip_edge_worst_edge: image["
+          << advisory.worstFirstImageIndex() << "]->image["
+          << advisory.worstSecondImageIndex() << "]\n";
+      out << "bundle_strip_edge_worst_tie_points: "
+          << advisory.worstTiePointCount() << "\n";
+      out << "bundle_strip_edge_required_tie_points: "
+          << advisory.requiredTiePointCount() << "\n";
+   }
+
+   struct RegistrationSetupOptions
+   {
+      RegistrationSetupApproach approach;
+      std::string matchMethod;
+      std::string resamplerType;
+      std::string supportPassMatcherResampler;
+      int chipSize;
+      int searchRadius;
+      int gridSpacing;
+      double minScore;
+      double minScoreMargin;
+      double viewGsd;
+      std::size_t maxTiePoints;
+      std::size_t denseGridSeedBudget;
+      bool autoDenseGridSeedBudget;
+      bool tiePointTimingDiagnostics;
+      BundlePairPolicy bundlePairPolicy;
+      std::size_t bundleNeighborSpan;
+      std::size_t maxConcurrentRegistrations;
+      std::size_t adaptiveBankThreadCount;
+      bool adaptiveFullPostBankRefinement;
+      std::string nativeLowGridPolicy;
+      bool opencvRansacPrefilter;
+      double opencvRansacThresholdPixels;
+
+      RegistrationSetupOptions()
+      : approach(REGISTRATION_SETUP_FIXED_AUTO),
+        matchMethod(preferredRegistrationMatchMethod()),
+        resamplerType("cubic"),
+        supportPassMatcherResampler(),
+        chipSize(31),
+        searchRadius(64),
+        gridSpacing(128),
+        minScore(0.6),
+        minScoreMargin(0.03),
+        viewGsd(0.0),
+        maxTiePoints(300),
+        denseGridSeedBudget(0),
+        autoDenseGridSeedBudget(false),
+        tiePointTimingDiagnostics(false),
+        bundlePairPolicy(BUNDLE_PAIR_POLICY_ALL_PAIRS),
+        bundleNeighborSpan(0),
+        maxConcurrentRegistrations(1),
+        adaptiveBankThreadCount(4),
+        adaptiveFullPostBankRefinement(true),
+        nativeLowGridPolicy("advisory"),
+        opencvRansacPrefilter(true),
+        opencvRansacThresholdPixels(25.0)
+      {
+      }
+   };
+
+   RegistrationSetupOptions registrationSetupDefaults(
+      RegistrationSetupApproach approach,
+      const std::string& matchMethod)
+   {
+      RegistrationSetupOptions result;
+      result.approach = approach;
+      const bool bundle =
+         approach == REGISTRATION_SETUP_BUNDLE_ALL_FLOATING ||
+         approach == REGISTRATION_SETUP_BUNDLE_ANCHORED;
+      result.matchMethod = matchMethod.empty() ?
+         (bundle ? preferredBundleMatchMethod() :
+          (approach == REGISTRATION_SETUP_FIXED_AUTO ?
+              std::string() :
+              preferredRegistrationMatchMethod())) :
+         matchMethod;
+      result.resamplerType = "cubic";
+      result.supportPassMatcherResampler.clear();
+      result.chipSize = 31;
+      result.searchRadius = 36;
+      result.gridSpacing = 96;
+      result.minScore = 0.6;
+      result.minScoreMargin = 0.03;
+      result.viewGsd = 0.0;
+      result.maxTiePoints = 200;
+      result.denseGridSeedBudget = 0;
+      result.autoDenseGridSeedBudget = false;
+      result.maxConcurrentRegistrations = 1;
+      result.adaptiveBankThreadCount = bundle ? 0 : 4;
+      result.adaptiveFullPostBankRefinement = true;
+      result.nativeLowGridPolicy = "advisory";
+      result.opencvRansacPrefilter = true;
+      result.opencvRansacThresholdPixels = 25.0;
+
+      if(approach == REGISTRATION_SETUP_FIXED_AUTO &&
+         result.matchMethod.empty())
+      {
+         ossim_autoreg::AutoRegistrationOptions defaults;
+         defaults.setAutoRegister(true);
+         ossim_autoreg::applyAutoRegistrationDefaults(defaults);
+        result.resamplerType = defaults.generator().resamplerType();
+         result.supportPassMatcherResampler =
+            defaults.supportPassMatcherResampler();
+         result.chipSize = defaults.generator().chipSize();
+         result.searchRadius = defaults.generator().searchRadius();
+         result.gridSpacing = defaults.generator().gridSpacing();
+         result.minScore = defaults.generator().minScore();
+         result.minScoreMargin = defaults.generator().minScoreMargin();
+         result.viewGsd = defaults.generator().viewGsd();
+         result.maxTiePoints = defaults.generator().maxTiePoints();
+         result.denseGridSeedBudget =
+            defaults.generator().denseGridSeedBudget();
+         result.autoDenseGridSeedBudget =
+            defaults.generator().autoDenseGridSeedBudget();
+         result.tiePointTimingDiagnostics =
+            defaults.generator().timingDiagnostics();
+         result.opencvRansacPrefilter =
+            defaults.opencvRansacPrefilter();
+         result.opencvRansacThresholdPixels =
+            defaults.opencvRansacThresholdPixels();
+         result.nativeLowGridPolicy =
+            defaults.nativeLowGridPolicy();
+         return result;
+      }
+
+      if(bundle)
+      {
+         ossim_autoreg::AutoRegistrationOptions defaults;
+         defaults.generator().setMatchMethod(result.matchMethod);
+         ossim_autoreg::applyBundleRegistrationDefaults(
+            defaults,
+            approach == REGISTRATION_SETUP_BUNDLE_ANCHORED);
+
+        result.resamplerType = defaults.generator().resamplerType();
+         result.supportPassMatcherResampler.clear();
+         result.chipSize = defaults.generator().chipSize();
+         result.searchRadius = defaults.generator().searchRadius();
+         result.gridSpacing = defaults.generator().gridSpacing();
+         result.minScore = defaults.generator().minScore();
+         result.minScoreMargin = defaults.generator().minScoreMargin();
+         result.viewGsd = defaults.generator().viewGsd();
+         result.maxTiePoints = defaults.generator().maxTiePoints();
+         result.denseGridSeedBudget =
+            defaults.generator().denseGridSeedBudget();
+         result.autoDenseGridSeedBudget =
+            defaults.generator().autoDenseGridSeedBudget();
+         result.tiePointTimingDiagnostics =
+            defaults.generator().timingDiagnostics();
+         result.opencvRansacPrefilter =
+            defaults.opencvRansacPrefilter();
+         result.opencvRansacThresholdPixels =
+            defaults.opencvRansacThresholdPixels();
+         result.nativeLowGridPolicy =
+            defaults.nativeLowGridPolicy();
+         return result;
+      }
+
+      ossim_autoreg::AutoRegistrationOptions recommended;
+      recommended.generator().setMatchMethod(result.matchMethod);
+      recommended.generator().setResamplerType(result.resamplerType);
+      recommended.generator().setChipSize(result.chipSize);
+      recommended.generator().setSearchRadius(result.searchRadius);
+      recommended.generator().setGridSpacing(result.gridSpacing);
+      recommended.generator().setMinScore(result.minScore);
+      recommended.generator().setMinScoreMargin(result.minScoreMargin);
+      recommended.generator().setViewGsd(result.viewGsd);
+      recommended.generator().setMaxTiePoints(result.maxTiePoints);
+      recommended.generator().setDenseGridSeedBudget(
+         result.denseGridSeedBudget);
+      recommended.generator().setAutoDenseGridSeedBudget(
+         result.autoDenseGridSeedBudget);
+      recommended.generator().setTimingDiagnostics(
+         result.tiePointTimingDiagnostics);
+      recommended.setThreadCount(result.maxConcurrentRegistrations);
+      recommended.setAdaptiveBankThreadCount(
+         result.adaptiveBankThreadCount);
+      recommended.setAdaptiveFullPostBankRefinement(
+         result.adaptiveFullPostBankRefinement);
+      recommended.setSupportPassMatcherResampler(
+         result.supportPassMatcherResampler);
+      recommended.setNativeLowGridPolicy(result.nativeLowGridPolicy);
+      recommended.setOpencvRansacPrefilter(
+         result.opencvRansacPrefilter);
+      recommended.setOpencvRansacThresholdPixels(
+         result.opencvRansacThresholdPixels);
+      ossim_autoreg::TiePointGeneratorFactory::instance()->
+         configureRecommendedOptions(
+            result.matchMethod,
+            approach == REGISTRATION_SETUP_FIXED_AUTO ?
+               "fixed-setup-auto" : "fixed-manual",
+            recommended);
+
+      result.resamplerType = recommended.generator().resamplerType();
+      result.supportPassMatcherResampler =
+         recommended.supportPassMatcherResampler();
+      result.chipSize = recommended.generator().chipSize();
+      result.searchRadius = recommended.generator().searchRadius();
+      result.gridSpacing = recommended.generator().gridSpacing();
+      result.minScore = recommended.generator().minScore();
+      result.minScoreMargin = recommended.generator().minScoreMargin();
+      result.viewGsd = recommended.generator().viewGsd();
+      result.maxTiePoints = recommended.generator().maxTiePoints();
+      result.denseGridSeedBudget =
+         recommended.generator().denseGridSeedBudget();
+      result.autoDenseGridSeedBudget =
+         recommended.generator().autoDenseGridSeedBudget();
+      result.tiePointTimingDiagnostics =
+         recommended.generator().timingDiagnostics();
+      result.maxConcurrentRegistrations = recommended.threadCount();
+      result.adaptiveBankThreadCount =
+         recommended.adaptiveBankThreadCount();
+      result.adaptiveFullPostBankRefinement =
+         recommended.adaptiveFullPostBankRefinement();
+      result.nativeLowGridPolicy = recommended.nativeLowGridPolicy();
+      result.opencvRansacPrefilter =
+         recommended.opencvRansacPrefilter();
+      result.opencvRansacThresholdPixels =
+         recommended.opencvRansacThresholdPixels();
+
+      if(approach == REGISTRATION_SETUP_FIXED_MANUAL)
+      {
+         result.searchRadius = std::max(result.searchRadius, 128);
+         result.maxTiePoints = 0;
+      }
+      return result;
+   }
+
+   class RegistrationSetupDialog : public QDialog
+   {
+   public:
+      RegistrationSetupDialog(QWidget* parent = 0)
+      : QDialog(parent),
+        m_approach(0),
+        m_matchMethod(0),
+        m_resampler(0),
+        m_supportPassResampler(0),
+        m_chipSize(0),
+        m_searchRadius(0),
+        m_gridSpacing(0),
+        m_minScore(0),
+        m_minScoreMargin(0),
+        m_viewGsd(0),
+        m_maxTiePoints(0),
+        m_denseGridSeedBudget(0),
+        m_autoDenseGridSeedBudget(0),
+        m_tiePointTimingDiagnostics(0),
+        m_bundlePairPolicy(0),
+        m_bundleNeighborSpan(0),
+        m_maxConcurrentRegistrations(0),
+        m_adaptiveBankThreadCount(0),
+        m_adaptiveFullPostBankRefinement(0),
+        m_nativeLowGridPolicy(0),
+        m_opencvRansacPrefilter(0),
+        m_opencvRansacThresholdPixels(0)
+      {
+         setWindowTitle("Registration Setup");
+
+         m_approach = new QComboBox(this);
+         m_approach->addItem(
+            "Fixed to Floating Auto (Recommended)",
+            REGISTRATION_SETUP_FIXED_AUTO);
+         m_approach->addItem(
+            "Bundle Anchored",
+            REGISTRATION_SETUP_BUNDLE_ANCHORED);
+         m_approach->addItem(
+            "Bundle All-Floating",
+            REGISTRATION_SETUP_BUNDLE_ALL_FLOATING);
+         m_approach->addItem(
+            "Fixed Manual",
+            REGISTRATION_SETUP_FIXED_MANUAL);
+
+         m_matchMethod = new QComboBox(this);
+         addMatchMethod("Adaptive Auto (Recommended)", "");
+
+         const std::vector<ossim_autoreg::RegistrationComponentDescriptor>
+            matcherTypes = ossim_autoreg::TiePointGeneratorFactory::instance()->
+               typeDescriptors();
+         for(const ossim_autoreg::RegistrationComponentDescriptor& matcherType :
+             matcherTypes)
+         {
+            const QString typeName =
+               QString::fromStdString(matcherType.typeName());
+            const QString displayName = QString::fromStdString(
+               matcherType.displayName().empty() ? matcherType.typeName() :
+                                                   matcherType.displayName());
+            addMatchMethod(displayName, typeName);
+            const int itemIndex = m_matchMethod->count() - 1;
+            if(!matcherType.description().empty())
+            {
+               m_matchMethod->setItemData(
+                  itemIndex,
+                  QString::fromStdString(matcherType.description()),
+                  Qt::ToolTipRole);
+            }
+         }
+         const int preferredIndex = m_matchMethod->findData(QString());
+         if(preferredIndex >= 0)
+            m_matchMethod->setCurrentIndex(preferredIndex);
+
+         m_resampler = new QComboBox(this);
+         m_resampler->addItem("cubic", "cubic");
+         m_resampler->addItem("bilinear", "bilinear");
+         m_resampler->addItem("nearest", "nearest_neighbor");
+         m_resampler->addItem("sinc", "sinc");
+
+         m_supportPassResampler = new QComboBox(this);
+         m_supportPassResampler->addItem("default", "");
+         m_supportPassResampler->addItem("cubic", "cubic");
+         m_supportPassResampler->addItem("bilinear", "bilinear");
+         m_supportPassResampler->addItem("nearest", "nearest_neighbor");
+         m_supportPassResampler->addItem("sinc", "sinc");
+         m_supportPassResampler->setToolTip(
+            "Optional fixed-auto support-pass matcher resampler. "
+            "Default keeps the main resampler.");
+
+         m_chipSize = new QSpinBox(this);
+         m_chipSize->setRange(5, 255);
+         m_chipSize->setSingleStep(2);
+         m_chipSize->setValue(31);
+
+         m_searchRadius = new QSpinBox(this);
+         m_searchRadius->setRange(1, 4096);
+         m_searchRadius->setValue(64);
+
+         m_gridSpacing = new QSpinBox(this);
+         m_gridSpacing->setRange(16, 8192);
+         m_gridSpacing->setValue(128);
+
+         m_minScore = new QDoubleSpinBox(this);
+         m_minScore->setRange(0.0, 1.0);
+         m_minScore->setDecimals(3);
+         m_minScore->setSingleStep(0.05);
+         m_minScore->setValue(0.6);
+
+         m_minScoreMargin = new QDoubleSpinBox(this);
+         m_minScoreMargin->setRange(0.0, 1.0);
+         m_minScoreMargin->setDecimals(3);
+         m_minScoreMargin->setSingleStep(0.01);
+         m_minScoreMargin->setValue(0.03);
+         m_minScoreMargin->setToolTip(
+            "Minimum native-affine NCC peak separation. "
+            "Use 0 to disable ambiguity filtering.");
+
+         m_viewGsd = new QDoubleSpinBox(this);
+         m_viewGsd->setRange(-100.0, 1000000.0);
+         m_viewGsd->setDecimals(3);
+         m_viewGsd->setSingleStep(0.25);
+         m_viewGsd->setValue(0.0);
+
+         m_maxTiePoints = new QSpinBox(this);
+         m_maxTiePoints->setRange(0, 100000);
+         m_maxTiePoints->setValue(300);
+
+         m_denseGridSeedBudget = new QSpinBox(this);
+         m_denseGridSeedBudget->setRange(0, 1000000);
+         m_denseGridSeedBudget->setValue(0);
+
+         m_autoDenseGridSeedBudget = new QCheckBox(this);
+         m_autoDenseGridSeedBudget->setChecked(false);
+
+         m_tiePointTimingDiagnostics = new QCheckBox(this);
+         m_tiePointTimingDiagnostics->setChecked(false);
+         m_tiePointTimingDiagnostics->setToolTip(
+            "Collect renderer/tile timing counters for profiling. "
+            "Leave off for faster normal registration.");
+
+         m_bundlePairPolicy = new QComboBox(this);
+         m_bundlePairPolicy->addItem("All pairs",
+                                     BUNDLE_PAIR_POLICY_ALL_PAIRS);
+         m_bundlePairPolicy->addItem("Neighbor span",
+                                     BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN);
+         m_bundlePairPolicy->addItem("Auto",
+                                     BUNDLE_PAIR_POLICY_AUTO);
+         m_bundlePairPolicy->setToolTip(
+            "Bundle only: choose whether to test every image pair or only "
+            "nearby image-index neighbors. Auto promotes clear strip-like "
+            "overlap chains and falls back to all pairs when needed.");
+
+         m_bundleNeighborSpan = new QSpinBox(this);
+         m_bundleNeighborSpan->setRange(1, 100000);
+         m_bundleNeighborSpan->setValue(1);
+         m_bundleNeighborSpan->setToolTip(
+            "Bundle only: neighbor image-index distance. 1 tests adjacent "
+            "pairs for strip-style datasets.");
+
+         m_maxConcurrentRegistrations = new QSpinBox(this);
+         m_maxConcurrentRegistrations->setRange(1, 64);
+         m_maxConcurrentRegistrations->setValue(1);
+
+         m_adaptiveBankThreadCount = new QSpinBox(this);
+         m_adaptiveBankThreadCount->setRange(0, 64);
+         m_adaptiveBankThreadCount->setValue(4);
+
+         m_adaptiveFullPostBankRefinement = new QCheckBox(this);
+         m_adaptiveFullPostBankRefinement->setChecked(true);
+
+         m_nativeLowGridPolicy = new QComboBox(this);
+         m_nativeLowGridPolicy->addItem("Advisory", "advisory");
+         m_nativeLowGridPolicy->addItem("Reject", "reject");
+         m_nativeLowGridPolicy->setToolTip(
+            "Handling for native image-space matches with low control-grid "
+            "occupancy.");
+
+         m_opencvRansacPrefilter = new QCheckBox(this);
+         m_opencvRansacPrefilter->setChecked(true);
+         m_opencvRansacPrefilter->setToolTip(
+            "Use OpenCV affine RANSAC as a tie-point coherence prefilter.");
+
+         m_opencvRansacThresholdPixels = new QDoubleSpinBox(this);
+         m_opencvRansacThresholdPixels->setRange(0.0, 100000.0);
+         m_opencvRansacThresholdPixels->setDecimals(2);
+         m_opencvRansacThresholdPixels->setSingleStep(1.0);
+         m_opencvRansacThresholdPixels->setValue(25.0);
+         m_opencvRansacThresholdPixels->setToolTip(
+            "RANSAC inlier threshold in pixels for the OpenCV affine "
+            "prefilter.");
+
+         connect(m_approach,
+                 static_cast<void (QComboBox::*)(int)>(
+                    &QComboBox::currentIndexChanged),
+                 [this](int) { applySelectedDefaults(); });
+         connect(m_matchMethod,
+                 static_cast<void (QComboBox::*)(int)>(
+                    &QComboBox::currentIndexChanged),
+                 [this](int) { applySelectedDefaults(); });
+         connect(m_bundlePairPolicy,
+                 static_cast<void (QComboBox::*)(int)>(
+                    &QComboBox::currentIndexChanged),
+                 [this](int) { updateBundlePairPolicyControls(); });
+
+         QFormLayout* form = new QFormLayout();
+         form->addRow("Approach", m_approach);
+         form->addRow("Matcher", m_matchMethod);
+         form->addRow("Resampler", m_resampler);
+         form->addRow("Support pass resampler", m_supportPassResampler);
+         form->addRow("Chip size", m_chipSize);
+         form->addRow("Search radius", m_searchRadius);
+         form->addRow("Grid spacing", m_gridSpacing);
+         form->addRow("Minimum score", m_minScore);
+         form->addRow("Minimum score margin", m_minScoreMargin);
+         form->addRow("View GSD", m_viewGsd);
+         form->addRow("Max ties", m_maxTiePoints);
+         form->addRow("Dense seed budget", m_denseGridSeedBudget);
+         form->addRow("Auto dense seed budget",
+                      m_autoDenseGridSeedBudget);
+         form->addRow("Tie timing diagnostics",
+                      m_tiePointTimingDiagnostics);
+         form->addRow("Bundle pair policy",
+                      m_bundlePairPolicy);
+         form->addRow("Bundle neighbor span",
+                      m_bundleNeighborSpan);
+         form->addRow("Parallel floating inputs",
+                      m_maxConcurrentRegistrations);
+         form->addRow("Adaptive bank threads",
+                      m_adaptiveBankThreadCount);
+         form->addRow("Full post-bank refinement",
+                      m_adaptiveFullPostBankRefinement);
+         form->addRow("Native low-grid policy",
+                      m_nativeLowGridPolicy);
+         form->addRow("OpenCV RANSAC prefilter",
+                      m_opencvRansacPrefilter);
+         form->addRow("OpenCV RANSAC threshold",
+                      m_opencvRansacThresholdPixels);
+
+         QGroupBox* optionsBox = new QGroupBox("Options", this);
+         optionsBox->setLayout(form);
+
+         QDialogButtonBox* buttons =
+            new QDialogButtonBox(QDialogButtonBox::Ok |
+                                 QDialogButtonBox::Cancel,
+                                 Qt::Horizontal,
+                                 this);
+         connect(buttons, SIGNAL(accepted()), this, SLOT(accept()));
+         connect(buttons, SIGNAL(rejected()), this, SLOT(reject()));
+
+         QVBoxLayout* layout = new QVBoxLayout();
+         layout->addWidget(optionsBox);
+         layout->addWidget(buttons);
+         setLayout(layout);
+         applySelectedDefaults();
+      }
+
+      RegistrationSetupOptions options() const
+      {
+         RegistrationSetupOptions result;
+         result.approach =
+            static_cast<RegistrationSetupApproach>(
+               m_approach->itemData(m_approach->currentIndex()).toInt());
+         result.matchMethod =
+            m_matchMethod->itemData(m_matchMethod->currentIndex()).
+               toString().toStdString();
+         result.resamplerType =
+            m_resampler->itemData(m_resampler->currentIndex()).
+               toString().toStdString();
+         result.supportPassMatcherResampler =
+            m_supportPassResampler->itemData(
+               m_supportPassResampler->currentIndex()).toString().toStdString();
+         result.chipSize = m_chipSize->value();
+         if((result.chipSize % 2) == 0)
+            ++result.chipSize;
+         result.searchRadius = m_searchRadius->value();
+         result.gridSpacing = m_gridSpacing->value();
+         result.minScore = m_minScore->value();
+         result.minScoreMargin = m_minScoreMargin->value();
+         result.viewGsd = m_viewGsd->value();
+         result.maxTiePoints =
+            static_cast<std::size_t>(m_maxTiePoints->value());
+         result.denseGridSeedBudget =
+            static_cast<std::size_t>(
+               m_denseGridSeedBudget->value());
+         result.autoDenseGridSeedBudget =
+            m_autoDenseGridSeedBudget->isChecked();
+         result.tiePointTimingDiagnostics =
+            m_tiePointTimingDiagnostics->isChecked();
+         result.bundlePairPolicy =
+            static_cast<BundlePairPolicy>(
+               m_bundlePairPolicy->itemData(
+                  m_bundlePairPolicy->currentIndex()).toInt());
+         result.bundleNeighborSpan =
+            result.bundlePairPolicy == BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN ?
+               static_cast<std::size_t>(m_bundleNeighborSpan->value()) :
+               0;
+         result.maxConcurrentRegistrations =
+            static_cast<std::size_t>(
+               m_maxConcurrentRegistrations->value());
+         result.adaptiveBankThreadCount =
+            static_cast<std::size_t>(
+               m_adaptiveBankThreadCount->value());
+         result.adaptiveFullPostBankRefinement =
+            m_adaptiveFullPostBankRefinement->isChecked();
+         result.nativeLowGridPolicy =
+            m_nativeLowGridPolicy->itemData(
+               m_nativeLowGridPolicy->currentIndex()).toString().toStdString();
+         result.opencvRansacPrefilter =
+            m_opencvRansacPrefilter->isChecked();
+         result.opencvRansacThresholdPixels =
+            m_opencvRansacThresholdPixels->value();
+         return result;
+      }
+
+   private:
+      void applySelectedDefaults()
+      {
+         const RegistrationSetupApproach approach =
+            static_cast<RegistrationSetupApproach>(
+               m_approach->itemData(m_approach->currentIndex()).toInt());
+         const std::string matchMethod =
+            m_matchMethod->itemData(m_matchMethod->currentIndex()).
+               toString().toStdString();
+         const RegistrationSetupOptions defaults =
+            registrationSetupDefaults(approach, matchMethod);
+
+         const int resamplerIndex =
+            m_resampler->findData(QString::fromStdString(
+               defaults.resamplerType));
+         if(resamplerIndex >= 0)
+            m_resampler->setCurrentIndex(resamplerIndex);
+         const int supportPassResamplerIndex =
+            m_supportPassResampler->findData(QString::fromStdString(
+               defaults.supportPassMatcherResampler));
+         if(supportPassResamplerIndex >= 0)
+            m_supportPassResampler->setCurrentIndex(
+               supportPassResamplerIndex);
+         m_chipSize->setValue(defaults.chipSize);
+         m_searchRadius->setValue(defaults.searchRadius);
+         m_gridSpacing->setValue(defaults.gridSpacing);
+         m_minScore->setValue(defaults.minScore);
+         m_minScoreMargin->setValue(defaults.minScoreMargin);
+         m_viewGsd->setValue(defaults.viewGsd);
+         m_maxTiePoints->setValue(
+            static_cast<int>(defaults.maxTiePoints));
+         m_denseGridSeedBudget->setValue(
+            static_cast<int>(defaults.denseGridSeedBudget));
+         m_autoDenseGridSeedBudget->setChecked(
+            defaults.autoDenseGridSeedBudget);
+         m_tiePointTimingDiagnostics->setChecked(
+            defaults.tiePointTimingDiagnostics);
+         {
+            const int pairPolicyIndex =
+               m_bundlePairPolicy->findData(
+                  defaults.bundleNeighborSpan ?
+                     BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN :
+                     BUNDLE_PAIR_POLICY_ALL_PAIRS);
+            if(pairPolicyIndex >= 0)
+               m_bundlePairPolicy->setCurrentIndex(pairPolicyIndex);
+         }
+         m_bundleNeighborSpan->setValue(
+            static_cast<int>(
+               defaults.bundleNeighborSpan ?
+                  defaults.bundleNeighborSpan :
+                  1));
+         updateBundlePairPolicyControls();
+         m_maxConcurrentRegistrations->setValue(
+            static_cast<int>(defaults.maxConcurrentRegistrations));
+         m_adaptiveBankThreadCount->setValue(
+            static_cast<int>(defaults.adaptiveBankThreadCount));
+         m_adaptiveFullPostBankRefinement->setChecked(
+            defaults.adaptiveFullPostBankRefinement);
+         {
+            const int nativeLowGridIndex =
+               m_nativeLowGridPolicy->findData(QString::fromStdString(
+                  defaults.nativeLowGridPolicy));
+            if(nativeLowGridIndex >= 0)
+               m_nativeLowGridPolicy->setCurrentIndex(nativeLowGridIndex);
+         }
+         m_opencvRansacPrefilter->setChecked(
+            defaults.opencvRansacPrefilter);
+         m_opencvRansacThresholdPixels->setValue(
+            defaults.opencvRansacThresholdPixels);
+      }
+
+      void addMatchMethod(const QString& label, const QString& method)
+      {
+         m_matchMethod->addItem(label, method);
+      }
+
+      void updateBundlePairPolicyControls()
+      {
+         const bool neighborSpan =
+            m_bundlePairPolicy->itemData(
+               m_bundlePairPolicy->currentIndex()).toInt() ==
+            BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN;
+         m_bundleNeighborSpan->setEnabled(neighborSpan);
+      }
+
+      QComboBox* m_approach;
+      QComboBox* m_matchMethod;
+      QComboBox* m_resampler;
+      QComboBox* m_supportPassResampler;
+      QSpinBox* m_chipSize;
+      QSpinBox* m_searchRadius;
+      QSpinBox* m_gridSpacing;
+      QDoubleSpinBox* m_minScore;
+      QDoubleSpinBox* m_minScoreMargin;
+      QDoubleSpinBox* m_viewGsd;
+      QSpinBox* m_maxTiePoints;
+      QSpinBox* m_denseGridSeedBudget;
+      QCheckBox* m_autoDenseGridSeedBudget;
+      QCheckBox* m_tiePointTimingDiagnostics;
+      QComboBox* m_bundlePairPolicy;
+      QSpinBox* m_bundleNeighborSpan;
+      QSpinBox* m_maxConcurrentRegistrations;
+      QSpinBox* m_adaptiveBankThreadCount;
+      QCheckBox* m_adaptiveFullPostBankRefinement;
+      QComboBox* m_nativeLowGridPolicy;
+      QCheckBox* m_opencvRansacPrefilter;
+      QDoubleSpinBox* m_opencvRansacThresholdPixels;
+   };
+
+   void applyRegistrationSetupTieOptions(
+      ossim_autoreg::TiePointGenerationOptions& tiePointOptions,
+      const RegistrationSetupOptions& setupOptions)
+   {
+      tiePointOptions.matchMethod() = setupOptions.matchMethod;
+      tiePointOptions.resamplerType() = setupOptions.resamplerType;
+      tiePointOptions.chipSize() = setupOptions.chipSize;
+      tiePointOptions.searchRadius() = setupOptions.searchRadius;
+      tiePointOptions.gridSpacing() = setupOptions.gridSpacing;
+      tiePointOptions.minScore() = setupOptions.minScore;
+      tiePointOptions.minScoreMargin() = setupOptions.minScoreMargin;
+      tiePointOptions.viewGsd() = setupOptions.viewGsd;
+      tiePointOptions.maxTiePoints() = setupOptions.maxTiePoints;
+      tiePointOptions.denseGridSeedBudget() =
+         setupOptions.denseGridSeedBudget;
+      tiePointOptions.autoDenseGridSeedBudget() =
+         setupOptions.autoDenseGridSeedBudget;
+      tiePointOptions.timingDiagnostics() =
+         setupOptions.tiePointTimingDiagnostics;
+   }
+
+   QString registeredNodeName(const std::string& matchMethod)
+   {
+      return QString("Registered: %1")
+         .arg(QString::fromStdString(
+            matchMethod.empty() ? std::string("hybrid-phase-ncc") :
+                                  matchMethod));
+   }
+}
+#endif
 
 void ossimGui::DataManagerWidget::RefreshVisitor::visit(ossimObject* obj)
 {
@@ -146,13 +2300,20 @@ namespace ossimGui
    class ImageStagerJobCallback : public ossimJobCallback
    {
    public:
-      ImageStagerJobCallback(DataManagerWidget* w, DataManagerNodeItem* i=0)
+      ImageStagerJobCallback(DataManagerWidget* w,
+                             std::shared_ptr<std::atomic_bool> shutdownRequested,
+                             DataManagerNodeItem* i=0)
       :m_dataManagerWidget(w),
+      m_shutdownRequested(shutdownRequested),
       m_item(i)
       {
       }
       virtual void finished(std::shared_ptr<ossimJob> job)
       {
+         if(m_shutdownRequested && m_shutdownRequested->load())
+         {
+            return;
+         }
          std::shared_ptr<ImageStagerJob> stagerJob = std::dynamic_pointer_cast<ImageStagerJob> (job);
          
          if(stagerJob)
@@ -170,9 +2331,890 @@ namespace ossimGui
       
    protected:
       DataManagerWidget* m_dataManagerWidget;  
+      std::shared_ptr<std::atomic_bool> m_shutdownRequested;
       DataManagerNodeItem* m_item;
       
    };
+
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   class RegistrationSourceJob : public ossimJob
+   {
+   public:
+      RegistrationSourceJob(ossimFixedRegistrationSource* registrationSource,
+                            DataManagerWidget* dataManagerWidget,
+                            std::shared_ptr<std::atomic_bool> shutdownRequested,
+                            const ossimString& label)
+      :m_registrationSource(registrationSource),
+       m_dataManagerWidget(dataManagerWidget),
+       m_shutdownRequested(shutdownRequested),
+       m_label(label),
+       m_launchInputStatus(registrationSource
+                              ? registrationSource->inputStatusSummary()
+                              : std::string()),
+       m_launchSettings(registrationSource
+                           ? registrationSource->autoRegistrationSettingsSummary()
+                           : std::string()),
+       m_success(false)
+      {
+         setId("ossimGui::RegistrationSourceJob");
+         setName("Register: " + m_label);
+      }
+
+      bool success()const{return m_success;}
+      const ossimString& resultSummary()const{return m_resultSummary;}
+      const ossimString& advisorySummary()const{return m_advisorySummary;}
+      const DataManagerWidgetEvent::HandlerListType& sourceHandlersToReload()const
+      {
+         return m_sourceHandlersToReload;
+      }
+      bool widgetShutdownRequested()const
+      {
+         return m_shutdownRequested && m_shutdownRequested->load();
+      }
+
+      virtual void start()
+      {
+         if(isCanceled())
+         {
+            m_success = false;
+            m_resultSummary = "Registration canceled before it started.";
+            setDescription(m_resultSummary);
+            setName("Registration canceled: " + m_label);
+            finished();
+            return;
+         }
+
+         setState(ossimJob_RUNNING);
+         run();
+         finished();
+      }
+
+   protected:
+      std::string displayProgressMessage(
+         const ossimFixedRegistrationSource::ProgressInfo& progress) const
+      {
+         const std::string message = progress.message();
+         std::string geometryMessage;
+         if(message.find("preview pass") != std::string::npos)
+         {
+            geometryMessage = "preview geometry: " + message;
+         }
+         else if(message.find("accepted pass") != std::string::npos)
+         {
+            geometryMessage = "accepted geometry: " + message;
+         }
+         else if(message.find("restored best") != std::string::npos)
+         {
+            geometryMessage = "restored geometry: " + message;
+         }
+         else if(message.find("coarse seed accepted") != std::string::npos ||
+                 message.find("fallback coarse seed accepted") != std::string::npos)
+         {
+            geometryMessage = "coarse geometry: " + message;
+         }
+
+         if(!geometryMessage.empty())
+         {
+            m_lastGeometryProgress = geometryMessage;
+            return geometryMessage;
+         }
+
+         if(!m_lastGeometryProgress.empty() &&
+            message.find("generating ties") != std::string::npos)
+         {
+            return m_lastGeometryProgress + " | " + message;
+         }
+         return registrationProgressPhaseMessage(message);
+      }
+
+      void updateProgressName(
+         const ossimFixedRegistrationSource::ProgressInfo& progress)
+      {
+         ossimString name = "Register";
+         const std::string message = displayProgressMessage(progress);
+         if(!message.empty())
+         {
+            name += " ";
+            name += message.c_str();
+         }
+         name += ": ";
+         name += m_label;
+         setName(name);
+         if(!message.empty())
+         {
+            setDescription(message.c_str());
+         }
+         setPercentComplete(progress.percentComplete());
+      }
+
+      ossimFilename defaultGeometryOutput(
+         const ossimFixedRegistrationSource::InputWrapper& input) const
+      {
+         ossimFilename result;
+         ossimImageHandler* handler = input.sourceHandler();
+         if(handler)
+         {
+            result = handler->getFilename().expand();
+         }
+         if(result.empty())
+         {
+            result = ossimString("floating_") +
+                     ossimString::toString(input.inputIndex()) +
+                     ".geom";
+         }
+         else
+         {
+            result.setExtension("geom");
+         }
+         return result;
+      }
+
+      bool applyResultOnGuiThread(
+         const ossimFixedRegistrationSource::RegistrationResult& result)
+      {
+         if(!m_registrationSource.valid() || !m_dataManagerWidget ||
+            widgetShutdownRequested())
+         {
+            return false;
+         }
+
+         bool applied = false;
+         const auto apply = [this, &result, &applied]() {
+            if(!m_registrationSource.valid() ||
+               widgetShutdownRequested())
+            {
+               applied = false;
+               return;
+            }
+
+            applied =
+               m_registrationSource->applyRegistrationResultToInput(result);
+            if(applied)
+            {
+               const ossimFixedRegistrationSource::InputWrapper* input =
+                  m_registrationSource->inputWrapper(result.inputIndex());
+               ossimImageSource* source = input ? input->source() : 0;
+               if(source)
+               {
+                  ossimRefPtr<ossimRefreshEvent> refreshEvent =
+                     new ossimRefreshEvent(
+                        ossimRefreshEvent::REFRESH_GEOMETRY);
+                  ossimEventVisitor visitor(refreshEvent.get(),
+                                            ossimVisitor::VISIT_ALL);
+                  source->accept(visitor);
+               }
+            }
+         };
+
+         if(QThread::currentThread() == m_dataManagerWidget->thread())
+         {
+            apply();
+         }
+         else
+         {
+            const bool invoked =
+               QMetaObject::invokeMethod(m_dataManagerWidget,
+                                         apply,
+                                         Qt::BlockingQueuedConnection);
+            if(!invoked)
+            {
+               applied = false;
+            }
+         }
+         return applied;
+      }
+
+      bool saveResultGeometryOnGuiThread(
+         const ossimFixedRegistrationSource::RegistrationResult& result,
+         const ossimFilename& outputFile)
+      {
+         if(!m_registrationSource.valid() || !m_dataManagerWidget ||
+            widgetShutdownRequested())
+         {
+            return false;
+         }
+
+         bool saved = false;
+         const auto saveGeometry = [this, &result, &outputFile, &saved]() {
+            if(!m_registrationSource.valid() ||
+               widgetShutdownRequested())
+            {
+               saved = false;
+               return;
+            }
+
+            const ossim_autoreg::RegistrationSession* session =
+               m_registrationSource->registrationSession(
+                  result.floatingInputIndex());
+            saved = session && session->saveMovingGeometry(outputFile);
+         };
+
+         if(QThread::currentThread() == m_dataManagerWidget->thread())
+         {
+            saveGeometry();
+         }
+         else
+         {
+            const bool invoked =
+               QMetaObject::invokeMethod(m_dataManagerWidget,
+                                         saveGeometry,
+                                         Qt::BlockingQueuedConnection);
+            if(!invoked)
+            {
+               saved = false;
+            }
+         }
+         return saved;
+      }
+
+      virtual void run()
+      {
+         setPercentComplete(0.0);
+         m_sourceHandlersToReload.clear();
+         m_advisorySummary.clear();
+         if(m_registrationSource.valid())
+         {
+            m_registrationSource->setCancelCallback([this]() {
+               return this->isCanceled();
+            });
+            m_registrationSource->setProgressCallback(
+               [this](
+                  const ossimFixedRegistrationSource::ProgressInfo& progress) {
+                  if(!widgetShutdownRequested())
+                  {
+                     updateProgressName(progress);
+                  }
+               });
+            m_registrationSource->setApplyResultsToInputs(false);
+            m_registrationSource->setApplyResultCallback(
+               [this](
+                  const ossimFixedRegistrationSource::RegistrationResult&
+                     result) {
+                  return applyResultOnGuiThread(result);
+               });
+            m_success = m_registrationSource->executeRegistration();
+            m_registrationSource->setCancelCallback(
+               std::function<bool()>());
+            m_registrationSource->setProgressCallback(
+               std::function<void(
+                  const ossimFixedRegistrationSource::ProgressInfo&)>());
+            m_registrationSource->setApplyResultCallback(
+               std::function<bool(
+                  const ossimFixedRegistrationSource::RegistrationResult&)>());
+
+            const std::vector<ossimFixedRegistrationSource::RegistrationResult>& results =
+               m_registrationSource->registrationResults();
+            ossim_uint32 tiePointCount = 0;
+            ossim_uint32 successfulPairs = 0;
+            ossim_uint32 propagatedGeometries = 0;
+            std::vector<ossimFilename> writtenGeometryFiles;
+            std::vector<ossimFilename> failedGeometryFiles;
+            ossim_uint32 idx = 0;
+            for(idx = 0; idx < results.size(); ++idx)
+            {
+               tiePointCount += static_cast<ossim_uint32>(results[idx].tiePoints().size());
+               if(results[idx].success() && !isCanceled())
+               {
+                  ++successfulPairs;
+                  const ossimFixedRegistrationSource::InputWrapper* input =
+                     m_registrationSource->inputWrapper(results[idx].inputIndex());
+                  if(input && m_registrationSource->optimizeEnabled())
+                  {
+                     const ossimFilename outputFile = defaultGeometryOutput(*input);
+                     if(results[idx].appliedToInput() ||
+                        applyResultOnGuiThread(results[idx]))
+                     {
+                        ++propagatedGeometries;
+                     }
+                     if(saveResultGeometryOnGuiThread(results[idx],
+                                                       outputFile))
+                     {
+                        writtenGeometryFiles.push_back(outputFile);
+                        ossimImageHandler* sourceHandler = input->sourceHandler();
+                        if(sourceHandler)
+                        {
+                           m_sourceHandlersToReload.push_back(sourceHandler);
+                        }
+                     }
+                     else
+                     {
+                        failedGeometryFiles.push_back(outputFile);
+                     }
+                  }
+               }
+            }
+
+            for(idx = 0; idx < results.size(); ++idx)
+            {
+               if(results[idx].success() &&
+                  !results[idx].qualityAdvisory().empty())
+               {
+                  if(!m_advisorySummary.empty())
+                  {
+                     m_advisorySummary += "\n";
+                  }
+                  m_advisorySummary += "Input ";
+                  m_advisorySummary +=
+                     ossimString::toString(results[idx].inputIndex());
+                  m_advisorySummary += ": ";
+                  m_advisorySummary +=
+                     results[idx].qualityAdvisory().c_str();
+               }
+            }
+
+            if(results.size() == 1 &&
+               !results[0].success() &&
+               results[0].tiePoints().empty() &&
+               !results[0].message().empty())
+            {
+               m_resultSummary = results[0].message().c_str();
+            }
+            else
+            {
+               m_resultSummary =
+                  ossimString::toString(successfulPairs) + "/" +
+                  ossimString::toString(static_cast<ossim_uint32>(results.size())) +
+                  " pair(s), " + ossimString::toString(tiePointCount) +
+                  " tie point(s)";
+               for(idx = 0; idx < results.size(); ++idx)
+               {
+                  if(!results[idx].success() && !results[idx].message().empty())
+                  {
+                     m_resultSummary += "; input ";
+                     m_resultSummary += ossimString::toString(results[idx].inputIndex());
+                     m_resultSummary += ": ";
+                     m_resultSummary += results[idx].message().c_str();
+                  }
+               }
+               ossimString cleanupInputs;
+               for(idx = 0; idx < results.size(); ++idx)
+               {
+                  if(results[idx].success() &&
+                     results[idx].executionPath().find("cleanup") !=
+                        std::string::npos)
+                  {
+                     if(!cleanupInputs.empty())
+                     {
+                        cleanupInputs += ", ";
+                     }
+                     cleanupInputs +=
+                        ossimString::toString(results[idx].inputIndex());
+                  }
+               }
+               if(!cleanupInputs.empty())
+               {
+                  m_resultSummary += "; native cleanup applied to input(s) ";
+                  m_resultSummary += cleanupInputs;
+               }
+            }
+            if(isCanceled())
+            {
+               m_resultSummary = "Registration canceled.";
+               m_success = false;
+            }
+            if(!writtenGeometryFiles.empty())
+            {
+               m_resultSummary += ", wrote ";
+               m_resultSummary += ossimString::toString(
+                  static_cast<ossim_uint32>(writtenGeometryFiles.size()));
+               m_resultSummary += " geometry file(s)";
+               for(idx = 0; idx < writtenGeometryFiles.size(); ++idx)
+               {
+                  m_resultSummary += (idx == 0) ? ": " : ", ";
+                  m_resultSummary += writtenGeometryFiles[idx];
+               }
+            }
+            if(propagatedGeometries > 0)
+            {
+               m_resultSummary += ", updated ";
+               m_resultSummary += ossimString::toString(propagatedGeometries);
+               m_resultSummary += " live geometry adjustment(s)";
+            }
+            if(!failedGeometryFiles.empty())
+            {
+               m_resultSummary += ", failed to write ";
+               m_resultSummary += ossimString::toString(
+                  static_cast<ossim_uint32>(failedGeometryFiles.size()));
+               m_resultSummary += " geometry file(s)";
+               for(idx = 0; idx < failedGeometryFiles.size(); ++idx)
+               {
+                  m_resultSummary += (idx == 0) ? ": " : ", ";
+                  m_resultSummary += failedGeometryFiles[idx];
+               }
+               m_success = false;
+            }
+            if(!m_success && m_registrationSource.valid())
+            {
+               if(!m_launchInputStatus.empty())
+               {
+                  m_resultSummary += " - ";
+                  m_resultSummary += m_launchInputStatus.c_str();
+               }
+               if(!m_launchSettings.empty())
+               {
+                  m_resultSummary += " - ";
+                  m_resultSummary += m_launchSettings.c_str();
+               }
+            }
+            const ossimFilename reportPath =
+               registrationQualityReportPath(m_label, "fixed-registration");
+            const bool wroteReport = writeRegistrationQualityReport(
+               reportPath,
+               fixedRegistrationQualityReportText(
+                  m_label,
+                  m_resultSummary,
+                  m_launchInputStatus,
+                  m_launchSettings,
+                  m_success,
+                  results,
+                  writtenGeometryFiles,
+                  failedGeometryFiles));
+            appendRegistrationQualityReportStatus(
+               m_resultSummary,
+               reportPath,
+               wroteReport);
+            setDescription(m_resultSummary);
+            if(isCanceled())
+            {
+               setName("Registration canceled: " + m_label);
+            }
+            else
+            {
+               setName((m_success ? "Registered: " : "Registration failed: ") + m_label);
+            }
+         }
+         else
+         {
+            m_success = false;
+            m_resultSummary = "Registration source is no longer available.";
+            setDescription(m_resultSummary);
+            setName("Registration failed: " + m_label);
+         }
+         setPercentComplete(100.0);
+      }
+
+      ossimRefPtr<ossimFixedRegistrationSource> m_registrationSource;
+      DataManagerWidget* m_dataManagerWidget;
+      std::shared_ptr<std::atomic_bool> m_shutdownRequested;
+      ossimString m_label;
+      std::string m_launchInputStatus;
+      std::string m_launchSettings;
+      mutable std::string m_lastGeometryProgress;
+      ossimString m_resultSummary;
+      ossimString m_advisorySummary;
+      DataManagerWidgetEvent::HandlerListType m_sourceHandlersToReload;
+      bool m_success;
+   };
+
+   class BundleRegistrationSourceJob : public ossimJob
+   {
+   public:
+      BundleRegistrationSourceJob(
+         ossimBundleAdjustmentRegistrationSource* registrationSource,
+         DataManagerWidget* dataManagerWidget,
+         std::shared_ptr<std::atomic_bool> shutdownRequested,
+         const ossimString& label)
+      :m_registrationSource(registrationSource),
+       m_dataManagerWidget(dataManagerWidget),
+       m_shutdownRequested(shutdownRequested),
+       m_label(label),
+       m_success(false)
+      {
+         setId("ossimGui::BundleRegistrationSourceJob");
+         if(m_registrationSource.valid() &&
+            m_registrationSource->allInputsFloating())
+         {
+            setName("Bundle adjust all-floating: " + m_label);
+         }
+         else
+         {
+            setName("Bundle adjust anchored: " + m_label);
+         }
+      }
+
+      bool success()const{return m_success;}
+      const ossimString& resultSummary()const{return m_resultSummary;}
+      const ossimString& advisorySummary()const{return m_advisorySummary;}
+      const DataManagerWidgetEvent::HandlerListType& sourceHandlersToReload()const
+      {
+         return m_sourceHandlersToReload;
+      }
+      bool widgetShutdownRequested()const
+      {
+         return m_shutdownRequested && m_shutdownRequested->load();
+      }
+
+      virtual void start()
+      {
+         if(isCanceled())
+         {
+            m_success = false;
+            m_resultSummary = "Bundle adjustment canceled before it started.";
+            setDescription(m_resultSummary);
+            setName("Bundle adjustment canceled: " + m_label);
+            finished();
+            return;
+         }
+
+         setState(ossimJob_RUNNING);
+         run();
+         finished();
+      }
+
+   protected:
+      void updateProgressName(
+         const ossimBundleAdjustmentRegistrationSource::ProgressInfo& progress)
+      {
+         ossimString name = "Bundle adjust";
+         const std::string message =
+            registrationProgressPhaseMessage(progress.message());
+         if(!message.empty())
+         {
+            name += " ";
+            name += message.c_str();
+         }
+         name += ": ";
+         name += m_label;
+         setName(name);
+         if(!message.empty())
+         {
+            setDescription(message.c_str());
+         }
+         setPercentComplete(progress.percentComplete());
+      }
+
+      ossimFilename defaultGeometryOutput(
+         const ossimBundleAdjustmentRegistrationSource::InputWrapper& input)
+         const
+      {
+         ossimFilename result;
+         ossimImageHandler* handler = input.sourceHandler();
+         if(handler)
+         {
+            result = handler->getFilename().expand();
+         }
+         if(result.empty())
+         {
+            result = ossimString("bundle_") +
+                     ossimString::toString(input.inputIndex()) +
+                     ".geom";
+         }
+         else
+         {
+            result.setExtension("geom");
+         }
+         return result;
+      }
+
+      bool saveGeometriesOnGuiThread(
+         const std::vector<ossimFilename>& outputGeometryFiles)
+      {
+         if(widgetShutdownRequested())
+         {
+            return false;
+         }
+         bool saved = false;
+         auto saveGeometry = [this, &outputGeometryFiles, &saved]() {
+            saved = !widgetShutdownRequested() &&
+                    m_registrationSource.valid() &&
+                    m_registrationSource->saveGeometries(outputGeometryFiles);
+         };
+
+         if(m_dataManagerWidget &&
+            QThread::currentThread() != m_dataManagerWidget->thread())
+         {
+            const bool invoked =
+               QMetaObject::invokeMethod(m_dataManagerWidget,
+                                         saveGeometry,
+                                         Qt::BlockingQueuedConnection);
+            if(!invoked)
+            {
+               saved = false;
+            }
+         }
+         else
+         {
+            saveGeometry();
+         }
+
+         return saved;
+      }
+
+      virtual void run()
+      {
+         setPercentComplete(0.0);
+         m_sourceHandlersToReload.clear();
+         m_advisorySummary.clear();
+         if(m_registrationSource.valid())
+         {
+            m_registrationSource->setCancelCallback([this]() {
+               return this->isCanceled();
+            });
+            m_registrationSource->setProgressCallback(
+               [this](const ossimBundleAdjustmentRegistrationSource::
+                         ProgressInfo& progress) {
+                  if(!widgetShutdownRequested())
+                  {
+                     updateProgressName(progress);
+                  }
+               });
+            m_success = m_registrationSource->executeRegistration();
+            m_registrationSource->setCancelCallback(
+               std::function<bool()>());
+            m_registrationSource->setProgressCallback(
+               std::function<void(
+                  const ossimBundleAdjustmentRegistrationSource::
+                     ProgressInfo&)>());
+
+            const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
+               result = m_registrationSource->registrationResult();
+            ossim_uint32 tiePointCount = 0;
+            ossim_uint32 pairCount =
+               static_cast<ossim_uint32>(result.pairResults().size());
+            ossim_uint32 idx = 0;
+            for(idx = 0; idx < result.pairResults().size(); ++idx)
+            {
+               tiePointCount += static_cast<ossim_uint32>(
+                  result.pairResults()[idx].tiePoints().size());
+            }
+
+            if(m_registrationSource->allInputsFloating())
+            {
+               m_resultSummary = "all-floating, ";
+            }
+            else
+            {
+               m_resultSummary = "anchored input ";
+               m_resultSummary += ossimString::toString(
+                  m_registrationSource->anchorInputIndex()) + ", ";
+            }
+            m_resultSummary +=
+               ossimString::toString(pairCount) + " pair(s), " +
+               ossimString::toString(tiePointCount) + " tie point(s)";
+
+            if(result.optimization().ran())
+            {
+               m_resultSummary += ", RMSE ";
+               m_resultSummary += ossimString::toString(
+                  result.optimization().finalRmsPixels());
+               m_resultSummary += " (target ";
+               m_resultSummary += ossimString::toString(
+                  m_registrationSource->autoRegistrationOptions().
+                     targetRmsePixels());
+               m_resultSummary += ")";
+            }
+            m_resultSummary += ", ";
+            m_resultSummary +=
+               bundleRegistrationMotionPolicy(m_registrationSource.get()).
+                  c_str();
+            const ossimString diagnosticsSummary =
+               bundleRegistrationDiagnosticsSummary(result);
+            if(!diagnosticsSummary.empty())
+            {
+               m_resultSummary += ", ";
+               m_resultSummary += diagnosticsSummary;
+            }
+            const ossimString pairPolicyDecision =
+               bundlePairPolicyDecisionSummary(result);
+            if(!pairPolicyDecision.empty())
+            {
+               m_resultSummary += ", ";
+               m_resultSummary += pairPolicyDecision;
+            }
+
+            std::vector<ossimFilename> writtenGeometryFiles;
+            std::vector<ossimFilename> outputGeometryFiles;
+            if(m_success && !isCanceled() &&
+               m_registrationSource->optimizeEnabled())
+            {
+               const std::vector<ossim_uint32>& inputIndexes =
+                  m_registrationSource->bundleInputIndexes();
+               for(idx = 0; idx < inputIndexes.size(); ++idx)
+               {
+                  const ossimBundleAdjustmentRegistrationSource::InputWrapper*
+                     input =
+                        m_registrationSource->inputWrapper(inputIndexes[idx]);
+                  if(input)
+                  {
+                     outputGeometryFiles.push_back(
+                        defaultGeometryOutput(*input));
+                  }
+               }
+
+               if(outputGeometryFiles.size() == inputIndexes.size() &&
+                  saveGeometriesOnGuiThread(outputGeometryFiles))
+               {
+                  writtenGeometryFiles = outputGeometryFiles;
+                  for(idx = 0; idx < inputIndexes.size(); ++idx)
+                  {
+                     const ossimBundleAdjustmentRegistrationSource::
+                        InputWrapper* input =
+                           m_registrationSource->inputWrapper(
+                              inputIndexes[idx]);
+                     if(input)
+                     {
+                        ossimImageHandler* sourceHandler =
+                           input->sourceHandler();
+                        if(sourceHandler)
+                        {
+                           m_sourceHandlersToReload.push_back(sourceHandler);
+                        }
+                     }
+                  }
+               }
+               else
+               {
+                  m_success = false;
+                  m_resultSummary +=
+                     ", failed to write bundle geometry file(s)";
+               }
+            }
+
+            if(isCanceled())
+            {
+               m_resultSummary = "Bundle adjustment canceled.";
+               m_success = false;
+            }
+            if(!writtenGeometryFiles.empty())
+            {
+               m_resultSummary += ", wrote ";
+               m_resultSummary += ossimString::toString(
+                  static_cast<ossim_uint32>(writtenGeometryFiles.size()));
+               m_resultSummary += " geometry file(s)";
+               for(idx = 0; idx < writtenGeometryFiles.size(); ++idx)
+               {
+                  m_resultSummary += (idx == 0) ? ": " : ", ";
+                  m_resultSummary += writtenGeometryFiles[idx];
+               }
+            }
+            if(!result.message().empty())
+            {
+               m_resultSummary += " - ";
+               m_resultSummary += result.message().c_str();
+            }
+            m_advisorySummary = bundleRegistrationAdvisorySummary(result);
+
+            const ossimFilename reportPath =
+               registrationQualityReportPath(m_label, "bundle-registration");
+            const bool wroteReport = writeRegistrationQualityReport(
+               reportPath,
+               bundleRegistrationQualityReportText(
+                  m_label,
+                  m_resultSummary,
+                  m_success,
+                  m_registrationSource.get(),
+                  result,
+                  writtenGeometryFiles));
+            appendRegistrationQualityReportStatus(
+               m_resultSummary,
+               reportPath,
+               wroteReport);
+
+            setDescription(m_resultSummary);
+            if(isCanceled())
+            {
+               setName("Bundle adjustment canceled: " + m_label);
+            }
+            else
+            {
+               setName((m_success ? "Bundle adjusted: " :
+                                    "Bundle adjustment failed: ") +
+                       m_label);
+            }
+         }
+         else
+         {
+            m_success = false;
+            m_resultSummary =
+               "Bundle adjustment source is no longer available.";
+            setDescription(m_resultSummary);
+            setName("Bundle adjustment failed: " + m_label);
+         }
+         setPercentComplete(100.0);
+      }
+
+      ossimRefPtr<ossimBundleAdjustmentRegistrationSource>
+         m_registrationSource;
+      DataManagerWidget* m_dataManagerWidget;
+      std::shared_ptr<std::atomic_bool> m_shutdownRequested;
+      ossimString m_label;
+      ossimString m_resultSummary;
+      ossimString m_advisorySummary;
+      DataManagerWidgetEvent::HandlerListType m_sourceHandlersToReload;
+      bool m_success;
+   };
+
+   class RegistrationSourceJobCallback : public ossimJobCallback
+   {
+   public:
+      RegistrationSourceJobCallback(DataManagerWidget* widget,
+                                    std::shared_ptr<std::atomic_bool> shutdownRequested,
+                                    DataManagerNodeItem* item)
+      :m_dataManagerWidget(widget),
+       m_shutdownRequested(shutdownRequested),
+       m_item(item)
+      {
+      }
+
+      virtual void finished(std::shared_ptr<ossimJob> job)
+      {
+         if(m_shutdownRequested && m_shutdownRequested->load())
+         {
+            ossimJobCallback::finished(job);
+            return;
+         }
+         if(m_dataManagerWidget&&m_item)
+         {
+            DataManagerWidgetEvent* evt =
+               new DataManagerWidgetEvent(DataManagerWidgetEvent::COMMAND_REFRESH);
+            evt->setItemList(m_item);
+            std::shared_ptr<RegistrationSourceJob> registrationJob =
+               std::dynamic_pointer_cast<RegistrationSourceJob>(job);
+            if(registrationJob)
+            {
+               evt->setHandlerList(registrationJob->sourceHandlersToReload());
+               if(!registrationJob->success())
+               {
+                  evt->setWarningMessage(
+                     "Registration failed",
+                     registrationJob->resultSummary().string());
+               }
+               else if(!registrationJob->advisorySummary().empty())
+               {
+                  evt->setWarningMessage(
+                     "Registration quality advisory",
+                     registrationJob->advisorySummary().string());
+               }
+            }
+            std::shared_ptr<BundleRegistrationSourceJob> bundleJob =
+               std::dynamic_pointer_cast<BundleRegistrationSourceJob>(job);
+            if(bundleJob)
+            {
+               evt->setHandlerList(bundleJob->sourceHandlersToReload());
+               if(!bundleJob->success())
+               {
+                  evt->setWarningMessage(
+                     "Bundle adjustment failed",
+                     bundleJob->resultSummary().string());
+               }
+               else if(!bundleJob->advisorySummary().empty())
+               {
+                  evt->setWarningMessage(
+                     "Bundle adjustment quality advisory",
+                     bundleJob->advisorySummary().string());
+               }
+            }
+            QCoreApplication::postEvent(m_dataManagerWidget, evt);
+         }
+         ossimJobCallback::finished(job);
+      }
+
+   protected:
+      DataManagerWidget* m_dataManagerWidget;
+      std::shared_ptr<std::atomic_bool> m_shutdownRequested;
+      DataManagerNodeItem* m_item;
+   };
+#endif
 }
 
 class TestCycleVisitor :public ossimVisitor
@@ -212,9 +3254,19 @@ namespace ossimGui
    class ImageOpenJobCallback : public ossimJobCallback
    {
    public:
-      ImageOpenJobCallback(DataManagerWidget* widget, ossimRefPtr<DataManager> manager):m_dataManagerWidget(widget),m_dataManager(manager){}
+      ImageOpenJobCallback(DataManagerWidget* widget,
+                           std::shared_ptr<std::atomic_bool> shutdownRequested,
+                           ossimRefPtr<DataManager> manager)
+      :m_dataManagerWidget(widget),
+       m_shutdownRequested(shutdownRequested),
+       m_dataManager(manager)
+      {}
       virtual void finished(std::shared_ptr<ossimJob> job)
       {
+         if(m_shutdownRequested && m_shutdownRequested->load())
+         {
+            return;
+         }
          if(m_dataManager.valid())
          {
             std::shared_ptr<ossimGui::OpenImageUrlJob> imageOpenJob = std::dynamic_pointer_cast<ossimGui::OpenImageUrlJob> (job);
@@ -248,6 +3300,7 @@ namespace ossimGui
       
    protected:
       DataManagerWidget*       m_dataManagerWidget;
+      std::shared_ptr<std::atomic_bool> m_shutdownRequested;
       ossimRefPtr<DataManager> m_dataManager;
    };
 }
@@ -694,6 +3747,118 @@ ossimGui::DataManagerDisplayFolder::DataManagerDisplayFolder()
 :DataManagerFolder()
 {
    setText(0, "Displays");
+}
+
+ossimGui::DataManagerRegistrationFolder::DataManagerRegistrationFolder()
+:DataManagerFolder()
+{
+   setText(0, "Registration");
+}
+
+ossimGui::DataManagerRegistrationItem::DataManagerRegistrationItem(
+   DataManager::Node* node)
+:DataManagerNodeItem(node)
+{
+   m_autoDelete = false;
+}
+
+ossimGui::DataManagerRegistrationItem::~DataManagerRegistrationItem()
+{
+}
+
+void ossimGui::DataManagerRegistrationItem::dropItems(
+   QList<DataManagerItem*>& chainItemList)
+{
+   if(m_inputConnectionFolder)
+   {
+      m_inputConnectionFolder->connect(chainItemList);
+      setExpanded(true);
+      m_inputConnectionFolder->setExpanded(true);
+   }
+}
+
+void ossimGui::DataManagerRegistrationItem::execute()
+{
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   if(!objectAsNode())
+   {
+      return;
+   }
+
+   ossimFixedRegistrationSource* registration =
+      objectAsNode()->getObjectAs<ossimFixedRegistrationSource>();
+   ossimBundleAdjustmentRegistrationSource* bundleRegistration =
+      objectAsNode()->getObjectAs<ossimBundleAdjustmentRegistrationSource>();
+   if(!registration && !bundleRegistration)
+   {
+      QMessageBox::warning(treeWidget(),
+                           "Registration",
+                           "Selected registration object is not supported.");
+      return;
+   }
+
+   ossimConnectableObject* connectable =
+      objectAsNode()->getObjectAs<ossimConnectableObject>();
+   if(connectable && connectable->getInputList().empty())
+   {
+      QMessageBox::warning(treeWidget(),
+                           "Registration",
+                           "No inputs are connected. Drop image chains onto "
+                           "the registration item or its Inputs folder before "
+                           "running registration.");
+      return;
+   }
+
+   if(dataManagerWidget())
+   {
+      std::shared_ptr<ossimJobQueue> q = dataManagerWidget()->jobQueue();
+      if(q)
+      {
+         if(registration)
+         {
+            std::shared_ptr<RegistrationSourceJob> job =
+               std::make_shared<RegistrationSourceJob>(
+                  registration,
+                  dataManagerWidget(),
+                  dataManagerWidget()->shutdownRequested(),
+                  ossimString(text(0).toStdString()));
+            job->setCallback(
+               std::make_shared<RegistrationSourceJobCallback>(
+                  dataManagerWidget(),
+                  dataManagerWidget()->shutdownRequested(),
+                  this));
+            job->ready();
+            q->add(job);
+         }
+         else if(bundleRegistration)
+         {
+            std::shared_ptr<BundleRegistrationSourceJob> job =
+               std::make_shared<BundleRegistrationSourceJob>(
+                  bundleRegistration,
+                  dataManagerWidget(),
+                  dataManagerWidget()->shutdownRequested(),
+                  ossimString(text(0).toStdString()));
+            job->setCallback(
+               std::make_shared<RegistrationSourceJobCallback>(
+                  dataManagerWidget(),
+                  dataManagerWidget()->shutdownRequested(),
+                  this));
+            job->ready();
+            q->add(job);
+         }
+      }
+      else
+      {
+         QMessageBox::warning(treeWidget(),
+                              "Registration",
+                              "No job queue is available for registration.");
+      }
+   }
+#else
+   QMessageBox::warning(treeWidget(),
+                        "Registration",
+                        "ossim-registration-source is not enabled in this build.");
+#endif
 }
 
 ossimGui::DataManagerImageWriterFolder::DataManagerImageWriterFolder()
@@ -1314,7 +4479,7 @@ ossimGui::DataManagerJobItem::DataManagerJobItem()
 
 ossimGui::DataManagerJobItem::~DataManagerJobItem()
 {
-   if(m_job)
+   if(m_job&&m_jobCallback)
    {
       m_job->setCallback(m_jobCallback->callback());
    }
@@ -1355,8 +4520,27 @@ void ossimGui::DataManagerJobItem::cancel()
    }
 }
 
+void ossimGui::DataManagerJobItem::prepareForShutdown()
+{
+   if(m_jobCallback)
+   {
+      m_jobCallback->detach();
+   }
+   if(m_job)
+   {
+      m_job->cancel();
+      m_job->setCallback(std::shared_ptr<ossimJobCallback>());
+   }
+   m_jobCallback.reset();
+}
+
 void ossimGui::DataManagerJobItem::JobCallback::ready(std::shared_ptr<ossimJob> job)
 {
+   if(!m_jobItem)
+   {
+      ossimJobCallback::ready(job);
+      return;
+   }
    DataManagerJobsFolder* folder = m_jobItem->findParentItemAs<DataManagerJobsFolder>();
    if(folder)
    {
@@ -1369,6 +4553,11 @@ void ossimGui::DataManagerJobItem::JobCallback::ready(std::shared_ptr<ossimJob> 
 
 void ossimGui::DataManagerJobItem::JobCallback::started(std::shared_ptr<ossimJob> job)
 {
+   if(!m_jobItem)
+   {
+      ossimJobCallback::started(job);
+      return;
+   }
    DataManagerJobsFolder* folder = m_jobItem->findParentItemAs<DataManagerJobsFolder>();
    if(folder)
    {
@@ -1381,6 +4570,11 @@ void ossimGui::DataManagerJobItem::JobCallback::started(std::shared_ptr<ossimJob
 
 void ossimGui::DataManagerJobItem::JobCallback::finished(std::shared_ptr<ossimJob> job)
 {
+   if(!m_jobItem)
+   {
+      ossimJobCallback::finished(job);
+      return;
+   }
    DataManagerJobsFolder* folder = m_jobItem->findParentItemAs<DataManagerJobsFolder>();
    if(folder)
    {
@@ -1393,6 +4587,11 @@ void ossimGui::DataManagerJobItem::JobCallback::finished(std::shared_ptr<ossimJo
 
 void ossimGui::DataManagerJobItem::JobCallback::canceled(std::shared_ptr<ossimJob> job)
 {
+   if(!m_jobItem)
+   {
+      ossimJobCallback::canceled(job);
+      return;
+   }
    DataManagerWidgetJobEvent* e = new DataManagerWidgetJobEvent(DataManagerWidgetJobEvent::COMMAND_JOB_STATE_CHANGED);
    e->setJobList(job);
    QCoreApplication::postEvent(m_jobItem->treeWidget(), e);
@@ -1401,6 +4600,11 @@ void ossimGui::DataManagerJobItem::JobCallback::canceled(std::shared_ptr<ossimJo
 
 void ossimGui::DataManagerJobItem::JobCallback::nameChanged(const ossimString& name, std::shared_ptr<ossimJob> job)
 {
+   if(!m_jobItem)
+   {
+      ossimJobCallback::nameChanged(name, job);
+      return;
+   }
    DataManagerWidgetJobEvent* e = new DataManagerWidgetJobEvent(DataManagerWidgetJobEvent::COMMAND_JOB_PROPERTY_CHANGED);
    e->setJobList(job);
    QCoreApplication::postEvent(m_jobItem->treeWidget(), e);
@@ -1410,6 +4614,11 @@ void ossimGui::DataManagerJobItem::JobCallback::nameChanged(const ossimString& n
 
 void ossimGui::DataManagerJobItem::JobCallback::descriptionChanged(const ossimString& description, std::shared_ptr<ossimJob> job)
 {
+   if(!m_jobItem)
+   {
+      ossimJobCallback::descriptionChanged(description, job);
+      return;
+   }
    DataManagerWidgetJobEvent* e = new DataManagerWidgetJobEvent(DataManagerWidgetJobEvent::COMMAND_JOB_PROPERTY_CHANGED);
    e->setJobList(job);
    QCoreApplication::postEvent(m_jobItem->treeWidget(), e);
@@ -1419,6 +4628,11 @@ void ossimGui::DataManagerJobItem::JobCallback::descriptionChanged(const ossimSt
 
 void ossimGui::DataManagerJobItem::JobCallback::idChanged(const ossimString& id, std::shared_ptr<ossimJob> job)
 {
+   if(!m_jobItem)
+   {
+      ossimJobCallback::idChanged(id, job);
+      return;
+   }
    DataManagerWidgetJobEvent* e = new DataManagerWidgetJobEvent(DataManagerWidgetJobEvent::COMMAND_JOB_PROPERTY_CHANGED);
    e->setJobList(job);
    QCoreApplication::postEvent(m_jobItem->treeWidget(), e);
@@ -1428,6 +4642,11 @@ void ossimGui::DataManagerJobItem::JobCallback::idChanged(const ossimString& id,
 
 void ossimGui::DataManagerJobItem::JobCallback::percentCompleteChanged(double percentValue, std::shared_ptr<ossimJob> job)
 {
+   if(!m_jobItem)
+   {
+      ossimJobCallback::percentCompleteChanged(percentValue, job);
+      return;
+   }
    ossimJobCallback::percentCompleteChanged(percentValue, job);
    DataManagerWidgetJobEvent* e = new DataManagerWidgetJobEvent(DataManagerWidgetJobEvent::COMMAND_JOB_PERCENT_COMPLETE);
    e->setJobList(percentValue, job);
@@ -1460,6 +4679,38 @@ ossimGui::DataManagerJobsFolder::DataManagerJobsFolder(QTreeWidgetItem* parent)
 
 ossimGui::DataManagerJobsFolder::~DataManagerJobsFolder()
 {
+   prepareForShutdown();
+}
+
+void ossimGui::DataManagerJobsFolder::prepareForShutdown()
+{
+   std::lock_guard<std::mutex> lock(m_jobsFolderMutex);
+   if(m_jobQueueCallback)
+   {
+      m_jobQueueCallback->detach();
+   }
+   QueueListType::iterator queueIter = m_queues.begin();
+   while(queueIter != m_queues.end())
+   {
+      if(*queueIter)
+      {
+         (*queueIter)->setCallback(std::shared_ptr<ossimJobQueue::Callback>());
+         (*queueIter)->clear();
+         (*queueIter)->releaseBlock();
+      }
+      ++queueIter;
+   }
+   JobMapType::iterator jobIter = m_jobItemMap.begin();
+   while(jobIter != m_jobItemMap.end())
+   {
+      DataManagerJobItem* jobItem =
+         dynamic_cast<DataManagerJobItem*>((*jobIter).second);
+      if(jobItem)
+      {
+         jobItem->prepareForShutdown();
+      }
+      ++jobIter;
+   }
 }
 
 void ossimGui::DataManagerJobsFolder::removeStoppedJobs()
@@ -1478,8 +4729,11 @@ void ossimGui::DataManagerJobsFolder::setQueue(std::shared_ptr<ossimJobQueue> q)
 {
    std::lock_guard<std::mutex> lock(m_jobsFolderMutex);
    m_queues.clear();
-   m_queues.push_back(q);
-   q->setCallback(m_jobQueueCallback);
+   if(q)
+   {
+      m_queues.push_back(q);
+      q->setCallback(m_jobQueueCallback);
+   }
 }
 
 
@@ -1490,6 +4744,11 @@ ossimGui::DataManagerWidget::DataManagerCallback::DataManagerCallback(DataManage
 
 void ossimGui::DataManagerWidget::DataManagerCallback::nodesRemoved(DataManager::NodeListType& nodes)
 {
+   if(!m_dataManagerWidget ||
+      m_dataManagerWidget->isPreparingForShutdown())
+   {
+      return;
+   }
    QTreeWidgetItemIterator iter(m_dataManagerWidget);
    
    // see if we are removing the planetary node
@@ -1520,6 +4779,11 @@ void ossimGui::DataManagerWidget::DataManagerCallback::nodesRemoved(DataManager:
 
 void ossimGui::DataManagerWidget::DataManagerCallback::nodesAdded(DataManager::NodeListType& nodes)
 {
+   if(!m_dataManagerWidget ||
+      m_dataManagerWidget->isPreparingForShutdown())
+   {
+      return;
+   }
    DataManagerEvent* e = new DataManagerEvent(DataManagerEvent::COMMAND_NODE_ADDED);
    e->setNodeList(nodes);
    QCoreApplication::postEvent(m_dataManagerWidget, e);
@@ -1531,11 +4795,13 @@ ossimGui::DataManagerWidget::DataManagerWidget(QWidget* parent)
      m_dataManagerCallback( std::make_shared<DataManagerCallback>(this) ),
      m_jobQueue(0),
      m_displayQueue(std::make_shared<DisplayTimerJobQueue>()),
+     m_shutdownRequested(std::make_shared<std::atomic_bool>(false)),
      m_rootImageFolder(0),
      m_rootJobsFolder(0),
      m_rawImageSources(0),
      m_imageChains(0),
      m_imageDisplays(0),
+     m_registrationSources(0),
      m_imageWriters(0),
      m_dragStartPosition(),
      m_activeItems(),
@@ -1551,6 +4817,10 @@ ossimGui::DataManagerWidget::DataManagerWidget(QWidget* parent)
      m_planetaryDisplayNode(),
      m_lastOpenedDirectory()
 {
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   ensureRegistrationSourceFactoryRegistered();
+#endif
+
    setAcceptDrops(true);
    
    m_dataManager->setCallback(m_dataManagerCallback);
@@ -1561,6 +4831,42 @@ ossimGui::DataManagerWidget::DataManagerWidget(QWidget* parent)
    connect(this, SIGNAL(itemCollapsed(QTreeWidgetItem*)), this, SLOT(itemCollapsed(QTreeWidgetItem*)));
    connect(this, SIGNAL(itemExpanded(QTreeWidgetItem*)), this, SLOT(itemExpanded(QTreeWidgetItem*)));
 
+}
+
+ossimGui::DataManagerWidget::~DataManagerWidget()
+{
+   prepareForShutdown();
+}
+
+bool ossimGui::DataManagerWidget::isPreparingForShutdown()const
+{
+   return m_shutdownRequested && m_shutdownRequested->load();
+}
+
+void ossimGui::DataManagerWidget::prepareForShutdown()
+{
+   if(m_shutdownRequested && m_shutdownRequested->exchange(true))
+   {
+      return;
+   }
+
+   if(m_dataManager.valid())
+   {
+      m_dataManager->setCallback(std::shared_ptr<DataManager::Callback>());
+   }
+   if(m_rootJobsFolder)
+   {
+      m_rootJobsFolder->prepareForShutdown();
+   }
+   if(m_jobQueue)
+   {
+      m_jobQueue->setCallback(std::shared_ptr<ossimJobQueue::Callback>());
+      m_jobQueue->clear();
+      m_jobQueue->releaseBlock();
+   }
+
+   QCoreApplication::sendPostedEvents(this, QEvent::MetaCall);
+   QCoreApplication::removePostedEvents(this);
 }
 
 bool ossimGui::DataManagerWidget::openDataManager(const ossimFilename& file)
@@ -1622,6 +4928,7 @@ void ossimGui::DataManagerWidget::refresh()
    m_rawImageSources->clearChildren();
    m_imageChains->clearChildren();
    m_imageDisplays->clearChildren();
+   m_registrationSources->clearChildren();
    m_imageWriters->clearChildren();
    RefreshVisitor visitor(this);
    
@@ -1651,6 +4958,7 @@ void ossimGui::DataManagerWidget::initialize()
    m_rawImageSources   = new DataManagerRawImageSourceFolder();
    m_imageChains       = new DataManagerImageChainFolder();
    m_imageDisplays = new DataManagerDisplayFolder();
+   m_registrationSources = new DataManagerRegistrationFolder();
    m_imageWriters  = new DataManagerImageWriterFolder();
    m_rootImageFolder->setText(0, "Image Folder");
    m_rawImageSources->setText(0, "Sources");
@@ -1660,6 +4968,7 @@ void ossimGui::DataManagerWidget::initialize()
    m_rootImageFolder->addChild(m_rawImageSources);
    m_rootImageFolder->addChild(m_imageChains);
    m_rootImageFolder->addChild(m_imageDisplays);
+   m_rootImageFolder->addChild(m_registrationSources);
    m_rootImageFolder->addChild(m_imageWriters);
    
    std::vector<ossimString> objects;
@@ -1770,6 +5079,13 @@ void	ossimGui::DataManagerWidget::dropEvent ( QDropEvent * e )
          {
             targetChainItem->dropItems(selectedItems);
          }
+      }
+      else if(dynamic_cast<DataManagerRegistrationItem*>(targetItem))
+      {
+         QList<DataManagerItem*> itemList =
+            grabSelectedChildItemsOfType<DataManagerItem>();
+         dynamic_cast<DataManagerRegistrationItem*>(targetItem)->
+            dropItems(itemList);
       }
       else
       {
@@ -2053,7 +5369,11 @@ void ossimGui::DataManagerWidget::buildOverviewsForSelected(const QString& type)
             if(isource.valid())
             {
                std::shared_ptr<ImageStagerJob> stagerJob = std::make_shared<ImageStagerJob>(isource.get(), ImageStagerJob::STAGE_OVERVIEWS);
-               stagerJob->setCallback(std::make_shared<ImageStagerJobCallback>(this, (*item)));
+               stagerJob->setCallback(
+                  std::make_shared<ImageStagerJobCallback>(
+                     this,
+                     m_shutdownRequested,
+                     (*item)));
                stagerJob->setOverviewType(type.toStdString());
                m_jobQueue->add(stagerJob);
                stagerJob = 0; isource = 0;
@@ -2637,7 +5957,11 @@ void ossimGui::DataManagerWidget::openLocalImage()
             QUrl url = QUrl::fromLocalFile(fileNames.at(i));
             std::shared_ptr<OpenImageUrlJob> job = std::make_shared<OpenImageUrlJob>(url);
             job->setName(ossimString("open ") + url.toString().toStdString());
-            std::shared_ptr<ImageOpenJobCallback> callback = std::make_shared<ImageOpenJobCallback>(this, m_dataManager);
+            std::shared_ptr<ImageOpenJobCallback> callback =
+               std::make_shared<ImageOpenJobCallback>(
+                  this,
+                  m_shutdownRequested,
+                  m_dataManager);
             job->setCallback(callback);
             m_jobQueue->add(job);
 
@@ -2861,6 +6185,708 @@ void ossimGui::DataManagerWidget::createWriterFromType(const QString& type)
       }
    }
    m_activeItemsMutex.unlock();
+}
+
+void ossimGui::DataManagerWidget::createFixedRegistration()
+{
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   createDefaultFixedRegistrationItem();
+#else
+   QMessageBox::warning(this,
+                        "Registration",
+                        "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
+ossimGui::DataManagerRegistrationItem*
+ossimGui::DataManagerWidget::createDefaultFixedRegistrationItem()
+{
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   ossimRefPtr<ossimFixedRegistrationSource> registration =
+      new ossimFixedRegistrationSource();
+   ossim_autoreg::AutoRegistrationOptions registrationOptions =
+      registration->autoRegistrationOptions();
+   RegistrationSetupOptions setupOptions =
+      registrationSetupDefaults(REGISTRATION_SETUP_FIXED_AUTO,
+                                std::string());
+   ossim_autoreg::TiePointGenerationOptions tiePointOptions =
+      registrationOptions.generator();
+   applyRegistrationSetupTieOptions(tiePointOptions, setupOptions);
+   tiePointOptions.setMatchMethod(std::string());
+   registrationOptions.setAutoRegister(true);
+   registrationOptions.setGenerateTiePoints(true);
+   registrationOptions.setSkipOptimization(false);
+   registrationOptions.setAdaptiveBankThreadCount(
+      setupOptions.adaptiveBankThreadCount);
+   registrationOptions.setAdaptiveFullPostBankRefinement(
+      setupOptions.adaptiveFullPostBankRefinement);
+   registrationOptions.setGenerator(tiePointOptions);
+   registration->setAutoRegistrationOptions(registrationOptions);
+   registration->setAdaptiveBankThreadCount(
+      setupOptions.adaptiveBankThreadCount);
+   registration->setAdaptiveFullPostBankRefinement(
+      setupOptions.adaptiveFullPostBankRefinement);
+
+   ossimRefPtr<ossimObject> obj = registration.get();
+   if(obj.valid())
+   {
+      std::lock_guard<std::mutex> lock(m_activeItemsMutex);
+      ossimRefPtr<DataManager::Node> node = m_dataManager->addSource(obj.get(), false);
+      if(node.valid())
+      {
+         node->setName(FIXED_AUTO_LABEL);
+         DataManagerRegistrationItem* item = new DataManagerRegistrationItem(node.get());
+         item->setFlags(item->flags()|Qt::ItemIsEditable);
+         m_registrationSources->addChild(item);
+         m_activeItems.insert(item);
+         return item;
+      }
+   }
+#endif
+   return 0;
+}
+
+void ossimGui::DataManagerWidget::createFixedOpenCvAutoRegistration()
+{
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   createDefaultFixedOpenCvAutoRegistrationItem();
+#else
+   QMessageBox::warning(this,
+                        "Registration",
+                        "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
+ossimGui::DataManagerRegistrationItem*
+ossimGui::DataManagerWidget::createDefaultFixedOpenCvAutoRegistrationItem()
+{
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   if(!ossim_autoreg::TiePointGeneratorFactory::instance()->
+         create("opencv-phase-correlation"))
+   {
+      QMessageBox::warning(
+         this,
+         "Registration",
+         "The OpenCV phase-correlation tie-point generator is not available.");
+      return 0;
+   }
+
+   ossimRefPtr<ossimFixedRegistrationSource> registration =
+      new ossimFixedRegistrationSource();
+   registration->applyAutoRegistrationPreset("fixed:opencv-phase-ransac");
+   ossimRefPtr<ossimObject> obj = registration.get();
+   if(obj.valid())
+   {
+      std::lock_guard<std::mutex> lock(m_activeItemsMutex);
+      ossimRefPtr<DataManager::Node> node = m_dataManager->addSource(obj.get(), false);
+      if(node.valid())
+      {
+         node->setName(
+            registeredNodeName("opencv-phase-correlation").
+               toStdString().c_str());
+         DataManagerRegistrationItem* item = new DataManagerRegistrationItem(node.get());
+         item->setFlags(item->flags()|Qt::ItemIsEditable);
+         item->setToolTip(
+            0,
+            QString("%1\nTie point generators: %2")
+               .arg(registration->autoRegistrationSettingsSummary().c_str())
+               .arg(tiePointGeneratorSummary()));
+         m_registrationSources->addChild(item);
+         m_activeItems.insert(item);
+         return item;
+      }
+   }
+#endif
+   return 0;
+}
+
+void ossimGui::DataManagerWidget::createFixedNativeAffineAutoRegistration()
+{
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   createDefaultFixedNativeAffineAutoRegistrationItem();
+#else
+   QMessageBox::warning(this,
+                        "Registration",
+                        "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
+ossimGui::DataManagerRegistrationItem*
+ossimGui::DataManagerWidget::createDefaultFixedNativeAffineAutoRegistrationItem()
+{
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   if(!ossim_autoreg::TiePointGeneratorFactory::instance()->
+         create("native-affine-ncc"))
+   {
+      QMessageBox::warning(
+         this,
+         "Registration",
+         "The native affine NCC tie-point generator is not available.");
+      return 0;
+   }
+
+   ossimRefPtr<ossimFixedRegistrationSource> registration =
+      new ossimFixedRegistrationSource();
+   registration->applyAutoRegistrationPreset("fixed:native-affine");
+   ossimRefPtr<ossimObject> obj = registration.get();
+   if(obj.valid())
+   {
+      std::lock_guard<std::mutex> lock(m_activeItemsMutex);
+      ossimRefPtr<DataManager::Node> node =
+         m_dataManager->addSource(obj.get(), false);
+      if(node.valid())
+      {
+         node->setName(FIXED_NATIVE_AFFINE_AUTO_LABEL);
+         DataManagerRegistrationItem* item =
+            new DataManagerRegistrationItem(node.get());
+         item->setFlags(item->flags()|Qt::ItemIsEditable);
+         item->setToolTip(
+            0,
+            QString("%1\nTie point generators: %2")
+               .arg(registration->autoRegistrationSettingsSummary().c_str())
+               .arg(tiePointGeneratorSummary()));
+         m_registrationSources->addChild(item);
+         m_activeItems.insert(item);
+         return item;
+      }
+   }
+#endif
+   return 0;
+}
+
+void ossimGui::DataManagerWidget::createBundleFloatingRegistration()
+{
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   createDefaultBundleFloatingRegistrationItem();
+#else
+   QMessageBox::information(this,
+                            "Registration",
+                            "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
+void ossimGui::DataManagerWidget::createBundleNativeAffineAutoRegistration()
+{
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   createDefaultBundleNativeAffineAutoRegistrationItem();
+#else
+   QMessageBox::information(this,
+                            "Registration",
+                            "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
+void ossimGui::DataManagerWidget::createBundleNativeAffineMatcherAutoRegistration()
+{
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   createDefaultBundleNativeAffineAutoRegistrationItem(
+      0,
+      BUNDLE_NATIVE_AFFINE_MATCHER_AUTO_LABEL,
+      "native_affine_matcher_auto",
+      false,
+      true);
+#else
+   QMessageBox::information(this,
+                            "Registration",
+                            "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
+void ossimGui::DataManagerWidget::createBundleNativeAffineStripAutoRegistration()
+{
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   createDefaultBundleNativeAffineAutoRegistrationItem(
+      1,
+      BUNDLE_NATIVE_AFFINE_STRIP_AUTO_LABEL,
+      "native_affine_strip_auto",
+      false);
+#else
+   QMessageBox::information(this,
+                            "Registration",
+                            "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
+ossimGui::DataManagerRegistrationItem*
+ossimGui::DataManagerWidget::createDefaultBundleFloatingRegistrationItem()
+{
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   ossimRefPtr<ossimBundleAdjustmentRegistrationSource> bundle =
+      new ossimBundleAdjustmentRegistrationSource();
+   bundle->setAllInputsFloating(true);
+   bundle->setLaunchPreset("default_bundle_all_floating");
+   applyBundleDefaultsToSource(bundle.get(), false);
+   ossimRefPtr<ossimObject> obj = bundle.get();
+   if(obj.valid())
+   {
+      std::lock_guard<std::mutex> lock(m_activeItemsMutex);
+      ossimRefPtr<DataManager::Node> node =
+         m_dataManager->addSource(obj.get(), false);
+      if(node.valid())
+      {
+         node->setName(BUNDLE_ALL_FLOATING_AUTO_LABEL);
+         DataManagerRegistrationItem* item =
+            new DataManagerRegistrationItem(node.get());
+         item->setFlags(item->flags()|Qt::ItemIsEditable);
+         m_registrationSources->addChild(item);
+         m_activeItems.insert(item);
+         return item;
+      }
+   }
+#endif
+   return 0;
+}
+
+ossimGui::DataManagerRegistrationItem*
+ossimGui::DataManagerWidget::createDefaultBundleNativeAffineAutoRegistrationItem(
+   std::size_t bundleNeighborSpan,
+   const QString& nodeName,
+   const std::string& launchPreset,
+   bool autoPairPolicy,
+   bool nativeMatcherAuto)
+{
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   RegistrationSetupOptions setupOptions =
+      registrationSetupDefaults(REGISTRATION_SETUP_BUNDLE_ALL_FLOATING,
+                                "native-affine-ncc");
+   setupOptions.bundleNeighborSpan = bundleNeighborSpan;
+   setupOptions.bundlePairPolicy =
+      autoPairPolicy ?
+         BUNDLE_PAIR_POLICY_AUTO :
+         (bundleNeighborSpan ?
+             BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN :
+             BUNDLE_PAIR_POLICY_ALL_PAIRS);
+   ossimRefPtr<ossimBundleAdjustmentRegistrationSource> bundle =
+      new ossimBundleAdjustmentRegistrationSource();
+   bundle->setAllInputsFloating(true);
+   bundle->setLaunchPreset(launchPreset);
+   applyBundleDefaultsToSource(bundle.get(), false);
+
+   ossim_autoreg::AutoRegistrationOptions registrationOptions =
+      bundle->autoRegistrationOptions();
+   ossim_autoreg::TiePointGenerationOptions tiePointOptions =
+      registrationOptions.generator();
+   applyRegistrationSetupTieOptions(tiePointOptions, setupOptions);
+   registrationOptions.setGenerator(tiePointOptions);
+   registrationOptions.setBundlePairPolicy(
+      sharedBundlePairPolicy(setupOptions.bundlePairPolicy));
+   const ossim_autoreg::BundleNativeMatcherPolicy nativeMatcherPolicy =
+      nativeMatcherAuto ?
+         ossim_autoreg::BUNDLE_NATIVE_MATCHER_POLICY_AUTO :
+         ossim_autoreg::BUNDLE_NATIVE_MATCHER_POLICY_REPORT_ONLY;
+   registrationOptions.setBundleNativeMatcherPolicy(nativeMatcherPolicy);
+   registrationOptions.setBundleNeighborSpan(
+      setupOptions.bundlePairPolicy == BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN ?
+         setupOptions.bundleNeighborSpan :
+         0);
+   registrationOptions.overrides().setAutoDenseGridSeedBudget(true);
+   registrationOptions.setOpencvRansacPrefilter(
+      setupOptions.opencvRansacPrefilter);
+   registrationOptions.setOpencvRansacThresholdPixels(
+      setupOptions.opencvRansacThresholdPixels);
+   bundle->setAutoRegistrationOptions(registrationOptions);
+
+   ossimRefPtr<ossimObject> obj = bundle.get();
+   if(obj.valid())
+   {
+      std::lock_guard<std::mutex> lock(m_activeItemsMutex);
+      ossimRefPtr<DataManager::Node> node =
+         m_dataManager->addSource(obj.get(), false);
+      if(node.valid())
+      {
+         node->setName(nodeName.toStdString().c_str());
+         DataManagerRegistrationItem* item =
+            new DataManagerRegistrationItem(node.get());
+         item->setFlags(item->flags()|Qt::ItemIsEditable);
+         item->setToolTip(
+            0,
+            QString("Launch preset: %1\nMatcher: %2\nResampler: %3\nView GSD: %4\nMin score margin: %5\nDense seed budget: %6\nAuto dense seed budget: %7\nBundle pair policy: %8\nNative matcher policy: %9")
+               .arg(QString::fromStdString(launchPreset))
+               .arg(QString::fromStdString(setupOptions.matchMethod))
+               .arg(QString::fromStdString(setupOptions.resamplerType))
+               .arg(setupOptions.viewGsd)
+               .arg(setupOptions.minScoreMargin)
+               .arg(static_cast<int>(setupOptions.denseGridSeedBudget))
+               .arg(setupOptions.autoDenseGridSeedBudget ? "true" : "false")
+               .arg(QString::fromStdString(
+                  bundlePairPolicyDescription(
+                     setupOptions.bundlePairPolicy,
+                     setupOptions.bundleNeighborSpan)))
+               .arg(QString::fromStdString(
+                  ossim_autoreg::bundleNativeMatcherPolicyName(
+                     nativeMatcherPolicy))));
+         m_registrationSources->addChild(item);
+         m_activeItems.insert(item);
+         return item;
+      }
+   }
+#endif
+   return 0;
+}
+
+QList<ossimGui::DataManagerItem*>
+ossimGui::DataManagerWidget::selectedRegistrationInputItems() const
+{
+   QList<DataManagerItem*> result;
+   QList<QTreeWidgetItem*> selectedNodes = selectedItems();
+   QList<QTreeWidgetItem*>::iterator iter = selectedNodes.begin();
+   while(iter != selectedNodes.end())
+   {
+      DataManagerItem* item = dynamic_cast<DataManagerItem*>(*iter);
+      if(item &&
+         (item->itemAs<DataManagerRawImageSourceItem>() ||
+          item->itemAs<DataManagerImageChainItem>()) &&
+         item->objectAsNode())
+      {
+         result.push_back(item);
+      }
+      ++iter;
+   }
+   return result;
+}
+
+void ossimGui::DataManagerWidget::connectAndExecuteSelectedRegistration(
+   DataManagerRegistrationItem* item)
+{
+   if(!item)
+      return;
+
+   QList<DataManagerItem*> inputs = selectedRegistrationInputItems();
+   if(inputs.size() < 2)
+   {
+      QMessageBox::warning(this,
+                           "Registration",
+                           "Select at least two Sources or Chains before "
+                           "starting registration.");
+      return;
+   }
+
+   item->dropItems(inputs);
+   item->setSelected(true);
+   item->execute();
+}
+
+void ossimGui::DataManagerWidget::createFixedRegistrationFromSelection()
+{
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   connectAndExecuteSelectedRegistration(createDefaultFixedRegistrationItem());
+#else
+   QMessageBox::warning(this,
+                        "Registration",
+                        "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
+void ossimGui::DataManagerWidget::createFixedOpenCvAutoRegistrationFromSelection()
+{
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   connectAndExecuteSelectedRegistration(
+      createDefaultFixedOpenCvAutoRegistrationItem());
+#else
+   QMessageBox::warning(this,
+                        "Registration",
+                        "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
+void ossimGui::DataManagerWidget::createFixedNativeAffineAutoRegistrationFromSelection()
+{
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   connectAndExecuteSelectedRegistration(
+      createDefaultFixedNativeAffineAutoRegistrationItem());
+#else
+   QMessageBox::warning(this,
+                        "Registration",
+                        "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
+void ossimGui::DataManagerWidget::createBundleFloatingRegistrationFromSelection()
+{
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   connectAndExecuteSelectedRegistration(
+      createDefaultBundleFloatingRegistrationItem());
+#else
+   QMessageBox::information(this,
+                            "Registration",
+                            "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
+void ossimGui::DataManagerWidget::createBundleNativeAffineAutoRegistrationFromSelection()
+{
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   connectAndExecuteSelectedRegistration(
+      createDefaultBundleNativeAffineAutoRegistrationItem());
+#else
+   QMessageBox::information(this,
+                            "Registration",
+                            "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
+void ossimGui::DataManagerWidget::createBundleNativeAffineMatcherAutoRegistrationFromSelection()
+{
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   connectAndExecuteSelectedRegistration(
+      createDefaultBundleNativeAffineAutoRegistrationItem(
+         0,
+         BUNDLE_NATIVE_AFFINE_MATCHER_AUTO_LABEL,
+         "native_affine_matcher_auto",
+         false,
+         true));
+#else
+   QMessageBox::information(this,
+                            "Registration",
+                            "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
+void ossimGui::DataManagerWidget::createBundleNativeAffineStripAutoRegistrationFromSelection()
+{
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   connectAndExecuteSelectedRegistration(
+      createDefaultBundleNativeAffineAutoRegistrationItem(
+         1,
+         BUNDLE_NATIVE_AFFINE_STRIP_AUTO_LABEL,
+         "native_affine_strip_auto",
+         false));
+#else
+   QMessageBox::information(this,
+                            "Registration",
+                            "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
+void ossimGui::DataManagerWidget::createRegistrationFromDialog()
+{
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   RegistrationSetupDialog dialog(this);
+   if(dialog.exec() != QDialog::Accepted)
+      return;
+
+   const RegistrationSetupOptions setupOptions = dialog.options();
+   if(!setupOptions.matchMethod.empty() &&
+      !ossim_autoreg::TiePointGeneratorFactory::instance()->
+         create(setupOptions.matchMethod))
+   {
+      QMessageBox::warning(
+         this,
+         "Registration",
+         QString("The selected tie-point generator is not available: %1\n\n"
+                 "Available generators: %2")
+            .arg(QString::fromStdString(setupOptions.matchMethod))
+            .arg(tiePointGeneratorSummary()));
+      return;
+   }
+
+   ossimRefPtr<ossimObject> obj;
+   QString nodeName;
+   QString toolTip;
+
+   if(setupOptions.approach == REGISTRATION_SETUP_BUNDLE_ALL_FLOATING ||
+      setupOptions.approach == REGISTRATION_SETUP_BUNDLE_ANCHORED)
+   {
+      ossimRefPtr<ossimBundleAdjustmentRegistrationSource> bundle =
+         new ossimBundleAdjustmentRegistrationSource();
+      bundle->setAllInputsFloating(
+         setupOptions.approach == REGISTRATION_SETUP_BUNDLE_ALL_FLOATING);
+      bundle->setLaunchPreset(
+         setupOptions.approach == REGISTRATION_SETUP_BUNDLE_ALL_FLOATING ?
+            "registration_setup_bundle_all_floating" :
+            "registration_setup_bundle_anchored");
+      applyBundleDefaultsToSource(
+         bundle.get(),
+         setupOptions.approach == REGISTRATION_SETUP_BUNDLE_ANCHORED);
+      ossim_autoreg::AutoRegistrationOptions registrationOptions =
+         bundle->autoRegistrationOptions();
+      ossim_autoreg::TiePointGenerationOptions tiePointOptions =
+         registrationOptions.generator();
+      applyRegistrationSetupTieOptions(tiePointOptions, setupOptions);
+      registrationOptions.setGenerator(tiePointOptions);
+      registrationOptions.setBundlePairPolicy(
+         sharedBundlePairPolicy(setupOptions.bundlePairPolicy));
+      registrationOptions.setBundleNeighborSpan(
+         setupOptions.bundleNeighborSpan);
+      registrationOptions.overrides().setAutoDenseGridSeedBudget(true);
+      registrationOptions.setOpencvRansacPrefilter(
+         setupOptions.opencvRansacPrefilter);
+      registrationOptions.setOpencvRansacThresholdPixels(
+         setupOptions.opencvRansacThresholdPixels);
+      bundle->setAutoRegistrationOptions(registrationOptions);
+      obj = bundle.get();
+      nodeName = bundle->allInputsFloating() ?
+         "Bundle All-Floating Registration" :
+         "Bundle Anchored Registration";
+      toolTip =
+         QString("Launch preset: %1\nMatcher: %2\nResampler: %3\nView GSD: %4\nMin score margin: %5\nDense seed budget: %6\nAuto dense seed budget: %7\nTie timing diagnostics: %8\nBundle pair policy: %9\nOpenCV RANSAC prefilter: %10\nOpenCV RANSAC threshold: %11")
+            .arg(bundle->launchPreset().c_str())
+            .arg(QString::fromStdString(setupOptions.matchMethod))
+            .arg(QString::fromStdString(setupOptions.resamplerType))
+            .arg(setupOptions.viewGsd)
+            .arg(setupOptions.minScoreMargin)
+            .arg(static_cast<int>(setupOptions.denseGridSeedBudget))
+            .arg(setupOptions.autoDenseGridSeedBudget ? "true" : "false")
+            .arg(setupOptions.tiePointTimingDiagnostics ? "true" : "false")
+            .arg(QString::fromStdString(
+               bundlePairPolicyDescription(
+                  setupOptions.bundlePairPolicy,
+                  setupOptions.bundleNeighborSpan)))
+            .arg(setupOptions.opencvRansacPrefilter ? "true" : "false")
+            .arg(setupOptions.opencvRansacThresholdPixels);
+   }
+   else
+   {
+      ossimRefPtr<ossimFixedRegistrationSource> registration =
+         new ossimFixedRegistrationSource();
+      ossim_autoreg::AutoRegistrationOptions registrationOptions =
+         registration->autoRegistrationOptions();
+      if(setupOptions.approach == REGISTRATION_SETUP_FIXED_AUTO)
+      {
+         if(!setupOptions.matchMethod.empty())
+         {
+            ossim_autoreg::TiePointGeneratorFactory::instance()->
+               configureRecommendedOptions(
+                  setupOptions.matchMethod,
+                  "fixed-auto",
+                  registrationOptions);
+            registration->setAutoRegistrationOptions(registrationOptions);
+         }
+         registration->setAutoRegistrationEnabled(true);
+         registrationOptions = registration->autoRegistrationOptions();
+      }
+
+      ossim_autoreg::TiePointGenerationOptions tiePointOptions =
+         registrationOptions.generator();
+      applyRegistrationSetupTieOptions(tiePointOptions, setupOptions);
+      if(setupOptions.approach == REGISTRATION_SETUP_FIXED_AUTO &&
+         setupOptions.matchMethod.empty())
+      {
+         tiePointOptions.setMatchMethod(std::string());
+      }
+      registrationOptions.setGenerator(tiePointOptions);
+      registrationOptions.overrides().setAutoDenseGridSeedBudget(true);
+      registrationOptions.setThreadCount(
+         setupOptions.maxConcurrentRegistrations);
+      registrationOptions.setAdaptiveBankThreadCount(
+         setupOptions.adaptiveBankThreadCount);
+      registrationOptions.setAdaptiveFullPostBankRefinement(
+         setupOptions.adaptiveFullPostBankRefinement);
+      registrationOptions.setSupportPassMatcherResampler(
+         setupOptions.supportPassMatcherResampler);
+      registrationOptions.setNativeLowGridPolicy(
+         setupOptions.nativeLowGridPolicy);
+      registrationOptions.setOpencvRansacPrefilter(
+         setupOptions.opencvRansacPrefilter);
+      registrationOptions.setOpencvRansacThresholdPixels(
+         setupOptions.opencvRansacThresholdPixels);
+      registration->setAutoRegistrationOptions(registrationOptions);
+      registration->setMaxConcurrentRegistrations(
+         setupOptions.maxConcurrentRegistrations);
+      registration->setAdaptiveBankThreadCount(
+         setupOptions.adaptiveBankThreadCount);
+      registration->setAdaptiveFullPostBankRefinement(
+         setupOptions.adaptiveFullPostBankRefinement);
+      obj = registration.get();
+      nodeName = setupOptions.matchMethod.empty() ?
+         QString(FIXED_AUTO_LABEL) :
+         registeredNodeName(setupOptions.matchMethod);
+      toolTip =
+         QString("%1\nMatcher: %2\nResampler: %3\nSupport pass resampler: %4\nView GSD: %5\nMin score margin: %6\nNative low-grid policy: %7\nParallel floating inputs: %8\nAdaptive bank threads: %9\nDense seed budget: %10\nAuto dense seed budget: %11\nTie timing diagnostics: %12\nOpenCV RANSAC prefilter: %13\nOpenCV RANSAC threshold: %14")
+            .arg(registration->autoRegistrationSettingsSummary().c_str())
+            .arg(QString::fromStdString(
+               setupOptions.matchMethod.empty() ?
+                  std::string("adaptive auto") :
+                  setupOptions.matchMethod))
+            .arg(QString::fromStdString(setupOptions.resamplerType))
+            .arg(QString::fromStdString(
+               setupOptions.supportPassMatcherResampler.empty() ?
+                  std::string("default") :
+                  setupOptions.supportPassMatcherResampler))
+            .arg(setupOptions.viewGsd)
+            .arg(setupOptions.minScoreMargin)
+            .arg(QString::fromStdString(setupOptions.nativeLowGridPolicy))
+            .arg(static_cast<int>(
+               setupOptions.maxConcurrentRegistrations))
+            .arg(static_cast<int>(
+               setupOptions.adaptiveBankThreadCount))
+            .arg(static_cast<int>(
+               setupOptions.denseGridSeedBudget))
+            .arg(setupOptions.autoDenseGridSeedBudget ? "true" : "false")
+            .arg(setupOptions.tiePointTimingDiagnostics ? "true" : "false")
+            .arg(setupOptions.opencvRansacPrefilter ? "true" : "false")
+            .arg(setupOptions.opencvRansacThresholdPixels);
+   }
+
+   if(obj.valid())
+   {
+      std::lock_guard<std::mutex> lock(m_activeItemsMutex);
+      ossimRefPtr<DataManager::Node> node =
+         m_dataManager->addSource(obj.get(), false);
+      if(node.valid())
+      {
+         node->setName(nodeName.toStdString().c_str());
+         DataManagerRegistrationItem* item =
+            new DataManagerRegistrationItem(node.get());
+         item->setFlags(item->flags()|Qt::ItemIsEditable);
+         item->setToolTip(0, toolTip);
+         m_registrationSources->addChild(item);
+         m_activeItems.insert(item);
+      }
+   }
+#else
+   QMessageBox::warning(this,
+                        "Registration",
+                        "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
+void ossimGui::DataManagerWidget::setSelectedBundleAllFloating(bool enabled)
+{
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   QList<DataManagerRegistrationItem*> result =
+      grabSelectedChildItemsOfType<DataManagerRegistrationItem>();
+   QList<DataManagerRegistrationItem*>::iterator iter = result.begin();
+   while(iter != result.end())
+   {
+      DataManagerRegistrationItem* item = *iter;
+      if(item && item->objectAsNode())
+      {
+         ossimBundleAdjustmentRegistrationSource* bundle =
+            item->objectAsNode()->
+               getObjectAs<ossimBundleAdjustmentRegistrationSource>();
+         if(bundle)
+         {
+            bundle->setAllInputsFloating(enabled);
+            if(enabled)
+               item->setToolTip(0, "All bundle inputs participate in adjustment.");
+            else
+               item->setToolTip(0, "Input 0 is held as the bundle anchor.");
+         }
+      }
+      ++iter;
+   }
+#else
+   (void)enabled;
+   QMessageBox::warning(this,
+                        "Registration",
+                        "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
+void ossimGui::DataManagerWidget::registerSelected()
+{
+   QList<DataManagerRegistrationItem*> result =
+      grabSelectedChildItemsOfType<DataManagerRegistrationItem>();
+   if(!result.empty())
+   {
+      QList<DataManagerRegistrationItem*>::iterator iter = result.begin();
+      while(iter != result.end())
+      {
+         (*iter)->execute();
+         ++iter;
+      }
+   }
 }
 
 void ossimGui::DataManagerWidget::executeSelected()
@@ -3237,6 +7263,18 @@ void	ossimGui::DataManagerWidget::itemExpanded (QTreeWidgetItem* item)
 
 bool	ossimGui::DataManagerWidget::event( QEvent * e )
 {
+   if(isPreparingForShutdown())
+   {
+      const int eventType = e->type();
+      if(eventType == DATA_MANAGER_WIDGET_JOB_EVENT_ID ||
+         eventType == DATA_MANAGER_WIDGET_EVENT_ID ||
+         eventType == DATA_MANAGER_EVENT_ID)
+      {
+         e->accept();
+         return true;
+      }
+   }
+
    switch(e->type())
    {
       case DATA_MANAGER_WIDGET_JOB_EVENT_ID:
@@ -3415,6 +7453,33 @@ bool	ossimGui::DataManagerWidget::event( QEvent * e )
                }
                case DataManagerWidgetEvent::COMMAND_REFRESH:
                {
+                  if(!wEvent->warningMessage().empty())
+                  {
+                     QMessageBox::warning(this,
+                                          wEvent->warningTitle().c_str(),
+                                          wEvent->warningMessage().c_str());
+                  }
+
+                  DataManagerWidgetEvent::HandlerListType& handlerList =
+                     wEvent->handlerList();
+                  DataManagerWidgetEvent::HandlerListType::iterator handlerIter =
+                     handlerList.begin();
+                  while(handlerIter != handlerList.end())
+                  {
+                     if((*handlerIter).valid())
+                     {
+                        (*handlerIter)->setImageGeometry(0);
+                        (*handlerIter)->getImageGeometry();
+                        ossimRefPtr<ossimRefreshEvent> refreshEvent =
+                           new ossimRefreshEvent(
+                              ossimRefreshEvent::REFRESH_GEOMETRY);
+                        ossimEventVisitor visitor(refreshEvent.get(),
+                                                  ossimVisitor::VISIT_ALL);
+                        (*handlerIter)->accept(visitor);
+                     }
+                     ++handlerIter;
+                  }
+
                   m_activeItemsMutex.lock();
                   DataManagerWidgetEvent::ItemListType& itemList = wEvent->itemList();
                   DataManagerWidgetEvent::ItemListType::iterator iter = itemList.begin();
@@ -3426,8 +7491,23 @@ bool	ossimGui::DataManagerWidget::event( QEvent * e )
                         if(connectable)
                         {
                            ossimRefPtr<ossimRefreshEvent> refreshEvent = new ossimRefreshEvent(ossimRefreshEvent::REFRESH_GEOMETRY);
-                           ossimEventVisitor visitor(refreshEvent.get());
+                           ossimEventVisitor visitor(refreshEvent.get(),
+                                                     ossimVisitor::VISIT_ALL);
                            connectable->accept(visitor);
+
+                           ossimConnectableObject::ConnectableObjectList& inputList =
+                              connectable->getInputList();
+                           ossim_uint32 inputIdx = 0;
+                           for(inputIdx = 0; inputIdx < inputList.size(); ++inputIdx)
+                           {
+                              if(inputList[inputIdx].valid())
+                              {
+                                 ossimEventVisitor inputVisitor(
+                                    refreshEvent.get(),
+                                    ossimVisitor::VISIT_ALL);
+                                 inputList[inputIdx]->accept(inputVisitor);
+                              }
+                           }
                         }
                      }
                      ++iter;
@@ -3579,6 +7659,20 @@ void ossimGui::DataManagerWidget::populateTreeWithNodes(DataManager::NodeListTyp
          m_activeItems.insert(item);
          m_activeItemsMutex.unlock();
       }
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+      else if(node->getObjectAs<ossimFixedRegistrationSource>() ||
+              node->getObjectAs<ossimBundleAdjustmentRegistrationSource>())
+      {
+         DataManagerRegistrationItem* item =
+            new DataManagerRegistrationItem(node.get());
+         item->setFlags(item->flags()|Qt::ItemIsEditable);
+         m_registrationSources->addChild(item);
+         item->refreshChildConnections();
+         m_activeItemsMutex.lock();
+         m_activeItems.insert(item);
+         m_activeItemsMutex.unlock();
+      }
+#endif
       else if(node->getObjectAs<ossimImageSource>()) // we will default to a raw source for now
       {
          DataManagerRawImageSourceItem* source = new DataManagerRawImageSourceItem(node.get());
@@ -3634,6 +7728,107 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
       connect(geotiffImageAction, SIGNAL(triggered(bool)), this, SLOT(createTiffWriter()));
       connect(jpegImageAction, SIGNAL(triggered(bool)), this, SLOT(createJpegWriter()));
       connect(factoryImageAction, SIGNAL(triggered(bool)), this, SLOT(createWriterFromFactory()));
+   }
+   else if(dynamic_cast<DataManagerRegistrationFolder*> (activeItem))
+   {
+      QMenu* registrationMenu = new QMenu("Registration");
+      QAction* setupAction = registrationMenu->addAction("Setup...");
+      registrationMenu->addSeparator();
+      QAction* fixedAction = registrationMenu->addAction(FIXED_AUTO_LABEL);
+      QAction* fixedOpenCvAction =
+         registrationMenu->addAction(FIXED_OPENCV_AUTO_LABEL);
+      QAction* fixedNativeAffineAction =
+         registrationMenu->addAction(FIXED_NATIVE_AFFINE_AUTO_LABEL);
+      QAction* bundleFloatingAction =
+         registrationMenu->addAction(BUNDLE_ALL_FLOATING_AUTO_LABEL);
+      QAction* bundleNativeAffineAction =
+         registrationMenu->addAction(BUNDLE_NATIVE_AFFINE_AUTO_LABEL);
+      QAction* bundleNativeAffineMatcherAutoAction =
+         registrationMenu->addAction(
+            BUNDLE_NATIVE_AFFINE_MATCHER_AUTO_LABEL);
+      QAction* bundleNativeAffineStripAction =
+         registrationMenu->addAction(BUNDLE_NATIVE_AFFINE_STRIP_AUTO_LABEL);
+      bundleNativeAffineAction->setToolTip(
+         "General native-affine bundle default for mixed overlap sets.");
+      bundleNativeAffineAction->setStatusTip(
+         "General native-affine bundle default for mixed overlap sets.");
+      bundleNativeAffineMatcherAutoAction->setToolTip(
+         "Native-affine bundle with automatic native matcher fallback selection.");
+      bundleNativeAffineMatcherAutoAction->setStatusTip(
+         "Native-affine bundle with automatic native matcher fallback selection.");
+      bundleNativeAffineStripAction->setToolTip(
+         "Use adjacent pairs when selected images are ordered along a strip or flightline.");
+      bundleNativeAffineStripAction->setStatusTip(
+         "Use adjacent pairs when selected images are ordered along a strip or flightline.");
+#ifndef OSSIM_AUTOREGISTRATION_ENABLED
+      setupAction->setEnabled(false);
+      fixedAction->setEnabled(false);
+      fixedOpenCvAction->setEnabled(false);
+      fixedNativeAffineAction->setEnabled(false);
+      bundleFloatingAction->setEnabled(false);
+      bundleNativeAffineAction->setEnabled(false);
+      bundleNativeAffineMatcherAutoAction->setEnabled(false);
+      bundleNativeAffineStripAction->setEnabled(false);
+#endif
+      menu->addMenu(registrationMenu);
+      connect(setupAction,
+              SIGNAL(triggered(bool)),
+              this,
+              SLOT(createRegistrationFromDialog()));
+      connect(fixedAction, SIGNAL(triggered(bool)), this, SLOT(createFixedRegistration()));
+      connect(fixedOpenCvAction,
+              SIGNAL(triggered(bool)),
+              this,
+              SLOT(createFixedOpenCvAutoRegistration()));
+      connect(fixedNativeAffineAction,
+              SIGNAL(triggered(bool)),
+              this,
+              SLOT(createFixedNativeAffineAutoRegistration()));
+      connect(bundleFloatingAction,
+              SIGNAL(triggered(bool)),
+              this,
+              SLOT(createBundleFloatingRegistration()));
+      connect(bundleNativeAffineAction,
+              SIGNAL(triggered(bool)),
+              this,
+              SLOT(createBundleNativeAffineAutoRegistration()));
+      connect(bundleNativeAffineMatcherAutoAction,
+              SIGNAL(triggered(bool)),
+              this,
+              SLOT(createBundleNativeAffineMatcherAutoRegistration()));
+      connect(bundleNativeAffineStripAction,
+              SIGNAL(triggered(bool)),
+              this,
+              SLOT(createBundleNativeAffineStripAutoRegistration()));
+   }
+   else if(dynamic_cast<DataManagerRegistrationItem*> (activeItem))
+   {
+      QAction* registerAction = menu->addAction("Register");
+      connect(registerAction, SIGNAL(triggered(bool)), this, SLOT(registerSelected()));
+      activeItem->setSelected(true);
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+      DataManagerRegistrationItem* registrationItem =
+         dynamic_cast<DataManagerRegistrationItem*> (activeItem);
+      ossimBundleAdjustmentRegistrationSource* bundleRegistration = 0;
+      if(registrationItem && registrationItem->objectAsNode())
+      {
+         bundleRegistration = registrationItem->objectAsNode()->
+            getObjectAs<ossimBundleAdjustmentRegistrationSource>();
+      }
+      if(bundleRegistration)
+      {
+         QAction* allFloatingAction = menu->addAction("All Images Float");
+         allFloatingAction->setCheckable(true);
+         allFloatingAction->setChecked(
+            bundleRegistration->allInputsFloating());
+         connect(allFloatingAction,
+                 SIGNAL(triggered(bool)),
+                 this,
+                 SLOT(setSelectedBundleAllFloating(bool)));
+      }
+#endif
+      QAction* deleteAction = menu->addAction("Delete");
+      connect(deleteAction, SIGNAL(triggered(bool)), this, SLOT(deleteSelected()));
    }
    else if(dynamic_cast<DataManagerImageWriterItem*> (activeItem))
    {
@@ -3728,6 +7923,73 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
       
      if(nImageChainSelections>0||nRawSourceSelections>0)
      {
+        QMenu* registrationMenu = new QMenu("Registration");
+        QAction* fixedRegistrationAction =
+           registrationMenu->addAction(FIXED_AUTO_LABEL);
+        QAction* fixedOpenCvAction =
+           registrationMenu->addAction(FIXED_OPENCV_AUTO_LABEL);
+        QAction* fixedNativeAffineAction =
+           registrationMenu->addAction(FIXED_NATIVE_AFFINE_AUTO_LABEL);
+        QAction* bundleRegistrationAction =
+           registrationMenu->addAction(BUNDLE_ALL_FLOATING_AUTO_LABEL);
+        QAction* bundleNativeAffineAction =
+           registrationMenu->addAction(BUNDLE_NATIVE_AFFINE_AUTO_LABEL);
+        QAction* bundleNativeAffineMatcherAutoAction =
+           registrationMenu->addAction(
+              BUNDLE_NATIVE_AFFINE_MATCHER_AUTO_LABEL);
+        QAction* bundleNativeAffineStripAction =
+           registrationMenu->addAction(BUNDLE_NATIVE_AFFINE_STRIP_AUTO_LABEL);
+        bundleNativeAffineAction->setToolTip(
+           "General native-affine bundle default for mixed overlap sets.");
+        bundleNativeAffineAction->setStatusTip(
+           "General native-affine bundle default for mixed overlap sets.");
+        bundleNativeAffineMatcherAutoAction->setToolTip(
+           "Native-affine bundle with automatic native matcher fallback selection.");
+        bundleNativeAffineMatcherAutoAction->setStatusTip(
+           "Native-affine bundle with automatic native matcher fallback selection.");
+        bundleNativeAffineStripAction->setToolTip(
+           "Use adjacent pairs when selected images are ordered along a strip or flightline.");
+        bundleNativeAffineStripAction->setStatusTip(
+           "Use adjacent pairs when selected images are ordered along a strip or flightline.");
+#ifndef OSSIM_AUTOREGISTRATION_ENABLED
+        fixedRegistrationAction->setEnabled(false);
+        fixedOpenCvAction->setEnabled(false);
+        fixedNativeAffineAction->setEnabled(false);
+        bundleRegistrationAction->setEnabled(false);
+        bundleNativeAffineAction->setEnabled(false);
+        bundleNativeAffineMatcherAutoAction->setEnabled(false);
+        bundleNativeAffineStripAction->setEnabled(false);
+#endif
+        menu->addMenu(registrationMenu);
+        connect(fixedRegistrationAction,
+                SIGNAL(triggered(bool)),
+                this,
+                SLOT(createFixedRegistrationFromSelection()));
+        connect(fixedOpenCvAction,
+                SIGNAL(triggered(bool)),
+                this,
+                SLOT(createFixedOpenCvAutoRegistrationFromSelection()));
+        connect(fixedNativeAffineAction,
+                SIGNAL(triggered(bool)),
+                this,
+                SLOT(createFixedNativeAffineAutoRegistrationFromSelection()));
+        connect(bundleRegistrationAction,
+                SIGNAL(triggered(bool)),
+                this,
+                SLOT(createBundleFloatingRegistrationFromSelection()));
+        connect(bundleNativeAffineAction,
+                SIGNAL(triggered(bool)),
+                this,
+                SLOT(createBundleNativeAffineAutoRegistrationFromSelection()));
+        connect(bundleNativeAffineMatcherAutoAction,
+                SIGNAL(triggered(bool)),
+                this,
+                SLOT(createBundleNativeAffineMatcherAutoRegistrationFromSelection()));
+        connect(bundleNativeAffineStripAction,
+                SIGNAL(triggered(bool)),
+                this,
+                SLOT(createBundleNativeAffineStripAutoRegistrationFromSelection()));
+
         if(nRawSourceSelections>0)
         {
            QMenu* chainMenu = new QMenu("Chains");

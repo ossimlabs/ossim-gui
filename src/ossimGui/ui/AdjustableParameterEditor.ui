@@ -69,6 +69,11 @@
      </column>
      <column>
       <property name="text">
+       <string>Lock</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
        <string>Sigma</string>
       </property>
      </column>
@@ -135,6 +140,16 @@
       <widget class="QPushButton" name="m_resetButton">
        <property name="text">
         <string>Reset</string>
+       </property>
+       <property name="autoDefault">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="m_modelDefaultsButton">
+       <property name="text">
+        <string>Model Defaults</string>
        </property>
        <property name="autoDefault">
         <bool>false</bool>

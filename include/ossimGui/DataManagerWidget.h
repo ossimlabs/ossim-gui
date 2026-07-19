@@ -10,6 +10,7 @@
 #include <QtCore/QModelIndex>
 #include <QCheckBox>
 #include <QComboBox>
+#include <atomic>
 //#include <QProgressBar>
 #include <ossimGui/Export.h>
 #include <ossimGui/Event.h>
@@ -347,6 +348,21 @@ namespace ossimGui{
    public:
       DataManagerDisplayFolder();
    };
+
+   class OSSIMGUI_DLL DataManagerRegistrationItem : public DataManagerNodeItem
+   {
+   public:
+      DataManagerRegistrationItem(DataManager::Node* node=0);
+      virtual ~DataManagerRegistrationItem();
+      virtual void dropItems(QList<DataManagerItem*>& chainItemList);
+      virtual void execute();
+   };
+
+   class OSSIMGUI_DLL DataManagerRegistrationFolder : public DataManagerFolder
+   {
+   public:
+      DataManagerRegistrationFolder();
+   };
    
    class OSSIMGUI_DLL DataManagerImageWriterItem : public DataManagerNodeItem
    {
@@ -387,6 +403,7 @@ namespace ossimGui{
       virtual ~DataManagerJobItem();
       virtual void setJob(std::shared_ptr<ossimJob> job);
       virtual void cancel();
+      virtual void prepareForShutdown();
       void setPercentComplete(double value)
       {
          if(m_progressBar)
@@ -409,6 +426,7 @@ namespace ossimGui{
          virtual void idChanged(const ossimString& id, std::shared_ptr<ossimJob> job);
          
          virtual void percentCompleteChanged(double percentValue, std::shared_ptr<ossimJob> job);
+         void detach(){m_jobItem = 0;}
          
          DataManagerJobItem* m_jobItem;
       };
@@ -429,6 +447,7 @@ namespace ossimGui{
       DataManagerJobsFolder(QTreeWidgetItem* parent);
       virtual ~DataManagerJobsFolder();
       void setQueue(std::shared_ptr<ossimJobQueue> q);
+      void prepareForShutdown();
       void removeStoppedJobs();
       void addJob(std::shared_ptr<ossimJob> job)
       {
@@ -539,6 +558,7 @@ namespace ossimGui{
          virtual void added(std::shared_ptr<ossimJobQueue> /*q*/, 
                             std::shared_ptr<ossimJob> /*job*/)
          {}
+         void detach(){m_folder = 0;}
          
          DataManagerJobsFolder* m_folder;
       };
@@ -555,6 +575,7 @@ namespace ossimGui{
    public:
       friend class DataManagerNodeItem;
       DataManagerWidget(QWidget* parent=0);
+      virtual ~DataManagerWidget();
       
       //virtual void setDataManager(ossimRefPtr<DataManager> manager);
       DataManager* dataManager(){return m_dataManager.get();}
@@ -566,6 +587,9 @@ namespace ossimGui{
       std::shared_ptr<ossimJobQueue> jobQueue(){return m_jobQueue;}
       std::shared_ptr<ossimJobQueue> displayQueue(){return m_displayQueue;}
       void setDisplayQueue(std::shared_ptr<ossimJobQueue> q){m_displayQueue = q;}
+      void prepareForShutdown();
+      bool isPreparingForShutdown()const;
+      std::shared_ptr<std::atomic_bool> shutdownRequested()const{return m_shutdownRequested;}
       bool openDataManager(const ossimFilename& file);
       void refresh();
       QModelIndex indexFromDataManagerItem(DataManagerItem* item, int col=0);
@@ -632,6 +656,24 @@ namespace ossimGui{
       virtual void createTiffWriter();
       virtual void createJpegWriter();
       virtual void createWriterFromFactory();
+
+      virtual void createFixedRegistration();
+      virtual void createFixedOpenCvAutoRegistration();
+      virtual void createFixedNativeAffineAutoRegistration();
+      virtual void createBundleFloatingRegistration();
+      virtual void createBundleNativeAffineAutoRegistration();
+      virtual void createBundleNativeAffineMatcherAutoRegistration();
+      virtual void createBundleNativeAffineStripAutoRegistration();
+      virtual void createFixedRegistrationFromSelection();
+      virtual void createFixedOpenCvAutoRegistrationFromSelection();
+      virtual void createFixedNativeAffineAutoRegistrationFromSelection();
+      virtual void createBundleFloatingRegistrationFromSelection();
+      virtual void createBundleNativeAffineAutoRegistrationFromSelection();
+      virtual void createBundleNativeAffineMatcherAutoRegistrationFromSelection();
+      virtual void createBundleNativeAffineStripAutoRegistrationFromSelection();
+      virtual void createRegistrationFromDialog();
+      virtual void setSelectedBundleAllFloating(bool enabled);
+      virtual void registerSelected();
       
       virtual void executeSelected();
       
@@ -722,6 +764,25 @@ namespace ossimGui{
       
       void combineImagesWithType(const QString& classType);
       void createWriterFromType(const QString& classType);
+      DataManagerRegistrationItem* createDefaultFixedRegistrationItem();
+      DataManagerRegistrationItem*
+         createDefaultFixedOpenCvAutoRegistrationItem();
+      DataManagerRegistrationItem*
+         createDefaultFixedNativeAffineAutoRegistrationItem();
+      DataManagerRegistrationItem*
+         createDefaultBundleFloatingRegistrationItem();
+      DataManagerRegistrationItem*
+         createDefaultBundleNativeAffineAutoRegistrationItem(
+            std::size_t bundleNeighborSpan = 0,
+            const QString& nodeName =
+               QString("Bundle Native Affine Auto"),
+            const std::string& launchPreset =
+               std::string("native_affine_auto"),
+            bool autoPairPolicy = false,
+            bool nativeMatcherAuto = false);
+      QList<DataManagerItem*> selectedRegistrationInputItems() const;
+      void connectAndExecuteSelectedRegistration(
+         DataManagerRegistrationItem* item);
       virtual void incrementScrollBars(const QPoint& pos);
       
       /***************************** QT events **************************/
@@ -746,6 +807,7 @@ namespace ossimGui{
       std::shared_ptr<DataManagerCallback> m_dataManagerCallback;
       std::shared_ptr<ossimJobQueue>       m_jobQueue;
       std::shared_ptr<ossimJobQueue>       m_displayQueue;
+      std::shared_ptr<std::atomic_bool>    m_shutdownRequested;
 
       DataManagerImageFolder*          m_rootImageFolder;
       DataManagerJobsFolder*           m_rootJobsFolder;
@@ -753,6 +815,7 @@ namespace ossimGui{
       DataManagerImageChainFolder*     m_imageChains;
      // DataManagerImageOutputFolder*    m_imageOutput;
       DataManagerDisplayFolder*        m_imageDisplays;
+      DataManagerRegistrationFolder*   m_registrationSources;
       DataManagerImageWriterFolder*    m_imageWriters;
       
       QPoint m_dragStartPosition;

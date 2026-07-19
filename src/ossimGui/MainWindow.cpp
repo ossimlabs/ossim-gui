@@ -13,12 +13,17 @@
 #include <QMessageBox>
 #include <QMimeData>
 #include <QUrl>
+#include <QCloseEvent>
+#include <QEventLoop>
 
 #include <ossim/ossimVersion.h>
 #include <ossim/imaging/ossimImageHandlerRegistry.h>
 #include <ossim/imaging/ossimImageSource.h>
 #include <ossimGui/Common.h>
 #include <ossimGui/OpenImageUrlJob.h>
+#include <atomic>
+#include <chrono>
+#include <thread>
 
 class ossimImageOpenJobCallback : public ossimJobCallback
 {
@@ -68,6 +73,43 @@ ossimGui::MainWindow::MainWindow(QWidget* parent)
    m_dataManager->setMdiArea(m_mdiArea);
    m_dataManagerWidget->setJobQueue(m_stagerQueue->getJobQueue());
    // createModeSelector(toolbar);
+}
+
+ossimGui::MainWindow::~MainWindow()
+{
+   shutdownJobQueues();
+}
+
+void ossimGui::MainWindow::shutdownJobQueues()
+{
+   if(m_dataManagerWidget)
+   {
+      m_dataManagerWidget->prepareForShutdown();
+   }
+   if(m_stagerQueue)
+   {
+      std::shared_ptr<ossimJobMultiThreadQueue> stagerQueue = m_stagerQueue;
+      m_stagerQueue.reset();
+      std::atomic_bool queueStopped(false);
+      std::thread shutdownThread([stagerQueue, &queueStopped]() {
+         stagerQueue->cancel();
+         stagerQueue->waitForCompletion();
+         queueStopped.store(true);
+      });
+      while(!queueStopped.load())
+      {
+         QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+         std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      }
+      shutdownThread.join();
+   }
+   QCoreApplication::removePostedEvents(this);
+}
+
+void ossimGui::MainWindow::closeEvent(QCloseEvent* event)
+{
+   shutdownJobQueues();
+   QMainWindow::closeEvent(event);
 }
 
 void ossimGui::MainWindow::setViewMode(DataManager::ViewModeType mode)

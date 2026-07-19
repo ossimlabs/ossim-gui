@@ -57,16 +57,19 @@ namespace ossimGui
    class OSSIMGUI_DLL DataManagerProperty : public QStandardItem
    {
    public:
-      DataManagerProperty():QStandardItem(){}
-      DataManagerProperty(const QString& value, ossimRefPtr<ossimProperty> property=ossimRefPtr<ossimProperty>()):QStandardItem(value){setProperty(property.get());}
+      DataManagerProperty():QStandardItem(),m_editorActive(false){}
+      DataManagerProperty(const QString& value, ossimRefPtr<ossimProperty> property=ossimRefPtr<ossimProperty>()):QStandardItem(value),m_editorActive(false){setProperty(property.get());}
       virtual void setProperty(ossimRefPtr<ossimProperty> property);
       virtual void populateChildren();
       ossimProperty* property(){return m_property.get();}
       const ossimProperty* property()const{return m_property.get();}
       DataManagerProperty* rootProperty();
+      bool editorActive()const{return m_editorActive;}
+      void setEditorActive(bool flag){m_editorActive = flag;}
    protected:
       void addProperty(ossimRefPtr<ossimProperty> property);
       ossimRefPtr<ossimProperty>  m_property;
+      bool m_editorActive;
    };
 
    class OSSIMGUI_DLL DataManagerPropertyView : public QTreeView
@@ -91,6 +94,8 @@ namespace ossimGui
       public slots:
       void	expanded ( const QModelIndex & idx );
       void	collapsed ( const QModelIndex & index );
+      void	commitModelDataChanged ( const QModelIndex& topLeft,
+                                      const QModelIndex& bottomRight );
       
    protected:
       virtual void	mousePressEvent ( QMouseEvent * event );
