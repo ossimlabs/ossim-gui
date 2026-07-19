@@ -1663,6 +1663,16 @@ namespace
           << refinement.status() << "\n";
       out << "bundle_edge_refinement_reason: "
           << refinement.reason() << "\n";
+      out << "bundle_edge_refinement_candidate_selection_reason: "
+          << refinement.candidateSelectionReason() << "\n";
+      out << "bundle_edge_refinement_candidate_matcher_count: "
+          << refinement.candidateMatcherTypes().size() << "\n";
+      for(std::size_t idx = 0;
+          idx < refinement.candidateMatcherTypes().size(); ++idx)
+      {
+         out << "bundle_edge_refinement_candidate_matcher[" << idx << "]: "
+             << refinement.candidateMatcherTypes()[idx] << "\n";
+      }
       if(!refinement.eligible() && !refinement.attempted())
       {
          return;
