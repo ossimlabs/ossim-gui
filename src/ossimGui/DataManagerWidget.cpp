@@ -430,6 +430,12 @@ namespace
    void appendBundleStripEdgeQualityAdvisory(
       std::ostream& out,
       const ossim_autoreg::BundleStripEdgeQualityAdvisory& advisory);
+   void appendBundleEdgeRegistrationValueAdvisory(
+      std::ostream& out,
+      const ossim_autoreg::BundleEdgeRegistrationValueAdvisory& advisory);
+   void appendBundleEdgeRefinement(
+      std::ostream& out,
+      const ossim_autoreg::BundleEdgeRefinementResult& refinement);
 
    std::string bundleRegistrationAcceptanceTier(
       const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
@@ -1239,6 +1245,10 @@ namespace
       appendBundleStripEdgeQualityAdvisory(
          out,
          result.stripEdgeQualityAdvisory());
+      appendBundleEdgeRegistrationValueAdvisory(
+         out,
+         result.edgeRegistrationValueAdvisory());
+      appendBundleEdgeRefinement(out, result.edgeRefinement());
       if(source)
       {
          const ossim_autoreg::AutoRegistrationOptions options =
@@ -1359,6 +1369,58 @@ namespace
              << (pair.executionPath().empty()
                     ? std::string("unspecified")
                     : pair.executionPath()) << "\n";
+         const ossim_autoreg::BundlePairResidualSummary& initialResidual =
+            pair.initialResidualSummary();
+         const ossim_autoreg::BundlePairResidualSummary& finalResidual =
+            pair.residualSummary();
+         const ossim_autoreg::TiePointRegistrationValueAdvisory&
+            valueAdvisory = pair.registrationValueAdvisory();
+         out << "pair[" << idx << "].initial_residual_valid: "
+             << initialResidual.validResidualCount() << "\n";
+         if(initialResidual.validResidualCount())
+         {
+            out << "pair[" << idx << "].initial_residual_rms_pixels: "
+                << initialResidual.rmsPixels() << "\n";
+            out << "pair[" << idx << "].initial_residual_median_pixels: "
+                << initialResidual.medianPixels() << "\n";
+            out << "pair[" << idx << "].initial_residual_max_pixels: "
+                << initialResidual.maxPixels() << "\n";
+         }
+         out << "pair[" << idx << "].final_residual_valid: "
+             << finalResidual.validResidualCount() << "\n";
+         if(finalResidual.validResidualCount())
+         {
+            out << "pair[" << idx << "].final_residual_rms_pixels: "
+                << finalResidual.rmsPixels() << "\n";
+            out << "pair[" << idx << "].final_residual_median_pixels: "
+                << finalResidual.medianPixels() << "\n";
+            out << "pair[" << idx << "].final_residual_max_pixels: "
+                << finalResidual.maxPixels() << "\n";
+         }
+         out << "pair[" << idx << "].registration_value_advisory_valid: "
+             << (valueAdvisory.valid() ? "true" : "false") << "\n";
+         out << "pair[" << idx << "].registration_value_advisory: "
+             << valueAdvisory.status() << "\n";
+         out << "pair[" << idx << "].registration_value_reason: "
+             << valueAdvisory.reason() << "\n";
+         if(std::isfinite(valueAdvisory.improvementPixels()))
+         {
+            out << "pair[" << idx
+                << "].registration_value_improvement_pixels: "
+                << valueAdvisory.improvementPixels() << "\n";
+         }
+         if(std::isfinite(valueAdvisory.improvementRatio()))
+         {
+            out << "pair[" << idx
+                << "].registration_value_improvement_ratio: "
+                << valueAdvisory.improvementRatio() << "\n";
+         }
+         if(std::isfinite(valueAdvisory.finalToInitialRatio()))
+         {
+            out << "pair[" << idx
+                << "].registration_value_final_to_initial_ratio: "
+                << valueAdvisory.finalToInitialRatio() << "\n";
+         }
          appendDenseAlternateReport(
             out,
             std::string("pair[") +
@@ -1538,6 +1600,104 @@ namespace
           << advisory.worstTiePointCount() << "\n";
       out << "bundle_strip_edge_required_tie_points: "
           << advisory.requiredTiePointCount() << "\n";
+   }
+
+   void appendBundleEdgeRegistrationValueAdvisory(
+      std::ostream& out,
+      const ossim_autoreg::BundleEdgeRegistrationValueAdvisory& advisory)
+   {
+      out << "bundle_edge_value_valid: "
+          << (advisory.valid() ? "true" : "false") << "\n";
+      out << "bundle_edge_value_advisory: "
+          << advisory.status() << "\n";
+      out << "bundle_edge_value_reason: "
+          << advisory.reason() << "\n";
+      if(advisory.valid())
+      {
+         out << "bundle_edge_value_worst_edge: input["
+             << advisory.worstFinalFirstImageIndex() << "] -> input["
+             << advisory.worstFinalSecondImageIndex() << "]\n";
+         if(std::isfinite(advisory.worstFinalRmsPixels()))
+         {
+            out << "bundle_edge_value_worst_rms_pixels: "
+                << advisory.worstFinalRmsPixels() << "\n";
+         }
+         if(std::isfinite(advisory.worstFinalToBundleRatio()))
+         {
+            out << "bundle_edge_value_worst_to_bundle_ratio: "
+                << advisory.worstFinalToBundleRatio() << "\n";
+         }
+         if(std::isfinite(advisory.finalResidualWatchThresholdPixels()))
+         {
+            out << "bundle_edge_value_watch_threshold_pixels: "
+                << advisory.finalResidualWatchThresholdPixels() << "\n";
+         }
+      }
+      out << "bundle_edge_value_weakest_valid: "
+          << (advisory.weakestValueValid() ? "true" : "false") << "\n";
+      if(advisory.weakestValueValid())
+      {
+         out << "bundle_edge_value_weakest_edge: input["
+             << advisory.weakestFirstImageIndex() << "] -> input["
+             << advisory.weakestSecondImageIndex() << "]\n";
+         out << "bundle_edge_value_weakest_advisory: "
+             << advisory.weakestValue().status() << "\n";
+         out << "bundle_edge_value_weakest_reason: "
+             << advisory.weakestValue().reason() << "\n";
+         out << "bundle_edge_value_weakest_improvement_ratio: "
+             << advisory.weakestValue().improvementRatio() << "\n";
+      }
+   }
+
+   void appendBundleEdgeRefinement(
+      std::ostream& out,
+      const ossim_autoreg::BundleEdgeRefinementResult& refinement)
+   {
+      out << "bundle_edge_refinement_eligible: "
+          << (refinement.eligible() ? "true" : "false") << "\n";
+      out << "bundle_edge_refinement_attempted: "
+          << (refinement.attempted() ? "true" : "false") << "\n";
+      out << "bundle_edge_refinement_accepted: "
+          << (refinement.accepted() ? "true" : "false") << "\n";
+      out << "bundle_edge_refinement_status: "
+          << refinement.status() << "\n";
+      out << "bundle_edge_refinement_reason: "
+          << refinement.reason() << "\n";
+      if(!refinement.eligible() && !refinement.attempted())
+      {
+         return;
+      }
+      out << "bundle_edge_refinement_edge: input["
+          << refinement.firstImageIndex() << "] -> input["
+          << refinement.secondImageIndex() << "]\n";
+      out << "bundle_edge_refinement_matcher_type: "
+          << (refinement.matcherType().empty()
+                 ? std::string("none")
+                 : refinement.matcherType()) << "\n";
+      out << "bundle_edge_refinement_original_ties: "
+          << refinement.originalTiePointCount() << "\n";
+      out << "bundle_edge_refinement_candidate_ties: "
+          << refinement.candidateTiePointCount() << "\n";
+      if(std::isfinite(refinement.initialEdgeRmsPixels()))
+      {
+         out << "bundle_edge_refinement_initial_edge_rms_pixels: "
+             << refinement.initialEdgeRmsPixels() << "\n";
+      }
+      if(std::isfinite(refinement.candidateEdgeRmsPixels()))
+      {
+         out << "bundle_edge_refinement_candidate_edge_rms_pixels: "
+             << refinement.candidateEdgeRmsPixels() << "\n";
+      }
+      if(std::isfinite(refinement.initialBundleRmsPixels()))
+      {
+         out << "bundle_edge_refinement_initial_bundle_rms_pixels: "
+             << refinement.initialBundleRmsPixels() << "\n";
+      }
+      if(std::isfinite(refinement.candidateBundleRmsPixels()))
+      {
+         out << "bundle_edge_refinement_candidate_bundle_rms_pixels: "
+             << refinement.candidateBundleRmsPixels() << "\n";
+      }
    }
 
    struct RegistrationSetupOptions
