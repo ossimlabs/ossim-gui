@@ -96,6 +96,8 @@ All notable changes to `ossim-gui` are documented here.
 > should be much less exciting. Adjustable parameters can now be locked and
 > unlocked directly from GeoCell, so that persistent flag no longer requires
 > a side quest outside the dialog.
+> Bundle reports now show the same per-edge value and guarded weakest-edge
+> refinement evidence as the CLI, without teaching GeoCell any algorithms.
 
 ### Fixed
 - Prevent GeoCell shutdown crashes when a registration, image-open, or staging
@@ -104,6 +106,8 @@ All notable changes to `ossim-gui` are documented here.
   main window close path (`06576ee`).
 
 ### Added
+- Show shared bundle pair residual-value and bounded weakest-edge refinement
+  diagnostics in GeoCell quality reports (`9a1a57c`).
 - Add a `Lock` checkbox column to the Adjustable Parameter dialog so GeoCell
   users can toggle each parameter lock flag and persist the change through the
   existing OSSIM adjustment interface (`708edb2`).
