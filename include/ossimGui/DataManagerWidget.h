@@ -23,6 +23,8 @@
 #include <ossim/parallel/ossimJobQueue.h>
 #include <QApplication>
 class QMainWindow;
+class QLabel;
+class QPlainTextEdit;
 
 class ossimSensorModelTuple;
 
@@ -356,6 +358,16 @@ namespace ossimGui{
       virtual ~DataManagerRegistrationItem();
       virtual void dropItems(QList<DataManagerItem*>& chainItemList);
       virtual void execute();
+      void setRegistrationReport(const std::string& reportText,
+                                 const std::string& reportPath);
+      void showRegistrationReport();
+
+   protected:
+      QTreeWidgetItem* m_reportItem;
+      QPlainTextEdit* m_reportPreview;
+      QLabel* m_reportPathLabel;
+      QString m_reportText;
+      QString m_reportPath;
    };
 
    class OSSIMGUI_DLL DataManagerRegistrationFolder : public DataManagerFolder
@@ -791,6 +803,7 @@ namespace ossimGui{
       virtual void	dragLeaveEvent ( QDragLeaveEvent * event );
       virtual void	dragMoveEvent ( QDragMoveEvent * event );
       virtual void	dropEvent ( QDropEvent * event );
+      void contextMenuEvent(QContextMenuEvent* e);
       void keyPressEvent ( QKeyEvent * e);
       void mousePressEvent(QMouseEvent *e);
       void mouseMoveEvent(QMouseEvent *e);

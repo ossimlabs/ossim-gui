@@ -23,6 +23,7 @@
 #include <ossim/imaging/ossimImageSourceFactoryRegistry.h>
 #include <ossim/imaging/ossimOverviewBuilderFactoryRegistry.h>
 #include <QMainWindow>
+#include <QContextMenuEvent>
 #include <QDragEnterEvent>
 #include <QMessageBox>
 #include <QItemDelegate>
@@ -36,6 +37,7 @@
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QGroupBox>
+#include <QHBoxLayout>
 #include <QToolBar>
 #include <QItemDelegate>
 #include <QComboBox>
@@ -46,6 +48,9 @@
 #include <QTableWidget>
 #include <QMessageBox>
 #include <QMetaObject>
+#include <QLabel>
+#include <QPlainTextEdit>
+#include <QPushButton>
 #include <QUrl>
 #include <QVBoxLayout>
 #include <QStandardItemModel>
@@ -2624,6 +2629,8 @@ namespace ossimGui
       bool success()const{return m_success;}
       const ossimString& resultSummary()const{return m_resultSummary;}
       const ossimString& advisorySummary()const{return m_advisorySummary;}
+      const std::string& reportText()const{return m_reportText;}
+      const ossimFilename& reportPath()const{return m_reportPath;}
       const DataManagerWidgetEvent::HandlerListType& sourceHandlersToReload()const
       {
          return m_sourceHandlersToReload;
@@ -3021,22 +3028,23 @@ namespace ossimGui
                   m_resultSummary += m_launchSettings.c_str();
                }
             }
-            const ossimFilename reportPath =
+            m_reportPath =
                registrationQualityReportPath(m_label, "fixed-registration");
+            m_reportText = fixedRegistrationQualityReportText(
+               m_label,
+               m_resultSummary,
+               m_launchInputStatus,
+               m_launchSettings,
+               m_success,
+               results,
+               writtenGeometryFiles,
+               failedGeometryFiles);
             const bool wroteReport = writeRegistrationQualityReport(
-               reportPath,
-               fixedRegistrationQualityReportText(
-                  m_label,
-                  m_resultSummary,
-                  m_launchInputStatus,
-                  m_launchSettings,
-                  m_success,
-                  results,
-                  writtenGeometryFiles,
-                  failedGeometryFiles));
+               m_reportPath,
+               m_reportText);
             appendRegistrationQualityReportStatus(
                m_resultSummary,
-               reportPath,
+               m_reportPath,
                wroteReport);
             setDescription(m_resultSummary);
             if(isCanceled())
@@ -3067,6 +3075,8 @@ namespace ossimGui
       mutable std::string m_lastGeometryProgress;
       ossimString m_resultSummary;
       ossimString m_advisorySummary;
+      std::string m_reportText;
+      ossimFilename m_reportPath;
       DataManagerWidgetEvent::HandlerListType m_sourceHandlersToReload;
       bool m_success;
    };
@@ -3100,6 +3110,8 @@ namespace ossimGui
       bool success()const{return m_success;}
       const ossimString& resultSummary()const{return m_resultSummary;}
       const ossimString& advisorySummary()const{return m_advisorySummary;}
+      const std::string& reportText()const{return m_reportText;}
+      const ossimFilename& reportPath()const{return m_reportPath;}
       const DataManagerWidgetEvent::HandlerListType& sourceHandlersToReload()const
       {
          return m_sourceHandlersToReload;
@@ -3366,20 +3378,21 @@ namespace ossimGui
             }
             m_advisorySummary = bundleRegistrationAdvisorySummary(result);
 
-            const ossimFilename reportPath =
+            m_reportPath =
                registrationQualityReportPath(m_label, "bundle-registration");
+            m_reportText = bundleRegistrationQualityReportText(
+               m_label,
+               m_resultSummary,
+               m_success,
+               m_registrationSource.get(),
+               result,
+               writtenGeometryFiles);
             const bool wroteReport = writeRegistrationQualityReport(
-               reportPath,
-               bundleRegistrationQualityReportText(
-                  m_label,
-                  m_resultSummary,
-                  m_success,
-                  m_registrationSource.get(),
-                  result,
-                  writtenGeometryFiles));
+               m_reportPath,
+               m_reportText);
             appendRegistrationQualityReportStatus(
                m_resultSummary,
-               reportPath,
+               m_reportPath,
                wroteReport);
 
             setDescription(m_resultSummary);
@@ -3412,6 +3425,8 @@ namespace ossimGui
       ossimString m_label;
       ossimString m_resultSummary;
       ossimString m_advisorySummary;
+      std::string m_reportText;
+      ossimFilename m_reportPath;
       DataManagerWidgetEvent::HandlerListType m_sourceHandlersToReload;
       bool m_success;
    };
@@ -3445,6 +3460,11 @@ namespace ossimGui
             if(registrationJob)
             {
                evt->setHandlerList(registrationJob->sourceHandlersToReload());
+               evt->setRegistrationReport(
+                  registrationJob->reportText().empty()
+                     ? registrationJob->resultSummary().string()
+                     : registrationJob->reportText(),
+                  registrationJob->reportPath().string());
                if(!registrationJob->success())
                {
                   evt->setWarningMessage(
@@ -3463,6 +3483,11 @@ namespace ossimGui
             if(bundleJob)
             {
                evt->setHandlerList(bundleJob->sourceHandlersToReload());
+               evt->setRegistrationReport(
+                  bundleJob->reportText().empty()
+                     ? bundleJob->resultSummary().string()
+                     : bundleJob->reportText(),
+                  bundleJob->reportPath().string());
                if(!bundleJob->success())
                {
                   evt->setWarningMessage(
@@ -4029,7 +4054,10 @@ ossimGui::DataManagerRegistrationFolder::DataManagerRegistrationFolder()
 
 ossimGui::DataManagerRegistrationItem::DataManagerRegistrationItem(
    DataManager::Node* node)
-:DataManagerNodeItem(node)
+:DataManagerNodeItem(node),
+ m_reportItem(0),
+ m_reportPreview(0),
+ m_reportPathLabel(0)
 {
    m_autoDelete = false;
 }
@@ -4047,6 +4075,115 @@ void ossimGui::DataManagerRegistrationItem::dropItems(
       setExpanded(true);
       m_inputConnectionFolder->setExpanded(true);
    }
+}
+
+void ossimGui::DataManagerRegistrationItem::setRegistrationReport(
+   const std::string& reportText,
+   const std::string& reportPath)
+{
+   m_reportText = QString::fromStdString(reportText);
+   m_reportPath = QString::fromStdString(reportPath);
+
+   if(!m_reportItem)
+   {
+      m_reportItem = new QTreeWidgetItem();
+      m_reportItem->setText(0, "Registration Report");
+      m_reportItem->setSizeHint(0, QSize(720, 285));
+      addChild(m_reportItem);
+
+      QWidget* reportWidget = new QWidget(treeWidget());
+      QVBoxLayout* reportLayout = new QVBoxLayout(reportWidget);
+      reportLayout->setContentsMargins(6, 6, 6, 6);
+
+      QHBoxLayout* headingLayout = new QHBoxLayout();
+      QLabel* heading = new QLabel("Registration Report", reportWidget);
+      QFont headingFont = heading->font();
+      headingFont.setBold(true);
+      heading->setFont(headingFont);
+      headingLayout->addWidget(heading);
+      headingLayout->addStretch();
+
+      QPushButton* openButton =
+         new QPushButton("Open Full Report...", reportWidget);
+      QObject::connect(openButton,
+                       &QPushButton::clicked,
+                       [this]() { showRegistrationReport(); });
+      headingLayout->addWidget(openButton);
+      reportLayout->addLayout(headingLayout);
+
+      m_reportPathLabel = new QLabel(reportWidget);
+      m_reportPathLabel->setTextInteractionFlags(
+         Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
+      m_reportPathLabel->setWordWrap(true);
+      reportLayout->addWidget(m_reportPathLabel);
+
+      m_reportPreview = new QPlainTextEdit(reportWidget);
+      m_reportPreview->setReadOnly(true);
+      m_reportPreview->setLineWrapMode(QPlainTextEdit::NoWrap);
+      QFont reportFont = m_reportPreview->font();
+      reportFont.setFamily("monospace");
+      reportFont.setStyleHint(QFont::TypeWriter);
+      m_reportPreview->setFont(reportFont);
+      reportLayout->addWidget(m_reportPreview);
+
+      if(dataManagerWidget())
+      {
+         dataManagerWidget()->setItemWidget(m_reportItem, 0, reportWidget);
+      }
+   }
+
+   if(m_reportPathLabel)
+   {
+      const QString pathText = m_reportPath.isEmpty()
+         ? QString("Report retained with this registration object")
+         : QString("Report file: %1").arg(m_reportPath);
+      m_reportPathLabel->setText(pathText);
+      m_reportPathLabel->setToolTip(m_reportPath);
+   }
+   if(m_reportPreview)
+   {
+      m_reportPreview->setPlainText(m_reportText);
+      m_reportPreview->moveCursor(QTextCursor::Start);
+   }
+   setExpanded(true);
+}
+
+void ossimGui::DataManagerRegistrationItem::showRegistrationReport()
+{
+   QDialog* dialog = new QDialog(treeWidget());
+   dialog->setAttribute(Qt::WA_DeleteOnClose);
+   dialog->setWindowTitle(
+      QString("Registration Report - %1").arg(text(0)));
+
+   QVBoxLayout* layout = new QVBoxLayout(dialog);
+   if(!m_reportPath.isEmpty())
+   {
+      QLabel* pathLabel =
+         new QLabel(QString("Report file: %1").arg(m_reportPath), dialog);
+      pathLabel->setTextInteractionFlags(
+         Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
+      pathLabel->setWordWrap(true);
+      layout->addWidget(pathLabel);
+   }
+
+   QPlainTextEdit* reportView = new QPlainTextEdit(dialog);
+   reportView->setReadOnly(true);
+   reportView->setLineWrapMode(QPlainTextEdit::NoWrap);
+   reportView->setPlainText(m_reportText);
+   QFont reportFont = reportView->font();
+   reportFont.setFamily("monospace");
+   reportFont.setStyleHint(QFont::TypeWriter);
+   reportView->setFont(reportFont);
+   layout->addWidget(reportView);
+
+   QDialogButtonBox* buttons =
+      new QDialogButtonBox(QDialogButtonBox::Close, dialog);
+   QObject::connect(buttons, &QDialogButtonBox::rejected,
+                    dialog, &QDialog::close);
+   layout->addWidget(buttons);
+
+   dialog->resize(960, 700);
+   dialog->show();
 }
 
 void ossimGui::DataManagerRegistrationItem::execute()
@@ -5492,28 +5629,46 @@ void ossimGui::DataManagerWidget::mousePressEvent(QMouseEvent *e)
 {
    QTreeWidget::mousePressEvent(e);
    QTreeWidgetItem* itemSelected = itemAt(e->pos());
-   bool dropDownMenuFlag = (e->buttons() & Qt::RightButton) ||
-                          ((e->buttons() & Qt::LeftButton) &&
-                           (e->modifiers()&Qt::MetaModifier));
-   if(itemSelected) itemSelected->setSelected(true);
-   if(dropDownMenuFlag)
-   {
-      QList<DataManagerItem*> items = grabSelectedChildItemsOfType<DataManagerItem>();
-      if(!items.empty())
-      {
-         QMenu* menu = createMenu(items, dynamic_cast<DataManagerItem*>(itemSelected));
-         if(menu)
-         {
-            menu->popup(mapToGlobal(e->pos()), menu->menuAction());
-         }
-      }
-   }
-   else if ((e->buttons() & Qt::LeftButton)
-       && itemSelected) 
+   if(e->button() == Qt::LeftButton &&
+      !(e->modifiers() & Qt::MetaModifier) &&
+      itemSelected)
    {
       m_dragStartPosition = e->pos();
    }
-   
+}
+
+void ossimGui::DataManagerWidget::contextMenuEvent(QContextMenuEvent* e)
+{
+   DataManagerItem* activeItem =
+      dynamic_cast<DataManagerItem*>(itemAt(e->pos()));
+   if(!activeItem)
+   {
+      e->ignore();
+      return;
+   }
+
+   if(!activeItem->isSelected())
+   {
+      clearSelection();
+      activeItem->setSelected(true);
+      setCurrentItem(activeItem);
+   }
+
+   QList<DataManagerItem*> items =
+      grabSelectedChildItemsOfType<DataManagerItem>();
+   if(items.empty())
+   {
+      e->ignore();
+      return;
+   }
+
+   QMenu* menu = createMenu(items, activeItem);
+   if(menu)
+   {
+      menu->exec(e->globalPos());
+      delete menu;
+   }
+   e->accept();
 }
 
 void ossimGui::DataManagerWidget::mouseMoveEvent(QMouseEvent *e)
@@ -5540,7 +5695,19 @@ void ossimGui::DataManagerWidget::mouseMoveEvent(QMouseEvent *e)
 
 void ossimGui::DataManagerWidget::mouseReleaseEvent(QMouseEvent * e)
 {
+   const bool metaContextMenu =
+      e->button() == Qt::LeftButton &&
+      (e->modifiers() & Qt::MetaModifier);
    QTreeWidget::mouseReleaseEvent(e);
+   if(metaContextMenu)
+   {
+      QContextMenuEvent contextEvent(
+         QContextMenuEvent::Mouse,
+         e->pos(),
+         mapToGlobal(e->pos()),
+         e->modifiers());
+      contextMenuEvent(&contextEvent);
+   }
 }
 
 void ossimGui::DataManagerWidget::showSelected()
@@ -7759,6 +7926,15 @@ bool	ossimGui::DataManagerWidget::event( QEvent * e )
                   {
                      if(m_activeItems.find(*iter) != m_activeItems.end())
                      {
+                        DataManagerRegistrationItem* registrationItem =
+                           dynamic_cast<DataManagerRegistrationItem*>(*iter);
+                        if(registrationItem &&
+                           !wEvent->registrationReportText().empty())
+                        {
+                           registrationItem->setRegistrationReport(
+                              wEvent->registrationReportText(),
+                              wEvent->registrationReportPath());
+                        }
                         ossimConnectableObject* connectable = (*iter)->objectAsNode()->getObjectAs<ossimConnectableObject>();
                         if(connectable)
                         {
