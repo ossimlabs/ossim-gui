@@ -100,8 +100,14 @@ All notable changes to `ossim-gui` are documented here.
 > refinement evidence as the CLI, without teaching GeoCell any algorithms.
 > They now include the full factory-priority candidate order and shared
 > selection reason too, so plugin participation is visible without GUI policy.
+> Completed registration objects now retain their quality reports for inline
+> review or a larger report window, and context menus no longer activate an
+> action merely because the initiating mouse button was released over it.
 
 ### Fixed
+- Open GeoCell context menus through Qt's context-menu event so the mouse
+  release that requested the menu cannot immediately activate the action under
+  the pointer (`8d29413`).
 - Prevent GeoCell shutdown crashes when a registration, image-open, or staging
   job is still running by detaching widget callbacks, canceling queued work,
   draining pending widget events, and waiting for the worker queue from the
@@ -112,6 +118,9 @@ All notable changes to `ossim-gui` are documented here.
   (`37b931e`).
 
 ### Added
+- Retain completed fixed and bundle quality reports on their GeoCell
+  registration objects, including the generated report path, an inline preview,
+  and a resizable full-report window (`8d29413`).
 - Show the shared ordered weak-edge matcher candidates and factory selection
   reason in GeoCell bundle quality reports (`5e023ba`).
 - Show shared bundle pair residual-value and bounded weakest-edge refinement
