@@ -2544,6 +2544,60 @@ namespace ossimGui
    };
 
 #ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   class FixedRegistrationCallbackScope
+   {
+   public:
+      explicit FixedRegistrationCallbackScope(
+         ossimFixedRegistrationSource* source)
+      :m_source(source)
+      {
+      }
+      ~FixedRegistrationCallbackScope(){reset();}
+      void reset()
+      {
+         if(!m_source)
+         {
+            return;
+         }
+         m_source->setCancelCallback(std::function<bool()>());
+         m_source->setProgressCallback(
+            std::function<void(
+               const ossimFixedRegistrationSource::ProgressInfo&)>());
+         m_source->setApplyResultCallback(
+            std::function<bool(
+               const ossimFixedRegistrationSource::RegistrationResult&)>());
+         m_source = 0;
+      }
+   private:
+      ossimFixedRegistrationSource* m_source;
+   };
+
+   class BundleRegistrationCallbackScope
+   {
+   public:
+      explicit BundleRegistrationCallbackScope(
+         ossimBundleAdjustmentRegistrationSource* source)
+      :m_source(source)
+      {
+      }
+      ~BundleRegistrationCallbackScope(){reset();}
+      void reset()
+      {
+         if(!m_source)
+         {
+            return;
+         }
+         m_source->setCancelCallback(std::function<bool()>());
+         m_source->setProgressCallback(
+            std::function<void(
+               const ossimBundleAdjustmentRegistrationSource::
+                  ProgressInfo&)>());
+         m_source = 0;
+      }
+   private:
+      ossimBundleAdjustmentRegistrationSource* m_source;
+   };
+
    class RegistrationSourceJob : public ossimJob
    {
    public:
@@ -2782,7 +2836,7 @@ namespace ossimGui
          if(m_registrationSource.valid())
          {
             m_registrationSource->setCancelCallback([this]() {
-               return this->isCanceled();
+               return this->isCanceled() || widgetShutdownRequested();
             });
             m_registrationSource->setProgressCallback(
                [this](
@@ -2799,15 +2853,19 @@ namespace ossimGui
                      result) {
                   return applyResultOnGuiThread(result);
                });
+            FixedRegistrationCallbackScope callbackScope(
+               m_registrationSource.get());
             m_success = m_registrationSource->executeRegistration();
-            m_registrationSource->setCancelCallback(
-               std::function<bool()>());
-            m_registrationSource->setProgressCallback(
-               std::function<void(
-                  const ossimFixedRegistrationSource::ProgressInfo&)>());
-            m_registrationSource->setApplyResultCallback(
-               std::function<bool(
-                  const ossimFixedRegistrationSource::RegistrationResult&)>());
+            callbackScope.reset();
+            if(widgetShutdownRequested())
+            {
+               m_success = false;
+               m_resultSummary = "Registration canceled during shutdown.";
+               setDescription(m_resultSummary);
+               setName("Registration canceled: " + m_label);
+               setPercentComplete(100.0);
+               return;
+            }
 
             const std::vector<ossimFixedRegistrationSource::RegistrationResult>& results =
                m_registrationSource->registrationResults();
@@ -3155,7 +3213,7 @@ namespace ossimGui
          if(m_registrationSource.valid())
          {
             m_registrationSource->setCancelCallback([this]() {
-               return this->isCanceled();
+               return this->isCanceled() || widgetShutdownRequested();
             });
             m_registrationSource->setProgressCallback(
                [this](const ossimBundleAdjustmentRegistrationSource::
@@ -3165,13 +3223,20 @@ namespace ossimGui
                      updateProgressName(progress);
                   }
                });
+            BundleRegistrationCallbackScope callbackScope(
+               m_registrationSource.get());
             m_success = m_registrationSource->executeRegistration();
-            m_registrationSource->setCancelCallback(
-               std::function<bool()>());
-            m_registrationSource->setProgressCallback(
-               std::function<void(
-                  const ossimBundleAdjustmentRegistrationSource::
-                     ProgressInfo&)>());
+            callbackScope.reset();
+            if(widgetShutdownRequested())
+            {
+               m_success = false;
+               m_resultSummary =
+                  "Bundle adjustment canceled during shutdown.";
+               setDescription(m_resultSummary);
+               setName("Bundle adjustment canceled: " + m_label);
+               setPercentComplete(100.0);
+               return;
+            }
 
             const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
                result = m_registrationSource->registrationResult();
