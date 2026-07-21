@@ -103,12 +103,28 @@ namespace ossimGui{
       }
       const std::string& warningTitle()const{return m_warningTitle;}
       const std::string& warningMessage()const{return m_warningMessage;}
+      void setRegistrationReport(const std::string& text,
+                                 const std::string& path)
+      {
+         m_registrationReportText = text;
+         m_registrationReportPath = path;
+      }
+      const std::string& registrationReportText()const
+      {
+         return m_registrationReportText;
+      }
+      const std::string& registrationReportPath()const
+      {
+         return m_registrationReportPath;
+      }
       
    protected:
       ItemListType m_itemList;
       HandlerListType m_handlerList;
       std::string m_warningTitle;
       std::string m_warningMessage;
+      std::string m_registrationReportText;
+      std::string m_registrationReportPath;
       CommandType m_commandType;
    };
    class OSSIMGUI_DLL DataManagerWidgetJobEvent : public QEvent

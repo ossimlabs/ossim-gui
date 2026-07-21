@@ -23,6 +23,7 @@
 #include <ossim/imaging/ossimImageSourceFactoryRegistry.h>
 #include <ossim/imaging/ossimOverviewBuilderFactoryRegistry.h>
 #include <QMainWindow>
+#include <QContextMenuEvent>
 #include <QDragEnterEvent>
 #include <QMessageBox>
 #include <QItemDelegate>
@@ -36,6 +37,7 @@
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QGroupBox>
+#include <QHBoxLayout>
 #include <QToolBar>
 #include <QItemDelegate>
 #include <QComboBox>
@@ -46,6 +48,9 @@
 #include <QTableWidget>
 #include <QMessageBox>
 #include <QMetaObject>
+#include <QLabel>
+#include <QPlainTextEdit>
+#include <QPushButton>
 #include <QUrl>
 #include <QVBoxLayout>
 #include <QStandardItemModel>
@@ -430,6 +435,12 @@ namespace
    void appendBundleStripEdgeQualityAdvisory(
       std::ostream& out,
       const ossim_autoreg::BundleStripEdgeQualityAdvisory& advisory);
+   void appendBundleEdgeRegistrationValueAdvisory(
+      std::ostream& out,
+      const ossim_autoreg::BundleEdgeRegistrationValueAdvisory& advisory);
+   void appendBundleEdgeRefinement(
+      std::ostream& out,
+      const ossim_autoreg::BundleEdgeRefinementResult& refinement);
 
    std::string bundleRegistrationAcceptanceTier(
       const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
@@ -1239,6 +1250,10 @@ namespace
       appendBundleStripEdgeQualityAdvisory(
          out,
          result.stripEdgeQualityAdvisory());
+      appendBundleEdgeRegistrationValueAdvisory(
+         out,
+         result.edgeRegistrationValueAdvisory());
+      appendBundleEdgeRefinement(out, result.edgeRefinement());
       if(source)
       {
          const ossim_autoreg::AutoRegistrationOptions options =
@@ -1250,6 +1265,8 @@ namespace
          out << "bundle_native_matcher_policy: "
              << ossim_autoreg::bundleNativeMatcherPolicyName(
                    options.bundleNativeMatcherPolicy()) << "\n";
+         out << "bundle_edge_refinement_max_candidates: "
+             << options.bundleEdgeRefinementMaxCandidates() << "\n";
          out << "bundle_floating_datum_prior_weight: "
              << source->floatingDatumPriorWeight() << "\n";
       }
@@ -1359,6 +1376,58 @@ namespace
              << (pair.executionPath().empty()
                     ? std::string("unspecified")
                     : pair.executionPath()) << "\n";
+         const ossim_autoreg::BundlePairResidualSummary& initialResidual =
+            pair.initialResidualSummary();
+         const ossim_autoreg::BundlePairResidualSummary& finalResidual =
+            pair.residualSummary();
+         const ossim_autoreg::TiePointRegistrationValueAdvisory&
+            valueAdvisory = pair.registrationValueAdvisory();
+         out << "pair[" << idx << "].initial_residual_valid: "
+             << initialResidual.validResidualCount() << "\n";
+         if(initialResidual.validResidualCount())
+         {
+            out << "pair[" << idx << "].initial_residual_rms_pixels: "
+                << initialResidual.rmsPixels() << "\n";
+            out << "pair[" << idx << "].initial_residual_median_pixels: "
+                << initialResidual.medianPixels() << "\n";
+            out << "pair[" << idx << "].initial_residual_max_pixels: "
+                << initialResidual.maxPixels() << "\n";
+         }
+         out << "pair[" << idx << "].final_residual_valid: "
+             << finalResidual.validResidualCount() << "\n";
+         if(finalResidual.validResidualCount())
+         {
+            out << "pair[" << idx << "].final_residual_rms_pixels: "
+                << finalResidual.rmsPixels() << "\n";
+            out << "pair[" << idx << "].final_residual_median_pixels: "
+                << finalResidual.medianPixels() << "\n";
+            out << "pair[" << idx << "].final_residual_max_pixels: "
+                << finalResidual.maxPixels() << "\n";
+         }
+         out << "pair[" << idx << "].registration_value_advisory_valid: "
+             << (valueAdvisory.valid() ? "true" : "false") << "\n";
+         out << "pair[" << idx << "].registration_value_advisory: "
+             << valueAdvisory.status() << "\n";
+         out << "pair[" << idx << "].registration_value_reason: "
+             << valueAdvisory.reason() << "\n";
+         if(std::isfinite(valueAdvisory.improvementPixels()))
+         {
+            out << "pair[" << idx
+                << "].registration_value_improvement_pixels: "
+                << valueAdvisory.improvementPixels() << "\n";
+         }
+         if(std::isfinite(valueAdvisory.improvementRatio()))
+         {
+            out << "pair[" << idx
+                << "].registration_value_improvement_ratio: "
+                << valueAdvisory.improvementRatio() << "\n";
+         }
+         if(std::isfinite(valueAdvisory.finalToInitialRatio()))
+         {
+            out << "pair[" << idx
+                << "].registration_value_final_to_initial_ratio: "
+                << valueAdvisory.finalToInitialRatio() << "\n";
+         }
          appendDenseAlternateReport(
             out,
             std::string("pair[") +
@@ -1538,6 +1607,149 @@ namespace
           << advisory.worstTiePointCount() << "\n";
       out << "bundle_strip_edge_required_tie_points: "
           << advisory.requiredTiePointCount() << "\n";
+   }
+
+   void appendBundleEdgeRegistrationValueAdvisory(
+      std::ostream& out,
+      const ossim_autoreg::BundleEdgeRegistrationValueAdvisory& advisory)
+   {
+      out << "bundle_edge_value_valid: "
+          << (advisory.valid() ? "true" : "false") << "\n";
+      out << "bundle_edge_value_advisory: "
+          << advisory.status() << "\n";
+      out << "bundle_edge_value_reason: "
+          << advisory.reason() << "\n";
+      if(advisory.valid())
+      {
+         out << "bundle_edge_value_worst_edge: input["
+             << advisory.worstFinalFirstImageIndex() << "] -> input["
+             << advisory.worstFinalSecondImageIndex() << "]\n";
+         if(std::isfinite(advisory.worstFinalRmsPixels()))
+         {
+            out << "bundle_edge_value_worst_rms_pixels: "
+                << advisory.worstFinalRmsPixels() << "\n";
+         }
+         if(std::isfinite(advisory.worstFinalToBundleRatio()))
+         {
+            out << "bundle_edge_value_worst_to_bundle_ratio: "
+                << advisory.worstFinalToBundleRatio() << "\n";
+         }
+         if(std::isfinite(advisory.finalResidualWatchThresholdPixels()))
+         {
+            out << "bundle_edge_value_watch_threshold_pixels: "
+                << advisory.finalResidualWatchThresholdPixels() << "\n";
+         }
+      }
+      out << "bundle_edge_value_weakest_valid: "
+          << (advisory.weakestValueValid() ? "true" : "false") << "\n";
+      if(advisory.weakestValueValid())
+      {
+         out << "bundle_edge_value_weakest_edge: input["
+             << advisory.weakestFirstImageIndex() << "] -> input["
+             << advisory.weakestSecondImageIndex() << "]\n";
+         out << "bundle_edge_value_weakest_advisory: "
+             << advisory.weakestValue().status() << "\n";
+         out << "bundle_edge_value_weakest_reason: "
+             << advisory.weakestValue().reason() << "\n";
+         out << "bundle_edge_value_weakest_improvement_ratio: "
+             << advisory.weakestValue().improvementRatio() << "\n";
+      }
+   }
+
+   void appendBundleEdgeRefinement(
+      std::ostream& out,
+      const ossim_autoreg::BundleEdgeRefinementResult& refinement)
+   {
+      out << "bundle_edge_refinement_eligible: "
+          << (refinement.eligible() ? "true" : "false") << "\n";
+      out << "bundle_edge_refinement_attempted: "
+          << (refinement.attempted() ? "true" : "false") << "\n";
+      out << "bundle_edge_refinement_accepted: "
+          << (refinement.accepted() ? "true" : "false") << "\n";
+      out << "bundle_edge_refinement_status: "
+          << refinement.status() << "\n";
+      out << "bundle_edge_refinement_reason: "
+          << refinement.reason() << "\n";
+      out << "bundle_edge_refinement_candidate_selection_reason: "
+          << refinement.candidateSelectionReason() << "\n";
+      out << "bundle_edge_refinement_candidate_matcher_count: "
+          << refinement.candidateMatcherTypes().size() << "\n";
+      out << "bundle_edge_refinement_candidate_attempt_limit: "
+          << refinement.candidateAttemptLimit() << "\n";
+      out << "bundle_edge_refinement_attempt_count: "
+          << refinement.attempts().size() << "\n";
+      for(std::size_t idx = 0;
+          idx < refinement.candidateMatcherTypes().size(); ++idx)
+      {
+         out << "bundle_edge_refinement_candidate_matcher[" << idx << "]: "
+             << refinement.candidateMatcherTypes()[idx] << "\n";
+      }
+      for(std::size_t idx = 0; idx < refinement.attempts().size(); ++idx)
+      {
+         const ossim_autoreg::BundleEdgeRefinementAttempt& attempt =
+            refinement.attempts()[idx];
+         out << "bundle_edge_refinement_attempt[" << idx
+             << "].matcher_type: " << attempt.matcherType() << "\n";
+         out << "bundle_edge_refinement_attempt[" << idx
+             << "].status: " << attempt.status() << "\n";
+         out << "bundle_edge_refinement_attempt[" << idx
+             << "].reason: " << attempt.reason() << "\n";
+         out << "bundle_edge_refinement_attempt[" << idx
+             << "].generated_ties: "
+             << attempt.generatedTiePointCount() << "\n";
+         out << "bundle_edge_refinement_attempt[" << idx
+             << "].coherent_ties: "
+             << attempt.coherentTiePointCount() << "\n";
+         out << "bundle_edge_refinement_attempt[" << idx
+             << "].accepted: "
+             << (attempt.accepted() ? "true" : "false") << "\n";
+         if(std::isfinite(attempt.edgeRmsPixels()))
+         {
+            out << "bundle_edge_refinement_attempt[" << idx
+                << "].edge_rms_pixels: " << attempt.edgeRmsPixels() << "\n";
+         }
+         if(std::isfinite(attempt.bundleRmsPixels()))
+         {
+            out << "bundle_edge_refinement_attempt[" << idx
+                << "].bundle_rms_pixels: "
+                << attempt.bundleRmsPixels() << "\n";
+         }
+      }
+      if(!refinement.eligible() && !refinement.attempted())
+      {
+         return;
+      }
+      out << "bundle_edge_refinement_edge: input["
+          << refinement.firstImageIndex() << "] -> input["
+          << refinement.secondImageIndex() << "]\n";
+      out << "bundle_edge_refinement_matcher_type: "
+          << (refinement.matcherType().empty()
+                 ? std::string("none")
+                 : refinement.matcherType()) << "\n";
+      out << "bundle_edge_refinement_original_ties: "
+          << refinement.originalTiePointCount() << "\n";
+      out << "bundle_edge_refinement_candidate_ties: "
+          << refinement.candidateTiePointCount() << "\n";
+      if(std::isfinite(refinement.initialEdgeRmsPixels()))
+      {
+         out << "bundle_edge_refinement_initial_edge_rms_pixels: "
+             << refinement.initialEdgeRmsPixels() << "\n";
+      }
+      if(std::isfinite(refinement.candidateEdgeRmsPixels()))
+      {
+         out << "bundle_edge_refinement_candidate_edge_rms_pixels: "
+             << refinement.candidateEdgeRmsPixels() << "\n";
+      }
+      if(std::isfinite(refinement.initialBundleRmsPixels()))
+      {
+         out << "bundle_edge_refinement_initial_bundle_rms_pixels: "
+             << refinement.initialBundleRmsPixels() << "\n";
+      }
+      if(std::isfinite(refinement.candidateBundleRmsPixels()))
+      {
+         out << "bundle_edge_refinement_candidate_bundle_rms_pixels: "
+             << refinement.candidateBundleRmsPixels() << "\n";
+      }
    }
 
    struct RegistrationSetupOptions
@@ -2337,6 +2549,60 @@ namespace ossimGui
    };
 
 #ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   class FixedRegistrationCallbackScope
+   {
+   public:
+      explicit FixedRegistrationCallbackScope(
+         ossimFixedRegistrationSource* source)
+      :m_source(source)
+      {
+      }
+      ~FixedRegistrationCallbackScope(){reset();}
+      void reset()
+      {
+         if(!m_source)
+         {
+            return;
+         }
+         m_source->setCancelCallback(std::function<bool()>());
+         m_source->setProgressCallback(
+            std::function<void(
+               const ossimFixedRegistrationSource::ProgressInfo&)>());
+         m_source->setApplyResultCallback(
+            std::function<bool(
+               const ossimFixedRegistrationSource::RegistrationResult&)>());
+         m_source = 0;
+      }
+   private:
+      ossimFixedRegistrationSource* m_source;
+   };
+
+   class BundleRegistrationCallbackScope
+   {
+   public:
+      explicit BundleRegistrationCallbackScope(
+         ossimBundleAdjustmentRegistrationSource* source)
+      :m_source(source)
+      {
+      }
+      ~BundleRegistrationCallbackScope(){reset();}
+      void reset()
+      {
+         if(!m_source)
+         {
+            return;
+         }
+         m_source->setCancelCallback(std::function<bool()>());
+         m_source->setProgressCallback(
+            std::function<void(
+               const ossimBundleAdjustmentRegistrationSource::
+                  ProgressInfo&)>());
+         m_source = 0;
+      }
+   private:
+      ossimBundleAdjustmentRegistrationSource* m_source;
+   };
+
    class RegistrationSourceJob : public ossimJob
    {
    public:
@@ -2363,6 +2629,8 @@ namespace ossimGui
       bool success()const{return m_success;}
       const ossimString& resultSummary()const{return m_resultSummary;}
       const ossimString& advisorySummary()const{return m_advisorySummary;}
+      const std::string& reportText()const{return m_reportText;}
+      const ossimFilename& reportPath()const{return m_reportPath;}
       const DataManagerWidgetEvent::HandlerListType& sourceHandlersToReload()const
       {
          return m_sourceHandlersToReload;
@@ -2575,7 +2843,7 @@ namespace ossimGui
          if(m_registrationSource.valid())
          {
             m_registrationSource->setCancelCallback([this]() {
-               return this->isCanceled();
+               return this->isCanceled() || widgetShutdownRequested();
             });
             m_registrationSource->setProgressCallback(
                [this](
@@ -2592,15 +2860,19 @@ namespace ossimGui
                      result) {
                   return applyResultOnGuiThread(result);
                });
+            FixedRegistrationCallbackScope callbackScope(
+               m_registrationSource.get());
             m_success = m_registrationSource->executeRegistration();
-            m_registrationSource->setCancelCallback(
-               std::function<bool()>());
-            m_registrationSource->setProgressCallback(
-               std::function<void(
-                  const ossimFixedRegistrationSource::ProgressInfo&)>());
-            m_registrationSource->setApplyResultCallback(
-               std::function<bool(
-                  const ossimFixedRegistrationSource::RegistrationResult&)>());
+            callbackScope.reset();
+            if(widgetShutdownRequested())
+            {
+               m_success = false;
+               m_resultSummary = "Registration canceled during shutdown.";
+               setDescription(m_resultSummary);
+               setName("Registration canceled: " + m_label);
+               setPercentComplete(100.0);
+               return;
+            }
 
             const std::vector<ossimFixedRegistrationSource::RegistrationResult>& results =
                m_registrationSource->registrationResults();
@@ -2756,22 +3028,23 @@ namespace ossimGui
                   m_resultSummary += m_launchSettings.c_str();
                }
             }
-            const ossimFilename reportPath =
+            m_reportPath =
                registrationQualityReportPath(m_label, "fixed-registration");
+            m_reportText = fixedRegistrationQualityReportText(
+               m_label,
+               m_resultSummary,
+               m_launchInputStatus,
+               m_launchSettings,
+               m_success,
+               results,
+               writtenGeometryFiles,
+               failedGeometryFiles);
             const bool wroteReport = writeRegistrationQualityReport(
-               reportPath,
-               fixedRegistrationQualityReportText(
-                  m_label,
-                  m_resultSummary,
-                  m_launchInputStatus,
-                  m_launchSettings,
-                  m_success,
-                  results,
-                  writtenGeometryFiles,
-                  failedGeometryFiles));
+               m_reportPath,
+               m_reportText);
             appendRegistrationQualityReportStatus(
                m_resultSummary,
-               reportPath,
+               m_reportPath,
                wroteReport);
             setDescription(m_resultSummary);
             if(isCanceled())
@@ -2802,6 +3075,8 @@ namespace ossimGui
       mutable std::string m_lastGeometryProgress;
       ossimString m_resultSummary;
       ossimString m_advisorySummary;
+      std::string m_reportText;
+      ossimFilename m_reportPath;
       DataManagerWidgetEvent::HandlerListType m_sourceHandlersToReload;
       bool m_success;
    };
@@ -2835,6 +3110,8 @@ namespace ossimGui
       bool success()const{return m_success;}
       const ossimString& resultSummary()const{return m_resultSummary;}
       const ossimString& advisorySummary()const{return m_advisorySummary;}
+      const std::string& reportText()const{return m_reportText;}
+      const ossimFilename& reportPath()const{return m_reportPath;}
       const DataManagerWidgetEvent::HandlerListType& sourceHandlersToReload()const
       {
          return m_sourceHandlersToReload;
@@ -2948,7 +3225,7 @@ namespace ossimGui
          if(m_registrationSource.valid())
          {
             m_registrationSource->setCancelCallback([this]() {
-               return this->isCanceled();
+               return this->isCanceled() || widgetShutdownRequested();
             });
             m_registrationSource->setProgressCallback(
                [this](const ossimBundleAdjustmentRegistrationSource::
@@ -2958,13 +3235,20 @@ namespace ossimGui
                      updateProgressName(progress);
                   }
                });
+            BundleRegistrationCallbackScope callbackScope(
+               m_registrationSource.get());
             m_success = m_registrationSource->executeRegistration();
-            m_registrationSource->setCancelCallback(
-               std::function<bool()>());
-            m_registrationSource->setProgressCallback(
-               std::function<void(
-                  const ossimBundleAdjustmentRegistrationSource::
-                     ProgressInfo&)>());
+            callbackScope.reset();
+            if(widgetShutdownRequested())
+            {
+               m_success = false;
+               m_resultSummary =
+                  "Bundle adjustment canceled during shutdown.";
+               setDescription(m_resultSummary);
+               setName("Bundle adjustment canceled: " + m_label);
+               setPercentComplete(100.0);
+               return;
+            }
 
             const ossimBundleAdjustmentRegistrationSource::RegistrationResult&
                result = m_registrationSource->registrationResult();
@@ -3094,20 +3378,21 @@ namespace ossimGui
             }
             m_advisorySummary = bundleRegistrationAdvisorySummary(result);
 
-            const ossimFilename reportPath =
+            m_reportPath =
                registrationQualityReportPath(m_label, "bundle-registration");
+            m_reportText = bundleRegistrationQualityReportText(
+               m_label,
+               m_resultSummary,
+               m_success,
+               m_registrationSource.get(),
+               result,
+               writtenGeometryFiles);
             const bool wroteReport = writeRegistrationQualityReport(
-               reportPath,
-               bundleRegistrationQualityReportText(
-                  m_label,
-                  m_resultSummary,
-                  m_success,
-                  m_registrationSource.get(),
-                  result,
-                  writtenGeometryFiles));
+               m_reportPath,
+               m_reportText);
             appendRegistrationQualityReportStatus(
                m_resultSummary,
-               reportPath,
+               m_reportPath,
                wroteReport);
 
             setDescription(m_resultSummary);
@@ -3140,6 +3425,8 @@ namespace ossimGui
       ossimString m_label;
       ossimString m_resultSummary;
       ossimString m_advisorySummary;
+      std::string m_reportText;
+      ossimFilename m_reportPath;
       DataManagerWidgetEvent::HandlerListType m_sourceHandlersToReload;
       bool m_success;
    };
@@ -3173,6 +3460,11 @@ namespace ossimGui
             if(registrationJob)
             {
                evt->setHandlerList(registrationJob->sourceHandlersToReload());
+               evt->setRegistrationReport(
+                  registrationJob->reportText().empty()
+                     ? registrationJob->resultSummary().string()
+                     : registrationJob->reportText(),
+                  registrationJob->reportPath().string());
                if(!registrationJob->success())
                {
                   evt->setWarningMessage(
@@ -3191,6 +3483,11 @@ namespace ossimGui
             if(bundleJob)
             {
                evt->setHandlerList(bundleJob->sourceHandlersToReload());
+               evt->setRegistrationReport(
+                  bundleJob->reportText().empty()
+                     ? bundleJob->resultSummary().string()
+                     : bundleJob->reportText(),
+                  bundleJob->reportPath().string());
                if(!bundleJob->success())
                {
                   evt->setWarningMessage(
@@ -3757,7 +4054,10 @@ ossimGui::DataManagerRegistrationFolder::DataManagerRegistrationFolder()
 
 ossimGui::DataManagerRegistrationItem::DataManagerRegistrationItem(
    DataManager::Node* node)
-:DataManagerNodeItem(node)
+:DataManagerNodeItem(node),
+ m_reportItem(0),
+ m_reportPreview(0),
+ m_reportPathLabel(0)
 {
    m_autoDelete = false;
 }
@@ -3775,6 +4075,115 @@ void ossimGui::DataManagerRegistrationItem::dropItems(
       setExpanded(true);
       m_inputConnectionFolder->setExpanded(true);
    }
+}
+
+void ossimGui::DataManagerRegistrationItem::setRegistrationReport(
+   const std::string& reportText,
+   const std::string& reportPath)
+{
+   m_reportText = QString::fromStdString(reportText);
+   m_reportPath = QString::fromStdString(reportPath);
+
+   if(!m_reportItem)
+   {
+      m_reportItem = new QTreeWidgetItem();
+      m_reportItem->setText(0, "Registration Report");
+      m_reportItem->setSizeHint(0, QSize(720, 285));
+      addChild(m_reportItem);
+
+      QWidget* reportWidget = new QWidget(treeWidget());
+      QVBoxLayout* reportLayout = new QVBoxLayout(reportWidget);
+      reportLayout->setContentsMargins(6, 6, 6, 6);
+
+      QHBoxLayout* headingLayout = new QHBoxLayout();
+      QLabel* heading = new QLabel("Registration Report", reportWidget);
+      QFont headingFont = heading->font();
+      headingFont.setBold(true);
+      heading->setFont(headingFont);
+      headingLayout->addWidget(heading);
+      headingLayout->addStretch();
+
+      QPushButton* openButton =
+         new QPushButton("Open Full Report...", reportWidget);
+      QObject::connect(openButton,
+                       &QPushButton::clicked,
+                       [this]() { showRegistrationReport(); });
+      headingLayout->addWidget(openButton);
+      reportLayout->addLayout(headingLayout);
+
+      m_reportPathLabel = new QLabel(reportWidget);
+      m_reportPathLabel->setTextInteractionFlags(
+         Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
+      m_reportPathLabel->setWordWrap(true);
+      reportLayout->addWidget(m_reportPathLabel);
+
+      m_reportPreview = new QPlainTextEdit(reportWidget);
+      m_reportPreview->setReadOnly(true);
+      m_reportPreview->setLineWrapMode(QPlainTextEdit::NoWrap);
+      QFont reportFont = m_reportPreview->font();
+      reportFont.setFamily("monospace");
+      reportFont.setStyleHint(QFont::TypeWriter);
+      m_reportPreview->setFont(reportFont);
+      reportLayout->addWidget(m_reportPreview);
+
+      if(dataManagerWidget())
+      {
+         dataManagerWidget()->setItemWidget(m_reportItem, 0, reportWidget);
+      }
+   }
+
+   if(m_reportPathLabel)
+   {
+      const QString pathText = m_reportPath.isEmpty()
+         ? QString("Report retained with this registration object")
+         : QString("Report file: %1").arg(m_reportPath);
+      m_reportPathLabel->setText(pathText);
+      m_reportPathLabel->setToolTip(m_reportPath);
+   }
+   if(m_reportPreview)
+   {
+      m_reportPreview->setPlainText(m_reportText);
+      m_reportPreview->moveCursor(QTextCursor::Start);
+   }
+   setExpanded(true);
+}
+
+void ossimGui::DataManagerRegistrationItem::showRegistrationReport()
+{
+   QDialog* dialog = new QDialog(treeWidget());
+   dialog->setAttribute(Qt::WA_DeleteOnClose);
+   dialog->setWindowTitle(
+      QString("Registration Report - %1").arg(text(0)));
+
+   QVBoxLayout* layout = new QVBoxLayout(dialog);
+   if(!m_reportPath.isEmpty())
+   {
+      QLabel* pathLabel =
+         new QLabel(QString("Report file: %1").arg(m_reportPath), dialog);
+      pathLabel->setTextInteractionFlags(
+         Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
+      pathLabel->setWordWrap(true);
+      layout->addWidget(pathLabel);
+   }
+
+   QPlainTextEdit* reportView = new QPlainTextEdit(dialog);
+   reportView->setReadOnly(true);
+   reportView->setLineWrapMode(QPlainTextEdit::NoWrap);
+   reportView->setPlainText(m_reportText);
+   QFont reportFont = reportView->font();
+   reportFont.setFamily("monospace");
+   reportFont.setStyleHint(QFont::TypeWriter);
+   reportView->setFont(reportFont);
+   layout->addWidget(reportView);
+
+   QDialogButtonBox* buttons =
+      new QDialogButtonBox(QDialogButtonBox::Close, dialog);
+   QObject::connect(buttons, &QDialogButtonBox::rejected,
+                    dialog, &QDialog::close);
+   layout->addWidget(buttons);
+
+   dialog->resize(960, 700);
+   dialog->show();
 }
 
 void ossimGui::DataManagerRegistrationItem::execute()
@@ -5220,28 +5629,46 @@ void ossimGui::DataManagerWidget::mousePressEvent(QMouseEvent *e)
 {
    QTreeWidget::mousePressEvent(e);
    QTreeWidgetItem* itemSelected = itemAt(e->pos());
-   bool dropDownMenuFlag = (e->buttons() & Qt::RightButton) ||
-                          ((e->buttons() & Qt::LeftButton) &&
-                           (e->modifiers()&Qt::MetaModifier));
-   if(itemSelected) itemSelected->setSelected(true);
-   if(dropDownMenuFlag)
-   {
-      QList<DataManagerItem*> items = grabSelectedChildItemsOfType<DataManagerItem>();
-      if(!items.empty())
-      {
-         QMenu* menu = createMenu(items, dynamic_cast<DataManagerItem*>(itemSelected));
-         if(menu)
-         {
-            menu->popup(mapToGlobal(e->pos()), menu->menuAction());
-         }
-      }
-   }
-   else if ((e->buttons() & Qt::LeftButton)
-       && itemSelected) 
+   if(e->button() == Qt::LeftButton &&
+      !(e->modifiers() & Qt::MetaModifier) &&
+      itemSelected)
    {
       m_dragStartPosition = e->pos();
    }
-   
+}
+
+void ossimGui::DataManagerWidget::contextMenuEvent(QContextMenuEvent* e)
+{
+   DataManagerItem* activeItem =
+      dynamic_cast<DataManagerItem*>(itemAt(e->pos()));
+   if(!activeItem)
+   {
+      e->ignore();
+      return;
+   }
+
+   if(!activeItem->isSelected())
+   {
+      clearSelection();
+      activeItem->setSelected(true);
+      setCurrentItem(activeItem);
+   }
+
+   QList<DataManagerItem*> items =
+      grabSelectedChildItemsOfType<DataManagerItem>();
+   if(items.empty())
+   {
+      e->ignore();
+      return;
+   }
+
+   QMenu* menu = createMenu(items, activeItem);
+   if(menu)
+   {
+      menu->exec(e->globalPos());
+      delete menu;
+   }
+   e->accept();
 }
 
 void ossimGui::DataManagerWidget::mouseMoveEvent(QMouseEvent *e)
@@ -5268,7 +5695,19 @@ void ossimGui::DataManagerWidget::mouseMoveEvent(QMouseEvent *e)
 
 void ossimGui::DataManagerWidget::mouseReleaseEvent(QMouseEvent * e)
 {
+   const bool metaContextMenu =
+      e->button() == Qt::LeftButton &&
+      (e->modifiers() & Qt::MetaModifier);
    QTreeWidget::mouseReleaseEvent(e);
+   if(metaContextMenu)
+   {
+      QContextMenuEvent contextEvent(
+         QContextMenuEvent::Mouse,
+         e->pos(),
+         mapToGlobal(e->pos()),
+         e->modifiers());
+      contextMenuEvent(&contextEvent);
+   }
 }
 
 void ossimGui::DataManagerWidget::showSelected()
@@ -7487,6 +7926,15 @@ bool	ossimGui::DataManagerWidget::event( QEvent * e )
                   {
                      if(m_activeItems.find(*iter) != m_activeItems.end())
                      {
+                        DataManagerRegistrationItem* registrationItem =
+                           dynamic_cast<DataManagerRegistrationItem*>(*iter);
+                        if(registrationItem &&
+                           !wEvent->registrationReportText().empty())
+                        {
+                           registrationItem->setRegistrationReport(
+                              wEvent->registrationReportText(),
+                              wEvent->registrationReportPath());
+                        }
                         ossimConnectableObject* connectable = (*iter)->objectAsNode()->getObjectAs<ossimConnectableObject>();
                         if(connectable)
                         {

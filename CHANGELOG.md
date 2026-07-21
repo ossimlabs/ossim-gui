@@ -96,14 +96,35 @@ All notable changes to `ossim-gui` are documented here.
 > should be much less exciting. Adjustable parameters can now be locked and
 > unlocked directly from GeoCell, so that persistent flag no longer requires
 > a side quest outside the dialog.
+> Bundle reports now show the same per-edge value and guarded weakest-edge
+> refinement evidence as the CLI, without teaching GeoCell any algorithms.
+> They now include the full factory-priority candidate order and shared
+> selection reason too, so plugin participation is visible without GUI policy.
+> Completed registration objects now retain their quality reports for inline
+> review or a larger report window, and context menus no longer activate an
+> action merely because the initiating mouse button was released over it.
 
 ### Fixed
+- Open GeoCell context menus through Qt's context-menu event so the mouse
+  release that requested the menu cannot immediately activate the action under
+  the pointer (`8d29413`).
 - Prevent GeoCell shutdown crashes when a registration, image-open, or staging
   job is still running by detaching widget callbacks, canceling queued work,
   draining pending widget events, and waiting for the worker queue from the
   main window close path (`06576ee`).
+- Make fixed and bundle registration cancellation observe the shared widget
+  shutdown request directly, clear source callbacks with exception-safe scopes,
+  and skip result/report processing once close cancellation has completed
+  (`37b931e`).
 
 ### Added
+- Retain completed fixed and bundle quality reports on their GeoCell
+  registration objects, including the generated report path, an inline preview,
+  and a resizable full-report window (`8d29413`).
+- Show the shared ordered weak-edge matcher candidates and factory selection
+  reason in GeoCell bundle quality reports (`5e023ba`).
+- Show shared bundle pair residual-value and bounded weakest-edge refinement
+  diagnostics in GeoCell quality reports (`9a1a57c`).
 - Add a `Lock` checkbox column to the Adjustable Parameter dialog so GeoCell
   users can toggle each parameter lock flag and persist the change through the
   existing OSSIM adjustment interface (`708edb2`).
@@ -287,11 +308,15 @@ All notable changes to `ossim-gui` are documented here.
 
 > **TL;DR:** Registration Setup now discovers available matchers and their
 > recommended settings from `ossim-autoreg`, so GeoCell no longer maintains a
-> private list of algorithms or OpenCV-specific defaults.
+> private list of algorithms or OpenCV-specific defaults. Bundle reports now
+> explain each ordered factory-candidate attempt without moving algorithm
+> policy into the GUI.
 
 ### Changed
 - Populate Registration Setup from autoregistration factory descriptors and
   apply factory-owned recommendations for explicit matcher choices (`dfd647a`).
+- Report the shared candidate limit and per-attempt matcher, decision, tie, and
+  RMS evidence for bounded bundle edge fallback (`e3892ab`).
 
 ## [2026-07-18]
 
