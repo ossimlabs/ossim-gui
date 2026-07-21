@@ -106,6 +106,10 @@ All notable changes to `ossim-gui` are documented here.
   job is still running by detaching widget callbacks, canceling queued work,
   draining pending widget events, and waiting for the worker queue from the
   main window close path (`06576ee`).
+- Make fixed and bundle registration cancellation observe the shared widget
+  shutdown request directly, clear source callbacks with exception-safe scopes,
+  and skip result/report processing once close cancellation has completed
+  (`37b931e`).
 
 ### Added
 - Show the shared ordered weak-edge matcher candidates and factory selection
