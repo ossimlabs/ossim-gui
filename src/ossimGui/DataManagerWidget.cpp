@@ -49,6 +49,8 @@
 #include <QMessageBox>
 #include <QMetaObject>
 #include <QLabel>
+#include <QLineEdit>
+#include <QStringList>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QUrl>
@@ -84,10 +86,12 @@
 #include <string>
 
 #ifdef OSSIM_AUTOREGISTRATION_ENABLED
+#include "RegistrationSetupDialog.h"
 #include <ossim/registration/ossimBundleAdjustmentRegistrationSource.h>
 #include <ossim/registration/ossimFixedRegistrationSource.h>
 #include <ossim/registration/ossimRegistrationSourceFactory.h>
 #include <ossim_autoreg/AutoRegistration.h>
+#include <ossim_autoreg/BundleLinearSolverFactory.h>
 #include <ossim_autoreg/TiePointGenerator.h>
 #endif
 
@@ -109,6 +113,8 @@ namespace
 #ifdef OSSIM_AUTOREGISTRATION_ENABLED
 namespace
 {
+   using namespace ossimGui;
+
    void ensureRegistrationSourceFactoryRegistered()
    {
       ossimObjectFactoryRegistry::instance()->registerFactory(
@@ -1498,21 +1504,6 @@ namespace
       return out.str();
    }
 
-   enum RegistrationSetupApproach
-   {
-      REGISTRATION_SETUP_FIXED_AUTO = 0,
-      REGISTRATION_SETUP_FIXED_MANUAL = 1,
-      REGISTRATION_SETUP_BUNDLE_ALL_FLOATING = 2,
-      REGISTRATION_SETUP_BUNDLE_ANCHORED = 3
-   };
-
-   enum BundlePairPolicy
-   {
-      BUNDLE_PAIR_POLICY_ALL_PAIRS = 0,
-      BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN = 1,
-      BUNDLE_PAIR_POLICY_AUTO = 2
-   };
-
    ossim_autoreg::BundlePairPolicy sharedBundlePairPolicy(
       BundlePairPolicy policy)
    {
@@ -1529,6 +1520,8 @@ namespace
    {
       if(policy == BUNDLE_PAIR_POLICY_AUTO)
          return "auto";
+      if(policy == BUNDLE_PAIR_POLICY_EXPLICIT)
+         return "explicit";
       return bundlePairPolicyDescription(span);
    }
 
@@ -1752,666 +1745,6 @@ namespace
       }
    }
 
-   struct RegistrationSetupOptions
-   {
-      RegistrationSetupApproach approach;
-      std::string matchMethod;
-      std::string resamplerType;
-      std::string supportPassMatcherResampler;
-      int chipSize;
-      int searchRadius;
-      int gridSpacing;
-      double minScore;
-      double minScoreMargin;
-      double viewGsd;
-      std::size_t maxTiePoints;
-      std::size_t denseGridSeedBudget;
-      bool autoDenseGridSeedBudget;
-      bool tiePointTimingDiagnostics;
-      BundlePairPolicy bundlePairPolicy;
-      std::size_t bundleNeighborSpan;
-      std::size_t maxConcurrentRegistrations;
-      std::size_t adaptiveBankThreadCount;
-      bool adaptiveFullPostBankRefinement;
-      std::string nativeLowGridPolicy;
-      bool opencvRansacPrefilter;
-      double opencvRansacThresholdPixels;
-
-      RegistrationSetupOptions()
-      : approach(REGISTRATION_SETUP_FIXED_AUTO),
-        matchMethod(preferredRegistrationMatchMethod()),
-        resamplerType("cubic"),
-        supportPassMatcherResampler(),
-        chipSize(31),
-        searchRadius(64),
-        gridSpacing(128),
-        minScore(0.6),
-        minScoreMargin(0.03),
-        viewGsd(0.0),
-        maxTiePoints(300),
-        denseGridSeedBudget(0),
-        autoDenseGridSeedBudget(false),
-        tiePointTimingDiagnostics(false),
-        bundlePairPolicy(BUNDLE_PAIR_POLICY_ALL_PAIRS),
-        bundleNeighborSpan(0),
-        maxConcurrentRegistrations(1),
-        adaptiveBankThreadCount(4),
-        adaptiveFullPostBankRefinement(true),
-        nativeLowGridPolicy("advisory"),
-        opencvRansacPrefilter(true),
-        opencvRansacThresholdPixels(25.0)
-      {
-      }
-   };
-
-   RegistrationSetupOptions registrationSetupDefaults(
-      RegistrationSetupApproach approach,
-      const std::string& matchMethod)
-   {
-      RegistrationSetupOptions result;
-      result.approach = approach;
-      const bool bundle =
-         approach == REGISTRATION_SETUP_BUNDLE_ALL_FLOATING ||
-         approach == REGISTRATION_SETUP_BUNDLE_ANCHORED;
-      result.matchMethod = matchMethod.empty() ?
-         (bundle ? preferredBundleMatchMethod() :
-          (approach == REGISTRATION_SETUP_FIXED_AUTO ?
-              std::string() :
-              preferredRegistrationMatchMethod())) :
-         matchMethod;
-      result.resamplerType = "cubic";
-      result.supportPassMatcherResampler.clear();
-      result.chipSize = 31;
-      result.searchRadius = 36;
-      result.gridSpacing = 96;
-      result.minScore = 0.6;
-      result.minScoreMargin = 0.03;
-      result.viewGsd = 0.0;
-      result.maxTiePoints = 200;
-      result.denseGridSeedBudget = 0;
-      result.autoDenseGridSeedBudget = false;
-      result.maxConcurrentRegistrations = 1;
-      result.adaptiveBankThreadCount = bundle ? 0 : 4;
-      result.adaptiveFullPostBankRefinement = true;
-      result.nativeLowGridPolicy = "advisory";
-      result.opencvRansacPrefilter = true;
-      result.opencvRansacThresholdPixels = 25.0;
-
-      if(approach == REGISTRATION_SETUP_FIXED_AUTO &&
-         result.matchMethod.empty())
-      {
-         ossim_autoreg::AutoRegistrationOptions defaults;
-         defaults.setAutoRegister(true);
-         ossim_autoreg::applyAutoRegistrationDefaults(defaults);
-        result.resamplerType = defaults.generator().resamplerType();
-         result.supportPassMatcherResampler =
-            defaults.supportPassMatcherResampler();
-         result.chipSize = defaults.generator().chipSize();
-         result.searchRadius = defaults.generator().searchRadius();
-         result.gridSpacing = defaults.generator().gridSpacing();
-         result.minScore = defaults.generator().minScore();
-         result.minScoreMargin = defaults.generator().minScoreMargin();
-         result.viewGsd = defaults.generator().viewGsd();
-         result.maxTiePoints = defaults.generator().maxTiePoints();
-         result.denseGridSeedBudget =
-            defaults.generator().denseGridSeedBudget();
-         result.autoDenseGridSeedBudget =
-            defaults.generator().autoDenseGridSeedBudget();
-         result.tiePointTimingDiagnostics =
-            defaults.generator().timingDiagnostics();
-         result.opencvRansacPrefilter =
-            defaults.opencvRansacPrefilter();
-         result.opencvRansacThresholdPixels =
-            defaults.opencvRansacThresholdPixels();
-         result.nativeLowGridPolicy =
-            defaults.nativeLowGridPolicy();
-         return result;
-      }
-
-      if(bundle)
-      {
-         ossim_autoreg::AutoRegistrationOptions defaults;
-         defaults.generator().setMatchMethod(result.matchMethod);
-         ossim_autoreg::applyBundleRegistrationDefaults(
-            defaults,
-            approach == REGISTRATION_SETUP_BUNDLE_ANCHORED);
-
-        result.resamplerType = defaults.generator().resamplerType();
-         result.supportPassMatcherResampler.clear();
-         result.chipSize = defaults.generator().chipSize();
-         result.searchRadius = defaults.generator().searchRadius();
-         result.gridSpacing = defaults.generator().gridSpacing();
-         result.minScore = defaults.generator().minScore();
-         result.minScoreMargin = defaults.generator().minScoreMargin();
-         result.viewGsd = defaults.generator().viewGsd();
-         result.maxTiePoints = defaults.generator().maxTiePoints();
-         result.denseGridSeedBudget =
-            defaults.generator().denseGridSeedBudget();
-         result.autoDenseGridSeedBudget =
-            defaults.generator().autoDenseGridSeedBudget();
-         result.tiePointTimingDiagnostics =
-            defaults.generator().timingDiagnostics();
-         result.opencvRansacPrefilter =
-            defaults.opencvRansacPrefilter();
-         result.opencvRansacThresholdPixels =
-            defaults.opencvRansacThresholdPixels();
-         result.nativeLowGridPolicy =
-            defaults.nativeLowGridPolicy();
-         return result;
-      }
-
-      ossim_autoreg::AutoRegistrationOptions recommended;
-      recommended.generator().setMatchMethod(result.matchMethod);
-      recommended.generator().setResamplerType(result.resamplerType);
-      recommended.generator().setChipSize(result.chipSize);
-      recommended.generator().setSearchRadius(result.searchRadius);
-      recommended.generator().setGridSpacing(result.gridSpacing);
-      recommended.generator().setMinScore(result.minScore);
-      recommended.generator().setMinScoreMargin(result.minScoreMargin);
-      recommended.generator().setViewGsd(result.viewGsd);
-      recommended.generator().setMaxTiePoints(result.maxTiePoints);
-      recommended.generator().setDenseGridSeedBudget(
-         result.denseGridSeedBudget);
-      recommended.generator().setAutoDenseGridSeedBudget(
-         result.autoDenseGridSeedBudget);
-      recommended.generator().setTimingDiagnostics(
-         result.tiePointTimingDiagnostics);
-      recommended.setThreadCount(result.maxConcurrentRegistrations);
-      recommended.setAdaptiveBankThreadCount(
-         result.adaptiveBankThreadCount);
-      recommended.setAdaptiveFullPostBankRefinement(
-         result.adaptiveFullPostBankRefinement);
-      recommended.setSupportPassMatcherResampler(
-         result.supportPassMatcherResampler);
-      recommended.setNativeLowGridPolicy(result.nativeLowGridPolicy);
-      recommended.setOpencvRansacPrefilter(
-         result.opencvRansacPrefilter);
-      recommended.setOpencvRansacThresholdPixels(
-         result.opencvRansacThresholdPixels);
-      ossim_autoreg::TiePointGeneratorFactory::instance()->
-         configureRecommendedOptions(
-            result.matchMethod,
-            approach == REGISTRATION_SETUP_FIXED_AUTO ?
-               "fixed-setup-auto" : "fixed-manual",
-            recommended);
-
-      result.resamplerType = recommended.generator().resamplerType();
-      result.supportPassMatcherResampler =
-         recommended.supportPassMatcherResampler();
-      result.chipSize = recommended.generator().chipSize();
-      result.searchRadius = recommended.generator().searchRadius();
-      result.gridSpacing = recommended.generator().gridSpacing();
-      result.minScore = recommended.generator().minScore();
-      result.minScoreMargin = recommended.generator().minScoreMargin();
-      result.viewGsd = recommended.generator().viewGsd();
-      result.maxTiePoints = recommended.generator().maxTiePoints();
-      result.denseGridSeedBudget =
-         recommended.generator().denseGridSeedBudget();
-      result.autoDenseGridSeedBudget =
-         recommended.generator().autoDenseGridSeedBudget();
-      result.tiePointTimingDiagnostics =
-         recommended.generator().timingDiagnostics();
-      result.maxConcurrentRegistrations = recommended.threadCount();
-      result.adaptiveBankThreadCount =
-         recommended.adaptiveBankThreadCount();
-      result.adaptiveFullPostBankRefinement =
-         recommended.adaptiveFullPostBankRefinement();
-      result.nativeLowGridPolicy = recommended.nativeLowGridPolicy();
-      result.opencvRansacPrefilter =
-         recommended.opencvRansacPrefilter();
-      result.opencvRansacThresholdPixels =
-         recommended.opencvRansacThresholdPixels();
-
-      if(approach == REGISTRATION_SETUP_FIXED_MANUAL)
-      {
-         result.searchRadius = std::max(result.searchRadius, 128);
-         result.maxTiePoints = 0;
-      }
-      return result;
-   }
-
-   class RegistrationSetupDialog : public QDialog
-   {
-   public:
-      RegistrationSetupDialog(QWidget* parent = 0)
-      : QDialog(parent),
-        m_approach(0),
-        m_matchMethod(0),
-        m_resampler(0),
-        m_supportPassResampler(0),
-        m_chipSize(0),
-        m_searchRadius(0),
-        m_gridSpacing(0),
-        m_minScore(0),
-        m_minScoreMargin(0),
-        m_viewGsd(0),
-        m_maxTiePoints(0),
-        m_denseGridSeedBudget(0),
-        m_autoDenseGridSeedBudget(0),
-        m_tiePointTimingDiagnostics(0),
-        m_bundlePairPolicy(0),
-        m_bundleNeighborSpan(0),
-        m_maxConcurrentRegistrations(0),
-        m_adaptiveBankThreadCount(0),
-        m_adaptiveFullPostBankRefinement(0),
-        m_nativeLowGridPolicy(0),
-        m_opencvRansacPrefilter(0),
-        m_opencvRansacThresholdPixels(0)
-      {
-         setWindowTitle("Registration Setup");
-
-         m_approach = new QComboBox(this);
-         m_approach->addItem(
-            "Fixed to Floating Auto (Recommended)",
-            REGISTRATION_SETUP_FIXED_AUTO);
-         m_approach->addItem(
-            "Bundle Anchored",
-            REGISTRATION_SETUP_BUNDLE_ANCHORED);
-         m_approach->addItem(
-            "Bundle All-Floating",
-            REGISTRATION_SETUP_BUNDLE_ALL_FLOATING);
-         m_approach->addItem(
-            "Fixed Manual",
-            REGISTRATION_SETUP_FIXED_MANUAL);
-
-         m_matchMethod = new QComboBox(this);
-         addMatchMethod("Adaptive Auto (Recommended)", "");
-
-         const std::vector<ossim_autoreg::RegistrationComponentDescriptor>
-            matcherTypes = ossim_autoreg::TiePointGeneratorFactory::instance()->
-               typeDescriptors();
-         for(const ossim_autoreg::RegistrationComponentDescriptor& matcherType :
-             matcherTypes)
-         {
-            const QString typeName =
-               QString::fromStdString(matcherType.typeName());
-            const QString displayName = QString::fromStdString(
-               matcherType.displayName().empty() ? matcherType.typeName() :
-                                                   matcherType.displayName());
-            addMatchMethod(displayName, typeName);
-            const int itemIndex = m_matchMethod->count() - 1;
-            if(!matcherType.description().empty())
-            {
-               m_matchMethod->setItemData(
-                  itemIndex,
-                  QString::fromStdString(matcherType.description()),
-                  Qt::ToolTipRole);
-            }
-         }
-         const int preferredIndex = m_matchMethod->findData(QString());
-         if(preferredIndex >= 0)
-            m_matchMethod->setCurrentIndex(preferredIndex);
-
-         m_resampler = new QComboBox(this);
-         m_resampler->addItem("cubic", "cubic");
-         m_resampler->addItem("bilinear", "bilinear");
-         m_resampler->addItem("nearest", "nearest_neighbor");
-         m_resampler->addItem("sinc", "sinc");
-
-         m_supportPassResampler = new QComboBox(this);
-         m_supportPassResampler->addItem("default", "");
-         m_supportPassResampler->addItem("cubic", "cubic");
-         m_supportPassResampler->addItem("bilinear", "bilinear");
-         m_supportPassResampler->addItem("nearest", "nearest_neighbor");
-         m_supportPassResampler->addItem("sinc", "sinc");
-         m_supportPassResampler->setToolTip(
-            "Optional fixed-auto support-pass matcher resampler. "
-            "Default keeps the main resampler.");
-
-         m_chipSize = new QSpinBox(this);
-         m_chipSize->setRange(5, 255);
-         m_chipSize->setSingleStep(2);
-         m_chipSize->setValue(31);
-
-         m_searchRadius = new QSpinBox(this);
-         m_searchRadius->setRange(1, 4096);
-         m_searchRadius->setValue(64);
-
-         m_gridSpacing = new QSpinBox(this);
-         m_gridSpacing->setRange(16, 8192);
-         m_gridSpacing->setValue(128);
-
-         m_minScore = new QDoubleSpinBox(this);
-         m_minScore->setRange(0.0, 1.0);
-         m_minScore->setDecimals(3);
-         m_minScore->setSingleStep(0.05);
-         m_minScore->setValue(0.6);
-
-         m_minScoreMargin = new QDoubleSpinBox(this);
-         m_minScoreMargin->setRange(0.0, 1.0);
-         m_minScoreMargin->setDecimals(3);
-         m_minScoreMargin->setSingleStep(0.01);
-         m_minScoreMargin->setValue(0.03);
-         m_minScoreMargin->setToolTip(
-            "Minimum native-affine NCC peak separation. "
-            "Use 0 to disable ambiguity filtering.");
-
-         m_viewGsd = new QDoubleSpinBox(this);
-         m_viewGsd->setRange(-100.0, 1000000.0);
-         m_viewGsd->setDecimals(3);
-         m_viewGsd->setSingleStep(0.25);
-         m_viewGsd->setValue(0.0);
-
-         m_maxTiePoints = new QSpinBox(this);
-         m_maxTiePoints->setRange(0, 100000);
-         m_maxTiePoints->setValue(300);
-
-         m_denseGridSeedBudget = new QSpinBox(this);
-         m_denseGridSeedBudget->setRange(0, 1000000);
-         m_denseGridSeedBudget->setValue(0);
-
-         m_autoDenseGridSeedBudget = new QCheckBox(this);
-         m_autoDenseGridSeedBudget->setChecked(false);
-
-         m_tiePointTimingDiagnostics = new QCheckBox(this);
-         m_tiePointTimingDiagnostics->setChecked(false);
-         m_tiePointTimingDiagnostics->setToolTip(
-            "Collect renderer/tile timing counters for profiling. "
-            "Leave off for faster normal registration.");
-
-         m_bundlePairPolicy = new QComboBox(this);
-         m_bundlePairPolicy->addItem("All pairs",
-                                     BUNDLE_PAIR_POLICY_ALL_PAIRS);
-         m_bundlePairPolicy->addItem("Neighbor span",
-                                     BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN);
-         m_bundlePairPolicy->addItem("Auto",
-                                     BUNDLE_PAIR_POLICY_AUTO);
-         m_bundlePairPolicy->setToolTip(
-            "Bundle only: choose whether to test every image pair or only "
-            "nearby image-index neighbors. Auto promotes clear strip-like "
-            "overlap chains and falls back to all pairs when needed.");
-
-         m_bundleNeighborSpan = new QSpinBox(this);
-         m_bundleNeighborSpan->setRange(1, 100000);
-         m_bundleNeighborSpan->setValue(1);
-         m_bundleNeighborSpan->setToolTip(
-            "Bundle only: neighbor image-index distance. 1 tests adjacent "
-            "pairs for strip-style datasets.");
-
-         m_maxConcurrentRegistrations = new QSpinBox(this);
-         m_maxConcurrentRegistrations->setRange(1, 64);
-         m_maxConcurrentRegistrations->setValue(1);
-
-         m_adaptiveBankThreadCount = new QSpinBox(this);
-         m_adaptiveBankThreadCount->setRange(0, 64);
-         m_adaptiveBankThreadCount->setValue(4);
-
-         m_adaptiveFullPostBankRefinement = new QCheckBox(this);
-         m_adaptiveFullPostBankRefinement->setChecked(true);
-
-         m_nativeLowGridPolicy = new QComboBox(this);
-         m_nativeLowGridPolicy->addItem("Advisory", "advisory");
-         m_nativeLowGridPolicy->addItem("Reject", "reject");
-         m_nativeLowGridPolicy->setToolTip(
-            "Handling for native image-space matches with low control-grid "
-            "occupancy.");
-
-         m_opencvRansacPrefilter = new QCheckBox(this);
-         m_opencvRansacPrefilter->setChecked(true);
-         m_opencvRansacPrefilter->setToolTip(
-            "Use OpenCV affine RANSAC as a tie-point coherence prefilter.");
-
-         m_opencvRansacThresholdPixels = new QDoubleSpinBox(this);
-         m_opencvRansacThresholdPixels->setRange(0.0, 100000.0);
-         m_opencvRansacThresholdPixels->setDecimals(2);
-         m_opencvRansacThresholdPixels->setSingleStep(1.0);
-         m_opencvRansacThresholdPixels->setValue(25.0);
-         m_opencvRansacThresholdPixels->setToolTip(
-            "RANSAC inlier threshold in pixels for the OpenCV affine "
-            "prefilter.");
-
-         connect(m_approach,
-                 static_cast<void (QComboBox::*)(int)>(
-                    &QComboBox::currentIndexChanged),
-                 [this](int) { applySelectedDefaults(); });
-         connect(m_matchMethod,
-                 static_cast<void (QComboBox::*)(int)>(
-                    &QComboBox::currentIndexChanged),
-                 [this](int) { applySelectedDefaults(); });
-         connect(m_bundlePairPolicy,
-                 static_cast<void (QComboBox::*)(int)>(
-                    &QComboBox::currentIndexChanged),
-                 [this](int) { updateBundlePairPolicyControls(); });
-
-         QFormLayout* form = new QFormLayout();
-         form->addRow("Approach", m_approach);
-         form->addRow("Matcher", m_matchMethod);
-         form->addRow("Resampler", m_resampler);
-         form->addRow("Support pass resampler", m_supportPassResampler);
-         form->addRow("Chip size", m_chipSize);
-         form->addRow("Search radius", m_searchRadius);
-         form->addRow("Grid spacing", m_gridSpacing);
-         form->addRow("Minimum score", m_minScore);
-         form->addRow("Minimum score margin", m_minScoreMargin);
-         form->addRow("View GSD", m_viewGsd);
-         form->addRow("Max ties", m_maxTiePoints);
-         form->addRow("Dense seed budget", m_denseGridSeedBudget);
-         form->addRow("Auto dense seed budget",
-                      m_autoDenseGridSeedBudget);
-         form->addRow("Tie timing diagnostics",
-                      m_tiePointTimingDiagnostics);
-         form->addRow("Bundle pair policy",
-                      m_bundlePairPolicy);
-         form->addRow("Bundle neighbor span",
-                      m_bundleNeighborSpan);
-         form->addRow("Parallel floating inputs",
-                      m_maxConcurrentRegistrations);
-         form->addRow("Adaptive bank threads",
-                      m_adaptiveBankThreadCount);
-         form->addRow("Full post-bank refinement",
-                      m_adaptiveFullPostBankRefinement);
-         form->addRow("Native low-grid policy",
-                      m_nativeLowGridPolicy);
-         form->addRow("OpenCV RANSAC prefilter",
-                      m_opencvRansacPrefilter);
-         form->addRow("OpenCV RANSAC threshold",
-                      m_opencvRansacThresholdPixels);
-
-         QGroupBox* optionsBox = new QGroupBox("Options", this);
-         optionsBox->setLayout(form);
-
-         QDialogButtonBox* buttons =
-            new QDialogButtonBox(QDialogButtonBox::Ok |
-                                 QDialogButtonBox::Cancel,
-                                 Qt::Horizontal,
-                                 this);
-         connect(buttons, SIGNAL(accepted()), this, SLOT(accept()));
-         connect(buttons, SIGNAL(rejected()), this, SLOT(reject()));
-
-         QVBoxLayout* layout = new QVBoxLayout();
-         layout->addWidget(optionsBox);
-         layout->addWidget(buttons);
-         setLayout(layout);
-         applySelectedDefaults();
-      }
-
-      RegistrationSetupOptions options() const
-      {
-         RegistrationSetupOptions result;
-         result.approach =
-            static_cast<RegistrationSetupApproach>(
-               m_approach->itemData(m_approach->currentIndex()).toInt());
-         result.matchMethod =
-            m_matchMethod->itemData(m_matchMethod->currentIndex()).
-               toString().toStdString();
-         result.resamplerType =
-            m_resampler->itemData(m_resampler->currentIndex()).
-               toString().toStdString();
-         result.supportPassMatcherResampler =
-            m_supportPassResampler->itemData(
-               m_supportPassResampler->currentIndex()).toString().toStdString();
-         result.chipSize = m_chipSize->value();
-         if((result.chipSize % 2) == 0)
-            ++result.chipSize;
-         result.searchRadius = m_searchRadius->value();
-         result.gridSpacing = m_gridSpacing->value();
-         result.minScore = m_minScore->value();
-         result.minScoreMargin = m_minScoreMargin->value();
-         result.viewGsd = m_viewGsd->value();
-         result.maxTiePoints =
-            static_cast<std::size_t>(m_maxTiePoints->value());
-         result.denseGridSeedBudget =
-            static_cast<std::size_t>(
-               m_denseGridSeedBudget->value());
-         result.autoDenseGridSeedBudget =
-            m_autoDenseGridSeedBudget->isChecked();
-         result.tiePointTimingDiagnostics =
-            m_tiePointTimingDiagnostics->isChecked();
-         result.bundlePairPolicy =
-            static_cast<BundlePairPolicy>(
-               m_bundlePairPolicy->itemData(
-                  m_bundlePairPolicy->currentIndex()).toInt());
-         result.bundleNeighborSpan =
-            result.bundlePairPolicy == BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN ?
-               static_cast<std::size_t>(m_bundleNeighborSpan->value()) :
-               0;
-         result.maxConcurrentRegistrations =
-            static_cast<std::size_t>(
-               m_maxConcurrentRegistrations->value());
-         result.adaptiveBankThreadCount =
-            static_cast<std::size_t>(
-               m_adaptiveBankThreadCount->value());
-         result.adaptiveFullPostBankRefinement =
-            m_adaptiveFullPostBankRefinement->isChecked();
-         result.nativeLowGridPolicy =
-            m_nativeLowGridPolicy->itemData(
-               m_nativeLowGridPolicy->currentIndex()).toString().toStdString();
-         result.opencvRansacPrefilter =
-            m_opencvRansacPrefilter->isChecked();
-         result.opencvRansacThresholdPixels =
-            m_opencvRansacThresholdPixels->value();
-         return result;
-      }
-
-   private:
-      void applySelectedDefaults()
-      {
-         const RegistrationSetupApproach approach =
-            static_cast<RegistrationSetupApproach>(
-               m_approach->itemData(m_approach->currentIndex()).toInt());
-         const std::string matchMethod =
-            m_matchMethod->itemData(m_matchMethod->currentIndex()).
-               toString().toStdString();
-         const RegistrationSetupOptions defaults =
-            registrationSetupDefaults(approach, matchMethod);
-
-         const int resamplerIndex =
-            m_resampler->findData(QString::fromStdString(
-               defaults.resamplerType));
-         if(resamplerIndex >= 0)
-            m_resampler->setCurrentIndex(resamplerIndex);
-         const int supportPassResamplerIndex =
-            m_supportPassResampler->findData(QString::fromStdString(
-               defaults.supportPassMatcherResampler));
-         if(supportPassResamplerIndex >= 0)
-            m_supportPassResampler->setCurrentIndex(
-               supportPassResamplerIndex);
-         m_chipSize->setValue(defaults.chipSize);
-         m_searchRadius->setValue(defaults.searchRadius);
-         m_gridSpacing->setValue(defaults.gridSpacing);
-         m_minScore->setValue(defaults.minScore);
-         m_minScoreMargin->setValue(defaults.minScoreMargin);
-         m_viewGsd->setValue(defaults.viewGsd);
-         m_maxTiePoints->setValue(
-            static_cast<int>(defaults.maxTiePoints));
-         m_denseGridSeedBudget->setValue(
-            static_cast<int>(defaults.denseGridSeedBudget));
-         m_autoDenseGridSeedBudget->setChecked(
-            defaults.autoDenseGridSeedBudget);
-         m_tiePointTimingDiagnostics->setChecked(
-            defaults.tiePointTimingDiagnostics);
-         {
-            const int pairPolicyIndex =
-               m_bundlePairPolicy->findData(
-                  defaults.bundleNeighborSpan ?
-                     BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN :
-                     BUNDLE_PAIR_POLICY_ALL_PAIRS);
-            if(pairPolicyIndex >= 0)
-               m_bundlePairPolicy->setCurrentIndex(pairPolicyIndex);
-         }
-         m_bundleNeighborSpan->setValue(
-            static_cast<int>(
-               defaults.bundleNeighborSpan ?
-                  defaults.bundleNeighborSpan :
-                  1));
-         updateBundlePairPolicyControls();
-         m_maxConcurrentRegistrations->setValue(
-            static_cast<int>(defaults.maxConcurrentRegistrations));
-         m_adaptiveBankThreadCount->setValue(
-            static_cast<int>(defaults.adaptiveBankThreadCount));
-         m_adaptiveFullPostBankRefinement->setChecked(
-            defaults.adaptiveFullPostBankRefinement);
-         {
-            const int nativeLowGridIndex =
-               m_nativeLowGridPolicy->findData(QString::fromStdString(
-                  defaults.nativeLowGridPolicy));
-            if(nativeLowGridIndex >= 0)
-               m_nativeLowGridPolicy->setCurrentIndex(nativeLowGridIndex);
-         }
-         m_opencvRansacPrefilter->setChecked(
-            defaults.opencvRansacPrefilter);
-         m_opencvRansacThresholdPixels->setValue(
-            defaults.opencvRansacThresholdPixels);
-      }
-
-      void addMatchMethod(const QString& label, const QString& method)
-      {
-         m_matchMethod->addItem(label, method);
-      }
-
-      void updateBundlePairPolicyControls()
-      {
-         const bool neighborSpan =
-            m_bundlePairPolicy->itemData(
-               m_bundlePairPolicy->currentIndex()).toInt() ==
-            BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN;
-         m_bundleNeighborSpan->setEnabled(neighborSpan);
-      }
-
-      QComboBox* m_approach;
-      QComboBox* m_matchMethod;
-      QComboBox* m_resampler;
-      QComboBox* m_supportPassResampler;
-      QSpinBox* m_chipSize;
-      QSpinBox* m_searchRadius;
-      QSpinBox* m_gridSpacing;
-      QDoubleSpinBox* m_minScore;
-      QDoubleSpinBox* m_minScoreMargin;
-      QDoubleSpinBox* m_viewGsd;
-      QSpinBox* m_maxTiePoints;
-      QSpinBox* m_denseGridSeedBudget;
-      QCheckBox* m_autoDenseGridSeedBudget;
-      QCheckBox* m_tiePointTimingDiagnostics;
-      QComboBox* m_bundlePairPolicy;
-      QSpinBox* m_bundleNeighborSpan;
-      QSpinBox* m_maxConcurrentRegistrations;
-      QSpinBox* m_adaptiveBankThreadCount;
-      QCheckBox* m_adaptiveFullPostBankRefinement;
-      QComboBox* m_nativeLowGridPolicy;
-      QCheckBox* m_opencvRansacPrefilter;
-      QDoubleSpinBox* m_opencvRansacThresholdPixels;
-   };
-
-   void applyRegistrationSetupTieOptions(
-      ossim_autoreg::TiePointGenerationOptions& tiePointOptions,
-      const RegistrationSetupOptions& setupOptions)
-   {
-      tiePointOptions.matchMethod() = setupOptions.matchMethod;
-      tiePointOptions.resamplerType() = setupOptions.resamplerType;
-      tiePointOptions.chipSize() = setupOptions.chipSize;
-      tiePointOptions.searchRadius() = setupOptions.searchRadius;
-      tiePointOptions.gridSpacing() = setupOptions.gridSpacing;
-      tiePointOptions.minScore() = setupOptions.minScore;
-      tiePointOptions.minScoreMargin() = setupOptions.minScoreMargin;
-      tiePointOptions.viewGsd() = setupOptions.viewGsd;
-      tiePointOptions.maxTiePoints() = setupOptions.maxTiePoints;
-      tiePointOptions.denseGridSeedBudget() =
-         setupOptions.denseGridSeedBudget;
-      tiePointOptions.autoDenseGridSeedBudget() =
-         setupOptions.autoDenseGridSeedBudget;
-      tiePointOptions.timingDiagnostics() =
-         setupOptions.tiePointTimingDiagnostics;
-   }
 
    QString registeredNodeName(const std::string& matchMethod)
    {
@@ -7100,11 +6433,9 @@ void ossimGui::DataManagerWidget::createBundleNativeAffineStripAutoRegistrationF
 void ossimGui::DataManagerWidget::createRegistrationFromDialog()
 {
 #ifdef OSSIM_AUTOREGISTRATION_ENABLED
-   RegistrationSetupDialog dialog(this);
-   if(dialog.exec() != QDialog::Accepted)
+   RegistrationSetupOptions setupOptions;
+   if(!promptForRegistrationSetup(this, setupOptions))
       return;
-
-   const RegistrationSetupOptions setupOptions = dialog.options();
    if(!setupOptions.matchMethod.empty() &&
       !ossim_autoreg::TiePointGeneratorFactory::instance()->
          create(setupOptions.matchMethod))
@@ -7137,6 +6468,9 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
       applyBundleDefaultsToSource(
          bundle.get(),
          setupOptions.approach == REGISTRATION_SETUP_BUNDLE_ANCHORED);
+      bundle->setAnchorInputIndexes(
+         setupOptions.bundleAnchorInputIndexes);
+      bundle->setBundleInputPairs(setupOptions.bundleInputPairs);
       ossim_autoreg::AutoRegistrationOptions registrationOptions =
          bundle->autoRegistrationOptions();
       ossim_autoreg::TiePointGenerationOptions tiePointOptions =
@@ -7147,6 +6481,8 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
          sharedBundlePairPolicy(setupOptions.bundlePairPolicy));
       registrationOptions.setBundleNeighborSpan(
          setupOptions.bundleNeighborSpan);
+      registrationOptions.optimizer().setBundleLinearSolverType(
+         setupOptions.bundleLinearSolverType);
       registrationOptions.overrides().setAutoDenseGridSeedBudget(true);
       registrationOptions.setOpencvRansacPrefilter(
          setupOptions.opencvRansacPrefilter);
@@ -7158,7 +6494,7 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
          "Bundle All-Floating Registration" :
          "Bundle Anchored Registration";
       toolTip =
-         QString("Launch preset: %1\nMatcher: %2\nResampler: %3\nView GSD: %4\nMin score margin: %5\nDense seed budget: %6\nAuto dense seed budget: %7\nTie timing diagnostics: %8\nBundle pair policy: %9\nOpenCV RANSAC prefilter: %10\nOpenCV RANSAC threshold: %11")
+         QString("Launch preset: %1\nMatcher: %2\nResampler: %3\nView GSD: %4\nMin score margin: %5\nDense seed budget: %6\nAuto dense seed budget: %7\nTie timing diagnostics: %8\nBundle pair policy: %9\nBundle solver: %10\nOpenCV RANSAC prefilter: %11\nOpenCV RANSAC threshold: %12")
             .arg(bundle->launchPreset().c_str())
             .arg(QString::fromStdString(setupOptions.matchMethod))
             .arg(QString::fromStdString(setupOptions.resamplerType))
@@ -7171,6 +6507,8 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
                bundlePairPolicyDescription(
                   setupOptions.bundlePairPolicy,
                   setupOptions.bundleNeighborSpan)))
+            .arg(QString::fromStdString(
+               setupOptions.bundleLinearSolverType))
             .arg(setupOptions.opencvRansacPrefilter ? "true" : "false")
             .arg(setupOptions.opencvRansacThresholdPixels);
    }
