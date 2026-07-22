@@ -103,6 +103,9 @@ All notable changes to `ossim-gui` are documented here.
 > Completed registration objects now retain their quality reports for inline
 > review or a larger report window, and context menus no longer activate an
 > action merely because the initiating mouse button was released over it.
+> Registration Setup now lives in a focused optional component and obtains
+> bundle solver choices from the autoregistration factory while carrying
+> explicit pair and anchor selections through the shared source API.
 
 ### Fixed
 - Open GeoCell context menus through Qt's context-menu event so the mouse
@@ -303,6 +306,9 @@ All notable changes to `ossim-gui` are documented here.
 - Make deleting the final adjustable-parameter entry use the same model-default
   reload path as the new button instead of leaving stale adjustment state in
   the editor.
+- Extract Registration Setup from the data manager, populate bundle solvers
+  from factory descriptors, and pass explicit pair, anchor, and stable solver
+  type selections through the shared optional registration bridge (`b3a2e30`).
 
 ## [2026-07-19]
 
