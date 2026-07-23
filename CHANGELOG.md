@@ -103,6 +103,12 @@ All notable changes to `ossim-gui` are documented here.
 > Completed registration objects now retain their quality reports for inline
 > review or a larger report window, and context menus no longer activate an
 > action merely because the initiating mouse button was released over it.
+> Registration Setup now lives in a focused optional component and obtains
+> bundle solver choices from the autoregistration factory while carrying
+> explicit pair and anchor selections through the shared source API.
+> Fixed and bundle registration jobs now live in focused modules and launch
+> registered sources through shared setup profiles, leaving the data manager
+> to manage the interface instead of quietly moonlighting as an engine.
 
 ### Fixed
 - Open GeoCell context menus through Qt's context-menu event so the mouse
@@ -252,6 +258,10 @@ All notable changes to `ossim-gui` are documented here.
   checkbox/combobox editors that no longer fight the table paint layer.
 
 ### Changed
+- Extract fixed and bundle execution, cancellation, progress, runtime context,
+  and report handling from `DataManagerWidget`; create sources and apply named
+  setup profiles through the shared factory-driven autoregistration APIs
+  (`2b27f0b`).
 - Make `Bundle Native Affine Strip Auto` request explicit adjacent strip pairs
   and update its tooltip so ordered flightline runs use the graph promised by
   the menu label (`4770ff6`).
@@ -303,6 +313,9 @@ All notable changes to `ossim-gui` are documented here.
 - Make deleting the final adjustable-parameter entry use the same model-default
   reload path as the new button instead of leaving stale adjustment state in
   the editor.
+- Extract Registration Setup from the data manager, populate bundle solvers
+  from factory descriptors, and pass explicit pair, anchor, and stable solver
+  type selections through the shared optional registration bridge (`b3a2e30`).
 
 ## [2026-07-19]
 
