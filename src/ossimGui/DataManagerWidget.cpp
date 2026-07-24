@@ -963,8 +963,11 @@ void ossimGui::DataManagerRegistrationItem::setRegistrationReport(
 
    if(!m_reportItem)
    {
-      m_reportItem = new QTreeWidgetItem();
+      m_reportItem = new DataManagerItem();
       m_reportItem->setText(0, "Registration Report");
+      m_reportItem->setToolTip(
+         0,
+         "Double-click or use the context menu to open the full report.");
       m_reportItem->setSizeHint(0, QSize(720, 285));
       addChild(m_reportItem);
 
@@ -982,6 +985,8 @@ void ossimGui::DataManagerRegistrationItem::setRegistrationReport(
 
       QPushButton* openButton =
          new QPushButton("Open Full Report...", reportWidget);
+      openButton->setToolTip(
+         "Open this registration report in a resizable window.");
       QObject::connect(openButton,
                        &QPushButton::clicked,
                        [this]() { showRegistrationReport(); });
@@ -1025,6 +1030,17 @@ void ossimGui::DataManagerRegistrationItem::setRegistrationReport(
    setExpanded(true);
 }
 
+bool ossimGui::DataManagerRegistrationItem::hasRegistrationReport()const
+{
+   return !m_reportText.isEmpty();
+}
+
+bool ossimGui::DataManagerRegistrationItem::ownsRegistrationReportItem(
+   const QTreeWidgetItem* item)const
+{
+   return item && item == m_reportItem;
+}
+
 void ossimGui::DataManagerRegistrationItem::showRegistrationReport()
 {
    QDialog* dialog = new QDialog(treeWidget());
@@ -1047,6 +1063,7 @@ void ossimGui::DataManagerRegistrationItem::showRegistrationReport()
    reportView->setReadOnly(true);
    reportView->setLineWrapMode(QPlainTextEdit::NoWrap);
    reportView->setPlainText(m_reportText);
+   reportView->moveCursor(QTextCursor::Start);
    QFont reportFont = reportView->font();
    reportFont.setFamily("monospace");
    reportFont.setStyleHint(QFont::TypeWriter);
@@ -1055,11 +1072,36 @@ void ossimGui::DataManagerRegistrationItem::showRegistrationReport()
 
    QDialogButtonBox* buttons =
       new QDialogButtonBox(QDialogButtonBox::Close, dialog);
+   QPushButton* copyButton =
+      buttons->addButton("Copy All", QDialogButtonBox::ActionRole);
+   copyButton->setEnabled(!m_reportText.isEmpty());
+   copyButton->setToolTip("Copy the complete report to the clipboard.");
+   QObject::connect(
+      copyButton,
+      &QPushButton::clicked,
+      [reportView]() {
+         const QTextCursor originalCursor = reportView->textCursor();
+         reportView->selectAll();
+         reportView->copy();
+         reportView->setTextCursor(originalCursor);
+      });
+   QPushButton* wrapButton =
+      buttons->addButton("Wrap Lines", QDialogButtonBox::ActionRole);
+   wrapButton->setCheckable(true);
+   wrapButton->setToolTip("Toggle wrapping for long report lines.");
+   QObject::connect(
+      wrapButton,
+      &QPushButton::toggled,
+      [reportView](bool checked) {
+         reportView->setLineWrapMode(
+            checked ? QPlainTextEdit::WidgetWidth : QPlainTextEdit::NoWrap);
+      });
    QObject::connect(buttons, &QDialogButtonBox::rejected,
                     dialog, &QDialog::close);
    layout->addWidget(buttons);
 
    dialog->resize(960, 700);
+   dialog->setSizeGripEnabled(true);
    dialog->show();
 }
 
@@ -2112,7 +2154,20 @@ ossimGui::DataManagerWidget::DataManagerWidget(QWidget* parent)
    m_dataManager->setCallback(m_dataManagerCallback);
    
    initialize();
-   //connect(this, SIGNAL(itemDoubleClicked(QTreeWidgetItem*, int)), this, SLOT(itemDoubleClicked(QTreeWidgetItem*, int)));
+   connect(this,
+           &QTreeWidget::itemDoubleClicked,
+           this,
+           [](QTreeWidgetItem* item, int) {
+              if(!item)
+                 return;
+              DataManagerRegistrationItem* registrationItem =
+                 dynamic_cast<DataManagerRegistrationItem*>(item->parent());
+              if(registrationItem &&
+                 registrationItem->ownsRegistrationReportItem(item))
+              {
+                 registrationItem->showRegistrationReport();
+              }
+           });
    connect(this, SIGNAL(itemChanged(QTreeWidgetItem*, int)), this, SLOT(itemChanged(QTreeWidgetItem*, int)));
    connect(this, SIGNAL(itemCollapsed(QTreeWidgetItem*)), this, SLOT(itemCollapsed(QTreeWidgetItem*)));
    connect(this, SIGNAL(itemExpanded(QTreeWidgetItem*)), this, SLOT(itemExpanded(QTreeWidgetItem*)));
@@ -4981,7 +5036,22 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
    bool hasItems = false;
    QMenu* menu = 0;
    menu = new QMenu(this);
-   if(dynamic_cast<DataManagerRawImageSourceFolder*>(activeItem))
+   DataManagerRegistrationItem* reportRegistrationItem =
+      activeItem
+         ? dynamic_cast<DataManagerRegistrationItem*>(activeItem->parent())
+         : 0;
+   if(reportRegistrationItem &&
+      reportRegistrationItem->ownsRegistrationReportItem(activeItem))
+   {
+      QAction* openReportAction =
+         menu->addAction("Open Registration Report...");
+      connect(openReportAction,
+              &QAction::triggered,
+              [reportRegistrationItem]() {
+                 reportRegistrationItem->showRegistrationReport();
+              });
+   }
+   else if(dynamic_cast<DataManagerRawImageSourceFolder*>(activeItem))
    {
       QMenu* openMenu =new QMenu("Open Image");
       
@@ -5091,6 +5161,16 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
 #ifdef OSSIM_AUTOREGISTRATION_ENABLED
       DataManagerRegistrationItem* registrationItem =
          dynamic_cast<DataManagerRegistrationItem*> (activeItem);
+      if(registrationItem && registrationItem->hasRegistrationReport())
+      {
+         QAction* reportAction =
+            menu->addAction("Open Registration Report...");
+         connect(reportAction,
+                 &QAction::triggered,
+                 [registrationItem]() {
+                    registrationItem->showRegistrationReport();
+                 });
+      }
       ossimBundleAdjustmentRegistrationSource* bundleRegistration = 0;
       if(registrationItem && registrationItem->objectAsNode())
       {

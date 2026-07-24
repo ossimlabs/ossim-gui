@@ -360,6 +360,8 @@ namespace ossimGui{
       virtual void execute();
       void setRegistrationReport(const std::string& reportText,
                                  const std::string& reportPath);
+      bool hasRegistrationReport()const;
+      bool ownsRegistrationReportItem(const QTreeWidgetItem* item)const;
       void showRegistrationReport();
 
    protected:
