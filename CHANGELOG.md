@@ -109,6 +109,8 @@ All notable changes to `ossim-gui` are documented here.
 > Fixed and bundle registration jobs now live in focused modules and launch
 > registered sources through shared setup profiles, leaving the data manager
 > to manage the interface instead of quietly moonlighting as an engine.
+> Completed registration reports are now easier to reopen, read, wrap, and
+> copy from either the registration object or its report child.
 
 ### Fixed
 - Open GeoCell context menus through Qt's context-menu event so the mouse
@@ -124,6 +126,11 @@ All notable changes to `ossim-gui` are documented here.
   (`37b931e`).
 
 ### Added
+- Make completed registration reports directly accessible from the
+  registration object and report child through context menus and double-click,
+  and add copy-all, line-wrap, and resizable full-report controls. Verified
+  with a successful Celtic all-registration run covering 7 floating inputs,
+  482 retained tie points, and 7 in-place live geometry updates (`deb6756`).
 - Retain completed fixed and bundle quality reports on their GeoCell
   registration objects, including the generated report path, an inline preview,
   and a resizable full-report window (`8d29413`).
