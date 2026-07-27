@@ -1,15 +1,12 @@
 #include <ossimGui/ImageMdiSubWindow.h>
 #include <ossimGui/AdjustableParameterEditor.h>
-#include <ossimGui/BandSelectorEditor.h>
-#include <ossimGui/BrightnessContrastEditor.h>
 #include <ossimGui/ChipperDialog.h>
 #include <ossimGui/CopyChainVisitor.h>
 #include <ossimGui/Event.h>
 #include <ossimGui/ExportImageDialog.h>
-#include <ossimGui/HistogramRemapperEditor.h>
-#include <ossimGui/HsiRemapperEditor.h>
 #include <ossimGui/ImageScrollView.h>
 #include <ossimGui/ImageViewManipulator.h>
+#include <ossimGui/ObjectEditorFactory.h>
 #include <ossimGui/PolygonRemapperDialog.h>
 #include <ossimGui/PositionInformationDialog.h>
 #include <ossimGui/SetViewVisitor.h>
@@ -40,6 +37,23 @@
 #include <QMessageBox>
 #include <iostream>
 #include <fstream>
+
+namespace
+{
+   void showObjectEditor(const std::string& name,
+                         ossimObject* object,
+                         QWidget* parent)
+   {
+      QWidget* editor =
+         ossimGui::ObjectEditorFactory::instance()->create(
+            name, object, parent);
+      if(editor)
+      {
+         editor->setAttribute(Qt::WA_DeleteOnClose);
+         editor->show();
+      }
+   }
+}
 
 ossimGui::ImageActions::Visitor::Visitor()
 :ossimVisitor(ossimVisitor::VISIT_INPUTS | ossimVisitor::VISIT_CHILDREN)   
@@ -187,42 +201,33 @@ void ossimGui::ImageActions::exportKeywordlist()
 void ossimGui::ImageActions::editBandSelector()
 {
    if(!m_visitor.m_bandSelectors.empty())
-   {
-      BandSelectorEditor* editor = new BandSelectorEditor(m_widget);
-      editor->setObject(m_visitor.m_bandSelectors[0].get());
-      editor->show();
-   }
+      showObjectEditor(
+         "band-selector", m_visitor.m_bandSelectors[0].get(), m_widget);
 }
 
 void ossimGui::ImageActions::editHsiAdjustments()
 {
    if(!m_visitor.m_hsiRemappers.empty())
-   {
-      HsiRemapperEditor* editor = new HsiRemapperEditor(m_widget);
-      editor->setObject(m_visitor.m_hsiRemappers[0].get());
-      editor->show();
-      //std::cout << "Editing HSI adjustments === " << m_visitor.m_hsiRemappers[0].get() << std::endl;
-   }
+      showObjectEditor(
+         "hsi-remapper", m_visitor.m_hsiRemappers[0].get(), m_widget);
 }
 
 void ossimGui::ImageActions::editHistogramRemapper()
 {
    if(!m_visitor.m_histogramRemappers.empty())
-   {
-      HistogramRemapperEditor* editor = new HistogramRemapperEditor(m_widget);
-      editor->setObject(m_visitor.m_histogramRemappers[0].get());
-      editor->show();
-   }
+      showObjectEditor(
+         "histogram-remapper",
+         m_visitor.m_histogramRemappers[0].get(),
+         m_widget);
 }
 
 void ossimGui::ImageActions::editBrightnessContrast()
 {
    if(!m_visitor.m_brightnessContrastSources.empty())
-   {
-      BrightnessContrastEditor* editor = new BrightnessContrastEditor(m_widget);
-      editor->setObject(m_visitor.m_brightnessContrastSources[0].get());
-      editor->show();
-   }
+      showObjectEditor(
+         "brightness-contrast",
+         m_visitor.m_brightnessContrastSources[0].get(),
+         m_widget);
 }
 
 void ossimGui::ImageActions::showPolygonRemapper()
@@ -1305,5 +1310,4 @@ bool ossimGui::ImageMdiSubWindow::event(QEvent* evt)
    }
    return MdiSubWindowBase::event(evt);
 }
-
 

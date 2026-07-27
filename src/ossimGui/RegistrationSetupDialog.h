@@ -3,7 +3,12 @@
 
 #include <ossim_autoreg/RegistrationSourceSetup.h>
 
+#include <string>
+#include <vector>
+
 class QWidget;
+class ossimObject;
+class ossimImageSource;
 
 namespace ossimGui
 {
@@ -33,9 +38,41 @@ namespace ossimGui
    constexpr BundlePairPolicy BUNDLE_PAIR_POLICY_EXPLICIT =
       ossim_autoreg::REGISTRATION_SETUP_BUNDLE_PAIR_POLICY_EXPLICIT;
 
+   struct RegistrationSetupInput
+   {
+      std::string label;
+      ossimImageSource* source;
+      std::size_t originalIndex;
+
+      RegistrationSetupInput()
+      : label(), source(0), originalIndex(0)
+      {
+      }
+
+      RegistrationSetupInput(
+         const std::string& inputLabel,
+         ossimImageSource* inputSource,
+         std::size_t inputOriginalIndex)
+      : label(inputLabel), source(inputSource),
+        originalIndex(inputOriginalIndex)
+      {
+      }
+   };
+
    bool promptForRegistrationSetup(
       QWidget* parent,
       RegistrationSetupOptions& options);
+
+   bool promptForRegistrationLaunch(
+      QWidget* parent,
+      RegistrationSetupOptions& options,
+      bool& executeAfterCreate,
+      const RegistrationSetupOptions* initialOptions,
+      std::vector<RegistrationSetupInput>& inputs);
+
+   QWidget* createRegistrationSetupEditor(
+      ossimObject* object,
+      QWidget* parent = 0);
 
 }
 

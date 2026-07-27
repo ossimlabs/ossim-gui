@@ -359,14 +359,19 @@ namespace ossimGui{
       virtual void dropItems(QList<DataManagerItem*>& chainItemList);
       virtual void execute();
       void setRegistrationReport(const std::string& reportText,
-                                 const std::string& reportPath);
+                                 const std::string& reportPath,
+                                 const std::string& status,
+                                 const std::string& summary,
+                                 const std::string& advisory);
       bool hasRegistrationReport()const;
       bool ownsRegistrationReportItem(const QTreeWidgetItem* item)const;
       void showRegistrationReport();
 
    protected:
       QTreeWidgetItem* m_reportItem;
-      QPlainTextEdit* m_reportPreview;
+      QLabel* m_resultStatusLabel;
+      QLabel* m_resultSummaryLabel;
+      QLabel* m_resultAdvisoryLabel;
       QLabel* m_reportPathLabel;
       QString m_reportText;
       QString m_reportPath;
@@ -604,6 +609,7 @@ namespace ossimGui{
       void prepareForShutdown();
       bool isPreparingForShutdown()const;
       std::shared_ptr<std::atomic_bool> shutdownRequested()const{return m_shutdownRequested;}
+      void swipeRegistrationInputs(DataManagerRegistrationItem* item);
       bool openDataManager(const ossimFilename& file);
       void refresh();
       QModelIndex indexFromDataManagerItem(DataManagerItem* item, int col=0);
@@ -671,21 +677,8 @@ namespace ossimGui{
       virtual void createJpegWriter();
       virtual void createWriterFromFactory();
 
-      virtual void createFixedRegistration();
-      virtual void createFixedOpenCvAutoRegistration();
-      virtual void createFixedNativeAffineAutoRegistration();
-      virtual void createBundleFloatingRegistration();
-      virtual void createBundleNativeAffineAutoRegistration();
-      virtual void createBundleNativeAffineMatcherAutoRegistration();
-      virtual void createBundleNativeAffineStripAutoRegistration();
-      virtual void createFixedRegistrationFromSelection();
-      virtual void createFixedOpenCvAutoRegistrationFromSelection();
-      virtual void createFixedNativeAffineAutoRegistrationFromSelection();
-      virtual void createBundleFloatingRegistrationFromSelection();
-      virtual void createBundleNativeAffineAutoRegistrationFromSelection();
-      virtual void createBundleNativeAffineMatcherAutoRegistrationFromSelection();
-      virtual void createBundleNativeAffineStripAutoRegistrationFromSelection();
       virtual void createRegistrationFromDialog();
+      virtual void createRegistrationFromSelectionDialog();
       virtual void setSelectedBundleAllFloating(bool enabled);
       virtual void registerSelected();
       
@@ -778,22 +771,17 @@ namespace ossimGui{
       
       void combineImagesWithType(const QString& classType);
       void createWriterFromType(const QString& classType);
-      DataManagerRegistrationItem* createDefaultFixedRegistrationItem();
-      DataManagerRegistrationItem*
-         createDefaultFixedOpenCvAutoRegistrationItem();
-      DataManagerRegistrationItem*
-         createDefaultFixedNativeAffineAutoRegistrationItem();
-      DataManagerRegistrationItem*
-         createDefaultBundleFloatingRegistrationItem();
-      DataManagerRegistrationItem*
-         createDefaultBundleNativeAffineAutoRegistrationItem(
-            const std::string& setupPreset =
-               std::string("bundle:native-affine"),
-            const QString& nodeName =
-               QString("Bundle Native Affine Auto"));
       QList<DataManagerItem*> selectedRegistrationInputItems() const;
-      void connectAndExecuteSelectedRegistration(
-         DataManagerRegistrationItem* item);
+      void connectSelectedRegistration(
+         DataManagerRegistrationItem* item,
+         bool executeAfterCreate = true,
+         QList<DataManagerItem*> inputs = QList<DataManagerItem*>());
+      void createRegistrationSetup(
+         bool connectSelectedImages,
+         const QString& presetType = QString());
+      void populateQuickRegistrationMenu(
+         QMenu* menu,
+         bool connectSelectedImages);
       virtual void incrementScrollBars(const QPoint& pos);
       
       /***************************** QT events **************************/

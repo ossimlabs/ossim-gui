@@ -2,21 +2,37 @@
 
 #include "RegistrationSetupDialog.h"
 
+#include <ossim/registration/ossimBundleAdjustmentRegistrationSource.h>
+#include <ossim/registration/ossimFixedRegistrationSource.h>
 #include <ossim/base/ossimString.h>
+#include <ossim/imaging/ossimImageGeometry.h>
+#include <ossim/imaging/ossimImageSource.h>
 #include <ossim_autoreg/BundleLinearSolverFactory.h>
 #include <ossim_autoreg/TiePointGenerator.h>
 
+#include <QAbstractSpinBox>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
+#include <QGuiApplication>
 #include <QGroupBox>
+#include <QHeaderView>
+#include <QHBoxLayout>
+#include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QPushButton>
+#include <QScreen>
+#include <QSignalBlocker>
+#include <QSizePolicy>
 #include <QSpinBox>
 #include <QStringList>
+#include <QTableWidget>
+#include <QTabWidget>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -25,6 +41,31 @@
 
 namespace ossimGui
 {
+   void configureRegistrationField(QWidget* field,
+                                   int minimumWidth = 180)
+   {
+      if(!field)
+         return;
+      field->setMinimumWidth(minimumWidth);
+      field->setMinimumHeight(30);
+      QSizePolicy policy = field->sizePolicy();
+      policy.setHorizontalPolicy(QSizePolicy::Expanding);
+      field->setSizePolicy(policy);
+   }
+
+   void configureRegistrationSpinBox(QAbstractSpinBox* spinBox)
+   {
+      configureRegistrationField(spinBox, 140);
+      spinBox->setMinimumHeight(34);
+      spinBox->setAccelerated(true);
+   }
+
+   void configureRegistrationForm(QFormLayout* form)
+   {
+      form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+      form->setRowWrapPolicy(QFormLayout::DontWrapRows);
+   }
+
    bool parseRegistrationInputIndex(const std::string& text,
                                     std::size_t& value)
    {
@@ -133,8 +174,20 @@ namespace ossimGui
    class RegistrationSetupDialog : public QDialog
    {
    public:
-      RegistrationSetupDialog(QWidget* parent = 0)
+      RegistrationSetupDialog(
+         QWidget* parent = 0,
+         ossimObject* object = 0,
+         const RegistrationSetupOptions* initialOptions = 0,
+         bool showLaunchActions = false,
+         const std::vector<RegistrationSetupInput>& inputs = {})
       : QDialog(parent),
+        m_object(object),
+        m_executeAfterCreate(false),
+        m_executionEligible(true),
+        m_setupInputs(inputs),
+        m_preflightTable(0),
+        m_preflightSummary(0),
+        m_runButton(0),
         m_approach(0),
         m_matchMethod(0),
         m_resampler(0),
@@ -156,10 +209,7 @@ namespace ossimGui
         m_bundleLinearSolver(0),
         m_maxConcurrentRegistrations(0),
         m_adaptiveBankThreadCount(0),
-        m_adaptiveFullPostBankRefinement(0),
-        m_nativeLowGridPolicy(0),
-        m_opencvRansacPrefilter(0),
-        m_opencvRansacThresholdPixels(0)
+        m_adaptiveFullPostBankRefinement(0)
       {
          setWindowTitle("Registration Setup");
 
@@ -246,7 +296,7 @@ namespace ossimGui
          m_minScoreMargin->setSingleStep(0.01);
          m_minScoreMargin->setValue(0.03);
          m_minScoreMargin->setToolTip(
-            "Minimum native-affine NCC peak separation. "
+            "Minimum matcher score separation. "
             "Use 0 to disable ambiguity filtering.");
 
          m_viewGsd = new QDoubleSpinBox(this);
@@ -340,26 +390,25 @@ namespace ossimGui
          m_adaptiveFullPostBankRefinement = new QCheckBox(this);
          m_adaptiveFullPostBankRefinement->setChecked(true);
 
-         m_nativeLowGridPolicy = new QComboBox(this);
-         m_nativeLowGridPolicy->addItem("Advisory", "advisory");
-         m_nativeLowGridPolicy->addItem("Reject", "reject");
-         m_nativeLowGridPolicy->setToolTip(
-            "Handling for native image-space matches with low control-grid "
-            "occupancy.");
-
-         m_opencvRansacPrefilter = new QCheckBox(this);
-         m_opencvRansacPrefilter->setChecked(true);
-         m_opencvRansacPrefilter->setToolTip(
-            "Use OpenCV affine RANSAC as a tie-point coherence prefilter.");
-
-         m_opencvRansacThresholdPixels = new QDoubleSpinBox(this);
-         m_opencvRansacThresholdPixels->setRange(0.0, 100000.0);
-         m_opencvRansacThresholdPixels->setDecimals(2);
-         m_opencvRansacThresholdPixels->setSingleStep(1.0);
-         m_opencvRansacThresholdPixels->setValue(25.0);
-         m_opencvRansacThresholdPixels->setToolTip(
-            "RANSAC inlier threshold in pixels for the OpenCV affine "
-            "prefilter.");
+         configureRegistrationField(m_approach, 220);
+         configureRegistrationField(m_matchMethod, 220);
+         configureRegistrationField(m_resampler);
+         configureRegistrationField(m_supportPassResampler);
+         configureRegistrationField(m_bundlePairPolicy);
+         configureRegistrationField(m_bundleAnchorInputIndexes, 220);
+         configureRegistrationField(m_bundleInputPairs, 220);
+         configureRegistrationField(m_bundleLinearSolver, 220);
+         configureRegistrationSpinBox(m_chipSize);
+         configureRegistrationSpinBox(m_searchRadius);
+         configureRegistrationSpinBox(m_gridSpacing);
+         configureRegistrationSpinBox(m_minScore);
+         configureRegistrationSpinBox(m_minScoreMargin);
+         configureRegistrationSpinBox(m_viewGsd);
+         configureRegistrationSpinBox(m_maxTiePoints);
+         configureRegistrationSpinBox(m_denseGridSeedBudget);
+         configureRegistrationSpinBox(m_bundleNeighborSpan);
+         configureRegistrationSpinBox(m_maxConcurrentRegistrations);
+         configureRegistrationSpinBox(m_adaptiveBankThreadCount);
 
          connect(m_approach,
                  static_cast<void (QComboBox::*)(int)>(
@@ -373,71 +422,209 @@ namespace ossimGui
                  static_cast<void (QComboBox::*)(int)>(
                     &QComboBox::currentIndexChanged),
                  [this](int) { updateBundlePairPolicyControls(); });
+         connect(m_bundleAnchorInputIndexes, &QLineEdit::textChanged,
+                 [this](const QString&) { updatePreflight(); });
 
-         QFormLayout* form = new QFormLayout();
-         form->addRow("Approach", m_approach);
-         form->addRow("Matcher", m_matchMethod);
-         form->addRow("Resampler", m_resampler);
-         form->addRow("Support pass resampler", m_supportPassResampler);
-         form->addRow("Chip size", m_chipSize);
-         form->addRow("Search radius", m_searchRadius);
-         form->addRow("Grid spacing", m_gridSpacing);
-         form->addRow("Minimum score", m_minScore);
-         form->addRow("Minimum score margin", m_minScoreMargin);
-         form->addRow("View GSD", m_viewGsd);
-         form->addRow("Max ties", m_maxTiePoints);
-         form->addRow("Dense seed budget", m_denseGridSeedBudget);
-         form->addRow("Auto dense seed budget",
-                      m_autoDenseGridSeedBudget);
-         form->addRow("Tie timing diagnostics",
-                      m_tiePointTimingDiagnostics);
-         form->addRow("Bundle pair policy",
-                      m_bundlePairPolicy);
-         form->addRow("Bundle neighbor span",
-                      m_bundleNeighborSpan);
-         form->addRow("Bundle anchor input indexes",
-                      m_bundleAnchorInputIndexes);
-         form->addRow("Bundle explicit input pairs",
-                      m_bundleInputPairs);
-         form->addRow("Bundle linear solver",
-                      m_bundleLinearSolver);
-         form->addRow("Parallel floating inputs",
-                      m_maxConcurrentRegistrations);
-         form->addRow("Adaptive bank threads",
-                      m_adaptiveBankThreadCount);
-         form->addRow("Full post-bank refinement",
-                      m_adaptiveFullPostBankRefinement);
-         form->addRow("Native low-grid policy",
-                      m_nativeLowGridPolicy);
-         form->addRow("OpenCV RANSAC prefilter",
-                      m_opencvRansacPrefilter);
-         form->addRow("OpenCV RANSAC threshold",
-                      m_opencvRansacThresholdPixels);
+         QFormLayout* basicLeftForm = new QFormLayout();
+         configureRegistrationForm(basicLeftForm);
+         basicLeftForm->addRow("Approach", m_approach);
+         basicLeftForm->addRow("Matcher", m_matchMethod);
+         basicLeftForm->addRow("Resampler", m_resampler);
+         basicLeftForm->addRow(
+            "Parallel floating inputs", m_maxConcurrentRegistrations);
+         QFormLayout* basicRightForm = new QFormLayout();
+         configureRegistrationForm(basicRightForm);
+         basicRightForm->addRow("Bundle pair policy", m_bundlePairPolicy);
+         basicRightForm->addRow(
+            "Bundle neighbor span", m_bundleNeighborSpan);
+         basicRightForm->addRow(
+            "Bundle anchor input indexes", m_bundleAnchorInputIndexes);
+         basicRightForm->addRow(
+            "Bundle explicit input pairs", m_bundleInputPairs);
+         QHBoxLayout* basicLayout = new QHBoxLayout();
+         basicLayout->addLayout(basicLeftForm, 1);
+         basicLayout->addSpacing(20);
+         basicLayout->addLayout(basicRightForm, 1);
+         QWidget* basicOptionsPage = new QWidget(this);
+         basicOptionsPage->setLayout(basicLayout);
 
-         QGroupBox* optionsBox = new QGroupBox("Options", this);
-         optionsBox->setLayout(form);
+         QFormLayout* advancedLeftForm = new QFormLayout();
+         configureRegistrationForm(advancedLeftForm);
+         advancedLeftForm->addRow(
+            "Support pass resampler", m_supportPassResampler);
+         advancedLeftForm->addRow("Chip size", m_chipSize);
+         advancedLeftForm->addRow("Search radius", m_searchRadius);
+         advancedLeftForm->addRow("Grid spacing", m_gridSpacing);
+         advancedLeftForm->addRow("Minimum score", m_minScore);
+         advancedLeftForm->addRow(
+            "Minimum score margin", m_minScoreMargin);
+         advancedLeftForm->addRow("View GSD", m_viewGsd);
+         QFormLayout* advancedRightForm = new QFormLayout();
+         configureRegistrationForm(advancedRightForm);
+         advancedRightForm->addRow("Max ties", m_maxTiePoints);
+         advancedRightForm->addRow(
+            "Dense seed budget", m_denseGridSeedBudget);
+         advancedRightForm->addRow(
+            "Auto dense seed budget", m_autoDenseGridSeedBudget);
+         advancedRightForm->addRow(
+            "Tie timing diagnostics", m_tiePointTimingDiagnostics);
+         advancedRightForm->addRow(
+            "Bundle linear solver", m_bundleLinearSolver);
+         advancedRightForm->addRow(
+            "Adaptive bank threads", m_adaptiveBankThreadCount);
+         advancedRightForm->addRow(
+            "Full post-bank refinement",
+            m_adaptiveFullPostBankRefinement);
+         QHBoxLayout* advancedLayout = new QHBoxLayout();
+         advancedLayout->addLayout(advancedLeftForm, 1);
+         advancedLayout->addSpacing(20);
+         advancedLayout->addLayout(advancedRightForm, 1);
+         QWidget* advancedOptionsPage = new QWidget(this);
+         advancedOptionsPage->setLayout(advancedLayout);
+         QTabWidget* optionsTabs = new QTabWidget(this);
+         optionsTabs->addTab(basicOptionsPage, "Basic Options");
+         optionsTabs->addTab(advancedOptionsPage, "Advanced Options");
+         optionsTabs->setCurrentIndex(0);
 
-         QDialogButtonBox* buttons =
-            new QDialogButtonBox(QDialogButtonBox::Ok |
-                                 QDialogButtonBox::Cancel,
-                                 Qt::Horizontal,
-                                 this);
-         connect(buttons, &QDialogButtonBox::accepted, [this]() {
-            if(validateBundleControls())
-               accept();
-         });
+         if(!inputs.empty())
+         {
+            m_preflightTable =
+               new QTableWidget(static_cast<int>(inputs.size()), 6, this);
+            m_preflightTable->setHorizontalHeaderLabels(
+               QStringList() << "#" << "Input" << "Entry" << "Role"
+                             << "Geometry" << "Overlap");
+            m_preflightTable->verticalHeader()->setVisible(false);
+            m_preflightTable->setEditTriggers(
+               QAbstractItemView::NoEditTriggers);
+            m_preflightTable->setSelectionMode(
+               QAbstractItemView::SingleSelection);
+            m_preflightTable->setSelectionBehavior(
+               QAbstractItemView::SelectRows);
+            m_preflightTable->setTextElideMode(Qt::ElideLeft);
+            m_preflightTable->horizontalHeader()->setStretchLastSection(true);
+            m_preflightTable->horizontalHeader()->setSectionResizeMode(
+               0, QHeaderView::ResizeToContents);
+            m_preflightTable->horizontalHeader()->setSectionResizeMode(
+               1, QHeaderView::Stretch);
+            m_preflightTable->horizontalHeader()->setSectionResizeMode(
+               2, QHeaderView::ResizeToContents);
+            m_preflightTable->horizontalHeader()->setSectionResizeMode(
+               3, QHeaderView::ResizeToContents);
+            m_preflightTable->horizontalHeaderItem(1)->setToolTip(
+               "Long input names show the end of the path. "
+               "Hover over an input to see its complete name and source.");
+            m_preflightTable->setMaximumHeight(190);
+
+            for(std::size_t index = 0; index < inputs.size(); ++index)
+            {
+               m_preflightLabels.push_back(
+                  QString::fromStdString(inputs[index].label));
+               m_preflightInputs.push_back(
+                  ossim_autoreg::registrationSetupInputInfo(
+                     inputs[index].source));
+
+               int availablePeerCount = 0;
+               int overlapPeerCount = 0;
+               double maximumOverlap = 0.0;
+               for(std::size_t peerIndex = 0;
+                   peerIndex < inputs.size();
+                   ++peerIndex)
+               {
+                  if(peerIndex == index)
+                     continue;
+                  const ossim_autoreg::RegistrationSetupOverlapInfo overlap =
+                     ossim_autoreg::registrationSetupOverlapInfo(
+                        inputs[index].source, inputs[peerIndex].source);
+                  if(!overlap.available)
+                     continue;
+                  ++availablePeerCount;
+                  maximumOverlap =
+                     std::max(maximumOverlap, overlap.normalizedAreaRatio);
+                  if(overlap.normalizedAreaRatio > 0.0)
+                     ++overlapPeerCount;
+               }
+               m_preflightOverlaps.push_back(
+                  availablePeerCount ?
+                     QString("%1 peer(s), max %2%")
+                        .arg(overlapPeerCount)
+                        .arg(maximumOverlap * 100.0, 0, 'f', 0) :
+                     QString("Unavailable"));
+            }
+            m_preflightTable->selectRow(0);
+
+            m_preflightSummary = new QLabel(this);
+            m_preflightSummary->setWordWrap(true);
+         }
+
+         QDialogButtonBox* buttons = new QDialogButtonBox(this);
+         buttons->setOrientation(Qt::Horizontal);
+         if(showLaunchActions)
+         {
+            QPushButton* createButton = buttons->addButton(
+               "Create Setup", QDialogButtonBox::AcceptRole);
+            m_runButton = buttons->addButton(
+               "Run Registration", QDialogButtonBox::AcceptRole);
+            buttons->addButton(QDialogButtonBox::Cancel);
+            connect(createButton, &QPushButton::clicked,
+                    [this]() { acceptLaunch(false); });
+            connect(m_runButton, &QPushButton::clicked,
+                    [this]() { acceptLaunch(true); });
+         }
+         else
+         {
+            buttons->addButton(QDialogButtonBox::Ok);
+            buttons->addButton(QDialogButtonBox::Cancel);
+            connect(buttons, &QDialogButtonBox::accepted,
+                    [this]() { acceptLaunch(false); });
+         }
          connect(buttons, SIGNAL(rejected()), this, SLOT(reject()));
 
          QVBoxLayout* layout = new QVBoxLayout();
-         layout->addWidget(optionsBox);
+         if(m_preflightTable)
+         {
+            QVBoxLayout* preflightLayout = new QVBoxLayout();
+            preflightLayout->addWidget(m_preflightTable);
+            QHBoxLayout* orderingLayout = new QHBoxLayout();
+            orderingLayout->addStretch();
+            QPushButton* moveUpButton =
+               new QPushButton("Move Up", this);
+            QPushButton* moveDownButton =
+               new QPushButton("Move Down", this);
+            moveUpButton->setMinimumHeight(30);
+            moveDownButton->setMinimumHeight(30);
+            moveUpButton->setToolTip(
+               "Move the selected image earlier in registration input order.");
+            moveDownButton->setToolTip(
+               "Move the selected image later in registration input order.");
+            connect(moveUpButton, &QPushButton::clicked,
+                    [this]() { moveSelectedInput(-1); });
+            connect(moveDownButton, &QPushButton::clicked,
+                    [this]() { moveSelectedInput(1); });
+            orderingLayout->addWidget(moveUpButton);
+            orderingLayout->addWidget(moveDownButton);
+            preflightLayout->addLayout(orderingLayout);
+            preflightLayout->addWidget(m_preflightSummary);
+            QGroupBox* preflightBox =
+               new QGroupBox("Selected Image Preflight", this);
+            preflightBox->setLayout(preflightLayout);
+            layout->addWidget(preflightBox);
+         }
+         layout->addWidget(optionsTabs);
          layout->addWidget(buttons);
          setLayout(layout);
+         setSizeGripEnabled(true);
          applySelectedDefaults();
+         loadObjectOptions();
+         if(initialOptions)
+            setOptions(*initialOptions);
+         updatePreflight();
+         QTimer::singleShot(
+            0, this, [this]() { resizeForContent(); });
       }
 
       RegistrationSetupOptions options() const
       {
-         RegistrationSetupOptions result;
+         RegistrationSetupOptions result = m_baseOptions;
          result.approach =
             static_cast<RegistrationSetupApproach>(
                m_approach->itemData(m_approach->currentIndex()).toInt());
@@ -492,17 +679,295 @@ namespace ossimGui
                m_adaptiveBankThreadCount->value());
          result.adaptiveFullPostBankRefinement =
             m_adaptiveFullPostBankRefinement->isChecked();
-         result.nativeLowGridPolicy =
-            m_nativeLowGridPolicy->itemData(
-               m_nativeLowGridPolicy->currentIndex()).toString().toStdString();
-         result.opencvRansacPrefilter =
-            m_opencvRansacPrefilter->isChecked();
-         result.opencvRansacThresholdPixels =
-            m_opencvRansacThresholdPixels->value();
          return result;
       }
 
+      bool executeAfterCreate() const
+      {
+         return m_executeAfterCreate;
+      }
+
+      std::vector<RegistrationSetupInput> setupInputs() const
+      {
+         return m_setupInputs;
+      }
+
    private:
+      void resizeForContent()
+      {
+         if(layout())
+         {
+            layout()->invalidate();
+            layout()->activate();
+         }
+         QSize target = sizeHint();
+         target.setWidth(std::max(target.width(), 760));
+
+         QScreen* screen = QGuiApplication::screenAt(
+            frameGeometry().center());
+         if(!screen)
+            screen = QGuiApplication::primaryScreen();
+         if(screen)
+         {
+            const QSize available = screen->availableGeometry().size();
+            target.setWidth(std::min(
+               target.width(), std::max(320, available.width() - 60)));
+            target.setHeight(std::min(
+               target.height(), std::max(320, available.height() - 80)));
+         }
+         resize(target);
+      }
+
+      static std::size_t remapInputIndex(
+         std::size_t value,
+         std::size_t first,
+         std::size_t second)
+      {
+         if(value == first)
+            return second;
+         if(value == second)
+            return first;
+         return value;
+      }
+
+      void moveSelectedInput(int offset)
+      {
+         const int row = m_preflightTable ?
+            m_preflightTable->currentRow() : -1;
+         const int target = row + offset;
+         if(row < 0 || target < 0 ||
+            target >= static_cast<int>(m_setupInputs.size()))
+         {
+            return;
+         }
+
+         const std::size_t first = static_cast<std::size_t>(row);
+         const std::size_t second = static_cast<std::size_t>(target);
+         std::vector<ossim_uint32> anchors;
+         const bool validAnchors = parseRegistrationInputIndexes(
+            m_bundleAnchorInputIndexes->text().trimmed().toStdString(),
+            anchors);
+         if(validAnchors)
+         {
+            for(ossim_uint32& anchor : anchors)
+            {
+               anchor = static_cast<ossim_uint32>(
+                  remapInputIndex(anchor, first, second));
+            }
+            std::sort(anchors.begin(), anchors.end());
+         }
+
+         std::vector<ossim_autoreg::BundleImagePair> pairs;
+         const bool validPairs = parseRegistrationInputPairs(
+            m_bundleInputPairs->text().trimmed().toStdString(), pairs);
+         std::vector<ossim_autoreg::BundleImagePair> remappedPairs;
+         if(validPairs)
+         {
+            remappedPairs.reserve(pairs.size());
+            for(const ossim_autoreg::BundleImagePair& pair : pairs)
+            {
+               std::size_t pairFirst =
+                  remapInputIndex(pair.firstImageIndex(), first, second);
+               std::size_t pairSecond =
+                  remapInputIndex(pair.secondImageIndex(), first, second);
+               if(pairSecond < pairFirst)
+                  std::swap(pairFirst, pairSecond);
+               remappedPairs.push_back(
+                  ossim_autoreg::BundleImagePair(pairFirst, pairSecond));
+            }
+            std::sort(
+               remappedPairs.begin(), remappedPairs.end(),
+               [](const ossim_autoreg::BundleImagePair& lhs,
+                  const ossim_autoreg::BundleImagePair& rhs) {
+                  if(lhs.firstImageIndex() != rhs.firstImageIndex())
+                     return lhs.firstImageIndex() < rhs.firstImageIndex();
+                  return lhs.secondImageIndex() < rhs.secondImageIndex();
+               });
+         }
+
+         {
+            const QSignalBlocker anchorBlocker(m_bundleAnchorInputIndexes);
+            const QSignalBlocker pairBlocker(m_bundleInputPairs);
+            if(validAnchors)
+            {
+               m_bundleAnchorInputIndexes->setText(
+                  formatRegistrationInputIndexes(anchors));
+            }
+            if(validPairs)
+            {
+               m_bundleInputPairs->setText(
+                  formatRegistrationInputPairs(remappedPairs));
+            }
+         }
+         std::swap(m_setupInputs[first], m_setupInputs[second]);
+         std::swap(m_preflightLabels[first], m_preflightLabels[second]);
+         std::swap(m_preflightInputs[first], m_preflightInputs[second]);
+         std::swap(m_preflightOverlaps[first], m_preflightOverlaps[second]);
+         updatePreflight();
+         m_preflightTable->selectRow(target);
+      }
+
+      void acceptLaunch(bool executeAfterCreate)
+      {
+         if(!validateBundleControls())
+            return;
+         if(executeAfterCreate && !m_executionEligible)
+         {
+            QMessageBox::warning(
+               this, "Registration Setup",
+               m_executionEligibilityMessage);
+            return;
+         }
+         if(!applyObjectOptions())
+         {
+            QMessageBox::warning(
+               this, "Registration Setup",
+               "The selected setup could not be applied through the "
+               "registered source interface.");
+            return;
+         }
+         m_executeAfterCreate = executeAfterCreate;
+         accept();
+      }
+
+      void setOptions(const RegistrationSetupOptions& values)
+      {
+         const int approachIndex =
+            m_approach->findData(values.approach);
+         if(approachIndex >= 0)
+            m_approach->setCurrentIndex(approachIndex);
+         const int matcherIndex = m_matchMethod->findData(
+            QString::fromStdString(values.matchMethod));
+         if(matcherIndex >= 0)
+            m_matchMethod->setCurrentIndex(matcherIndex);
+         const int resamplerIndex = m_resampler->findData(
+            QString::fromStdString(values.resamplerType));
+         if(resamplerIndex >= 0)
+            m_resampler->setCurrentIndex(resamplerIndex);
+         const int supportIndex = m_supportPassResampler->findData(
+            QString::fromStdString(values.supportPassMatcherResampler));
+         if(supportIndex >= 0)
+            m_supportPassResampler->setCurrentIndex(supportIndex);
+         m_chipSize->setValue(values.chipSize);
+         m_searchRadius->setValue(values.searchRadius);
+         m_gridSpacing->setValue(values.gridSpacing);
+         m_minScore->setValue(values.minScore);
+         m_minScoreMargin->setValue(values.minScoreMargin);
+         m_viewGsd->setValue(values.viewGsd);
+         m_maxTiePoints->setValue(static_cast<int>(values.maxTiePoints));
+         m_denseGridSeedBudget->setValue(
+            static_cast<int>(values.denseGridSeedBudget));
+         m_autoDenseGridSeedBudget->setChecked(
+            values.autoDenseGridSeedBudget);
+         m_tiePointTimingDiagnostics->setChecked(
+            values.tiePointTimingDiagnostics);
+         const int pairPolicyIndex =
+            m_bundlePairPolicy->findData(values.bundlePairPolicy);
+         if(pairPolicyIndex >= 0)
+            m_bundlePairPolicy->setCurrentIndex(pairPolicyIndex);
+         m_bundleNeighborSpan->setValue(static_cast<int>(
+            values.bundleNeighborSpan ? values.bundleNeighborSpan : 1));
+         m_bundleAnchorInputIndexes->setText(
+            formatRegistrationInputIndexes(values.bundleAnchorInputIndexes));
+         m_bundleInputPairs->setText(
+            formatRegistrationInputPairs(values.bundleInputPairs));
+         const int solverIndex = m_bundleLinearSolver->findData(
+            QString::fromStdString(values.bundleLinearSolverType));
+         if(solverIndex >= 0)
+            m_bundleLinearSolver->setCurrentIndex(solverIndex);
+         m_maxConcurrentRegistrations->setValue(
+            static_cast<int>(values.maxConcurrentRegistrations));
+         m_adaptiveBankThreadCount->setValue(
+            static_cast<int>(values.adaptiveBankThreadCount));
+         m_adaptiveFullPostBankRefinement->setChecked(
+            values.adaptiveFullPostBankRefinement);
+         m_baseOptions = values;
+         updateBundlePairPolicyControls();
+      }
+
+      void removeApproach(RegistrationSetupApproach approach)
+      {
+         const int index = m_approach->findData(approach);
+         if(index >= 0)
+            m_approach->removeItem(index);
+      }
+
+      void loadObjectOptions()
+      {
+         if(!m_object.valid())
+            return;
+
+         if(ossimFixedRegistrationSource* fixed =
+               dynamic_cast<ossimFixedRegistrationSource*>(m_object.get()))
+         {
+            removeApproach(REGISTRATION_SETUP_BUNDLE_ANCHORED);
+            removeApproach(REGISTRATION_SETUP_BUNDLE_ALL_FLOATING);
+            const RegistrationSetupApproach approach =
+               fixed->autoRegistrationOptions().getAutoRegister()
+                  ? REGISTRATION_SETUP_FIXED_AUTO
+                  : REGISTRATION_SETUP_FIXED_MANUAL;
+            setOptions(ossim_autoreg::registrationSetupOptions(
+               fixed->autoRegistrationOptions(), approach));
+            return;
+         }
+
+         if(ossimBundleAdjustmentRegistrationSource* bundle =
+               dynamic_cast<ossimBundleAdjustmentRegistrationSource*>(
+                  m_object.get()))
+         {
+            removeApproach(REGISTRATION_SETUP_FIXED_AUTO);
+            removeApproach(REGISTRATION_SETUP_FIXED_MANUAL);
+            const RegistrationSetupApproach approach =
+               bundle->allInputsFloating()
+                  ? REGISTRATION_SETUP_BUNDLE_ALL_FLOATING
+                  : REGISTRATION_SETUP_BUNDLE_ANCHORED;
+            RegistrationSetupOptions values =
+               ossim_autoreg::registrationSetupOptions(
+                  bundle->autoRegistrationOptions(), approach);
+            values.bundleAnchorInputIndexes = bundle->anchorInputIndexes();
+            values.bundleInputPairs = bundle->bundleInputPairs();
+            if(!values.bundleInputPairs.empty())
+               values.bundlePairPolicy = BUNDLE_PAIR_POLICY_EXPLICIT;
+            setOptions(values);
+         }
+      }
+
+      bool applyObjectOptions()
+      {
+         if(!m_object.valid())
+            return true;
+         const RegistrationSetupOptions values = options();
+
+         if(ossimFixedRegistrationSource* fixed =
+               dynamic_cast<ossimFixedRegistrationSource*>(m_object.get()))
+         {
+            ossim_autoreg::AutoRegistrationOptions current =
+               fixed->autoRegistrationOptions();
+            if(!ossim_autoreg::applyRegistrationSetupOptions(current, values))
+               return false;
+            fixed->setAutoRegistrationOptions(current);
+            return true;
+         }
+
+         if(ossimBundleAdjustmentRegistrationSource* bundle =
+               dynamic_cast<ossimBundleAdjustmentRegistrationSource*>(
+                  m_object.get()))
+         {
+            ossim_autoreg::AutoRegistrationOptions current =
+               bundle->autoRegistrationOptions();
+            if(!ossim_autoreg::applyRegistrationSetupOptions(current, values))
+               return false;
+            bundle->setAutoRegistrationOptions(current);
+            bundle->setAllInputsFloating(
+               values.approach ==
+                  REGISTRATION_SETUP_BUNDLE_ALL_FLOATING);
+            bundle->setAnchorInputIndexes(values.bundleAnchorInputIndexes);
+            bundle->setBundleInputPairs(values.bundleInputPairs);
+            return true;
+         }
+         return false;
+      }
+
       bool validateBundleControls()
       {
          const RegistrationSetupApproach approach =
@@ -527,6 +992,18 @@ namespace ossimGui
                "0,2. Anchored mode requires at least one index.");
             return false;
          }
+         if(!m_preflightInputs.empty() &&
+            std::any_of(
+               anchors.begin(), anchors.end(),
+               [this](ossim_uint32 index) {
+                  return index >= m_preflightInputs.size();
+               }))
+         {
+            QMessageBox::warning(
+               this, "Registration Setup",
+               "Every anchor index must identify a selected image.");
+            return false;
+         }
 
          const bool explicitPairs =
             m_bundlePairPolicy->itemData(
@@ -543,6 +1020,19 @@ namespace ossimGui
                "pairs such as 0,1;1,2.");
             return false;
          }
+         if(!m_preflightInputs.empty() &&
+            std::any_of(
+               pairs.begin(), pairs.end(),
+               [this](const ossim_autoreg::BundleImagePair& pair) {
+                  return pair.firstImageIndex() >= m_preflightInputs.size() ||
+                         pair.secondImageIndex() >= m_preflightInputs.size();
+               }))
+         {
+            QMessageBox::warning(
+               this, "Registration Setup",
+               "Every explicit pair index must identify a selected image.");
+            return false;
+         }
          return true;
       }
 
@@ -556,6 +1046,7 @@ namespace ossimGui
                toString().toStdString();
          const RegistrationSetupOptions defaults =
             ossim_autoreg::registrationSetupDefaults(approach, matchMethod);
+         m_baseOptions = defaults;
 
          const int resamplerIndex =
             m_resampler->findData(QString::fromStdString(
@@ -612,17 +1103,6 @@ namespace ossimGui
             static_cast<int>(defaults.adaptiveBankThreadCount));
          m_adaptiveFullPostBankRefinement->setChecked(
             defaults.adaptiveFullPostBankRefinement);
-         {
-            const int nativeLowGridIndex =
-               m_nativeLowGridPolicy->findData(QString::fromStdString(
-                  defaults.nativeLowGridPolicy));
-            if(nativeLowGridIndex >= 0)
-               m_nativeLowGridPolicy->setCurrentIndex(nativeLowGridIndex);
-         }
-         m_opencvRansacPrefilter->setChecked(
-            defaults.opencvRansacPrefilter);
-         m_opencvRansacThresholdPixels->setValue(
-            defaults.opencvRansacThresholdPixels);
       }
 
       void addMatchMethod(const QString& label, const QString& method)
@@ -652,8 +1132,232 @@ namespace ossimGui
             approach == REGISTRATION_SETUP_BUNDLE_ANCHORED);
          m_bundleInputPairs->setEnabled(bundle && explicitPairs);
          m_bundleLinearSolver->setEnabled(bundle);
+         updatePreflight();
       }
 
+      void updatePreflight()
+      {
+         if(!m_preflightTable)
+            return;
+
+         const RegistrationSetupApproach approach =
+            static_cast<RegistrationSetupApproach>(
+               m_approach->itemData(m_approach->currentIndex()).toInt());
+         std::vector<ossim_uint32> anchors;
+         parseRegistrationInputIndexes(
+            m_bundleAnchorInputIndexes->text().trimmed().toStdString(),
+            anchors);
+         const bool haveFixedEligible = std::any_of(
+            m_preflightInputs.begin(), m_preflightInputs.end(),
+            [](const ossim_autoreg::RegistrationSetupInputInfo& input) {
+               return input.mobility ==
+                  ossim_autoreg::REGISTRATION_SETUP_INPUT_FIXED_ELIGIBLE;
+            });
+         int floatingCount = 0;
+         int fixedOrAnchorCount = 0;
+         int availableGeometryCount = 0;
+         int validAnchorCount = 0;
+
+         for(std::size_t index = 0;
+             index < m_preflightInputs.size();
+             ++index)
+         {
+            const ossim_autoreg::RegistrationSetupInputInfo& input =
+               m_preflightInputs[index];
+            if(input.mobility !=
+               ossim_autoreg::REGISTRATION_SETUP_INPUT_GEOMETRY_UNAVAILABLE)
+            {
+               ++availableGeometryCount;
+            }
+            QString role;
+            if(input.mobility ==
+               ossim_autoreg::REGISTRATION_SETUP_INPUT_GEOMETRY_UNAVAILABLE)
+            {
+               role = "Unavailable";
+            }
+            else if(approach == REGISTRATION_SETUP_BUNDLE_ALL_FLOATING)
+            {
+               if(input.mobility ==
+                  ossim_autoreg::REGISTRATION_SETUP_INPUT_MOVABLE)
+               {
+                  role = "Floating";
+                  ++floatingCount;
+               }
+               else
+               {
+                  role = "Fixed geometry";
+                  ++fixedOrAnchorCount;
+               }
+            }
+            else if(approach == REGISTRATION_SETUP_BUNDLE_ANCHORED)
+            {
+               const bool anchor =
+                  std::find(anchors.begin(), anchors.end(),
+                            static_cast<ossim_uint32>(index)) != anchors.end();
+               if(anchor)
+               {
+                  role = "Anchor";
+                  ++fixedOrAnchorCount;
+                  ++validAnchorCount;
+               }
+               else if(input.mobility ==
+                       ossim_autoreg::REGISTRATION_SETUP_INPUT_MOVABLE)
+               {
+                  role = "Floating";
+                  ++floatingCount;
+               }
+               else
+               {
+                  role = "Fixed geometry";
+                  ++fixedOrAnchorCount;
+               }
+            }
+            else if(input.mobility ==
+                    ossim_autoreg::REGISTRATION_SETUP_INPUT_FIXED_ELIGIBLE)
+            {
+               role = "Fixed / Control";
+               ++fixedOrAnchorCount;
+            }
+            else if(!haveFixedEligible && index == 0)
+            {
+               role = "Fixed / Control (fallback)";
+               ++fixedOrAnchorCount;
+            }
+            else
+            {
+               role = "Floating";
+               ++floatingCount;
+            }
+
+            QString geometry;
+            if(input.mobility ==
+               ossim_autoreg::REGISTRATION_SETUP_INPUT_GEOMETRY_UNAVAILABLE)
+            {
+               geometry = "No usable projection";
+            }
+            else if(!input.adjustableParameterCount)
+            {
+               geometry = "Non-adjustable";
+            }
+            else if(!input.unlockedAdjustableParameterCount)
+            {
+               geometry = QString("%1 adjustable(s), all locked")
+                  .arg(static_cast<int>(input.adjustableParameterCount));
+            }
+            else
+            {
+               geometry = QString("%1 of %2 adjustable(s) unlocked")
+                  .arg(static_cast<int>(
+                     input.unlockedAdjustableParameterCount))
+                  .arg(static_cast<int>(input.adjustableParameterCount));
+            }
+
+            m_preflightTable->setItem(
+               static_cast<int>(index), 0,
+               new QTableWidgetItem(QString::number(index)));
+            QTableWidgetItem* inputItem =
+               new QTableWidgetItem(m_preflightLabels[index]);
+            QString inputDetail = m_preflightLabels[index];
+            if(!input.sourceIdentifier.empty())
+            {
+               const QString sourceIdentifier =
+                  QString::fromStdString(input.sourceIdentifier);
+               inputDetail =
+                  sourceIdentifier == m_preflightLabels[index] ?
+                     sourceIdentifier :
+                     QString("Input: %1\nSource: %2")
+                        .arg(m_preflightLabels[index], sourceIdentifier);
+            }
+            inputItem->setToolTip(inputDetail);
+            inputItem->setData(Qt::AccessibleTextRole, inputDetail);
+            m_preflightTable->setItem(
+               static_cast<int>(index), 1, inputItem);
+            m_preflightTable->setItem(
+               static_cast<int>(index), 2,
+               new QTableWidgetItem(QString::number(input.entryIndex)));
+            m_preflightTable->setItem(
+               static_cast<int>(index), 3,
+               new QTableWidgetItem(role));
+            m_preflightTable->setItem(
+               static_cast<int>(index), 4,
+               new QTableWidgetItem(geometry));
+            m_preflightTable->setItem(
+               static_cast<int>(index), 5,
+               new QTableWidgetItem(m_preflightOverlaps[index]));
+         }
+
+         QString summary = QString("%1 fixed/anchor, %2 floating")
+            .arg(fixedOrAnchorCount)
+            .arg(floatingCount);
+         if(approach == REGISTRATION_SETUP_BUNDLE_ALL_FLOATING)
+            summary += "; relative adjustment";
+         if(approach == REGISTRATION_SETUP_BUNDLE_ALL_FLOATING ||
+            approach == REGISTRATION_SETUP_BUNDLE_ANCHORED)
+         {
+            summary += QString("; pair policy: %1")
+               .arg(m_bundlePairPolicy->currentText());
+         }
+         else if(!floatingCount)
+            summary += "; no movable floating input is available";
+
+         m_executionEligible =
+            availableGeometryCount >= 2 && floatingCount > 0;
+         if(approach == REGISTRATION_SETUP_BUNDLE_ANCHORED)
+            m_executionEligible = m_executionEligible && validAnchorCount > 0;
+         else if(approach != REGISTRATION_SETUP_BUNDLE_ALL_FLOATING)
+            m_executionEligible =
+               m_executionEligible && fixedOrAnchorCount > 0;
+
+         if(!m_executionEligible)
+         {
+            if(availableGeometryCount < 2)
+            {
+               m_executionEligibilityMessage =
+                  "At least two selected images need usable projections "
+                  "before registration can run.";
+            }
+            else if(!floatingCount)
+            {
+               m_executionEligibilityMessage =
+                  "No selected image has an unlocked adjustable geometry to "
+                  "serve as a floating input.";
+            }
+            else
+            {
+               m_executionEligibilityMessage =
+                  approach == REGISTRATION_SETUP_BUNDLE_ANCHORED ?
+                     "Anchored registration needs at least one usable "
+                     "selected anchor." :
+                     "Fixed registration needs at least one usable selected "
+                     "control image.";
+            }
+            summary += "; Create Setup only";
+         }
+         else
+         {
+            m_executionEligibilityMessage.clear();
+         }
+         if(m_runButton)
+         {
+            m_runButton->setEnabled(m_executionEligible);
+            m_runButton->setToolTip(m_executionEligibilityMessage);
+         }
+         m_preflightSummary->setText(summary);
+      }
+
+      ossimRefPtr<ossimObject> m_object;
+      bool m_executeAfterCreate;
+      bool m_executionEligible;
+      QString m_executionEligibilityMessage;
+      RegistrationSetupOptions m_baseOptions;
+      std::vector<RegistrationSetupInput> m_setupInputs;
+      QTableWidget* m_preflightTable;
+      QLabel* m_preflightSummary;
+      QPushButton* m_runButton;
+      std::vector<QString> m_preflightLabels;
+      std::vector<ossim_autoreg::RegistrationSetupInputInfo>
+         m_preflightInputs;
+      std::vector<QString> m_preflightOverlaps;
       QComboBox* m_approach;
       QComboBox* m_matchMethod;
       QComboBox* m_resampler;
@@ -676,9 +1380,6 @@ namespace ossimGui
       QSpinBox* m_maxConcurrentRegistrations;
       QSpinBox* m_adaptiveBankThreadCount;
       QCheckBox* m_adaptiveFullPostBankRefinement;
-      QComboBox* m_nativeLowGridPolicy;
-      QCheckBox* m_opencvRansacPrefilter;
-      QDoubleSpinBox* m_opencvRansacThresholdPixels;
    };
 
    bool promptForRegistrationSetup(
@@ -690,6 +1391,30 @@ namespace ossimGui
          return false;
       options = dialog.options();
       return true;
+   }
+
+   bool promptForRegistrationLaunch(
+      QWidget* parent,
+      RegistrationSetupOptions& options,
+      bool& executeAfterCreate,
+      const RegistrationSetupOptions* initialOptions,
+      std::vector<RegistrationSetupInput>& inputs)
+   {
+      RegistrationSetupDialog dialog(
+         parent, 0, initialOptions, true, inputs);
+      if(dialog.exec() != QDialog::Accepted)
+         return false;
+      options = dialog.options();
+      executeAfterCreate = dialog.executeAfterCreate();
+      inputs = dialog.setupInputs();
+      return true;
+   }
+
+   QWidget* createRegistrationSetupEditor(
+      ossimObject* object,
+      QWidget* parent)
+   {
+      return object ? new RegistrationSetupDialog(parent, object) : 0;
    }
 
 }

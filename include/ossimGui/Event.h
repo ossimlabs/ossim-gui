@@ -83,6 +83,9 @@ namespace ossimGui{
       };
       DataManagerWidgetEvent(int commandType=COMMAND_NONE)
       :QEvent(static_cast<QEvent::Type>(DATA_MANAGER_WIDGET_EVENT_ID)),
+      m_registrationStatus(),
+      m_registrationSummary(),
+      m_registrationAdvisory(),
       m_commandType(static_cast<CommandType>(commandType))
       {
       }
@@ -117,6 +120,26 @@ namespace ossimGui{
       {
          return m_registrationReportPath;
       }
+      void setRegistrationResult(const std::string& status,
+                                 const std::string& summary,
+                                 const std::string& advisory)
+      {
+         m_registrationStatus = status;
+         m_registrationSummary = summary;
+         m_registrationAdvisory = advisory;
+      }
+      const std::string& registrationStatus()const
+      {
+         return m_registrationStatus;
+      }
+      const std::string& registrationSummary()const
+      {
+         return m_registrationSummary;
+      }
+      const std::string& registrationAdvisory()const
+      {
+         return m_registrationAdvisory;
+      }
       
    protected:
       ItemListType m_itemList;
@@ -125,6 +148,9 @@ namespace ossimGui{
       std::string m_warningMessage;
       std::string m_registrationReportText;
       std::string m_registrationReportPath;
+      std::string m_registrationStatus;
+      std::string m_registrationSummary;
+      std::string m_registrationAdvisory;
       CommandType m_commandType;
    };
    class OSSIMGUI_DLL DataManagerWidgetJobEvent : public QEvent

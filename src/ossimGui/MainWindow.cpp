@@ -15,6 +15,8 @@
 #include <QUrl>
 #include <QCloseEvent>
 #include <QEventLoop>
+#include <QSplitter>
+#include <QTimer>
 
 #include <ossim/ossimVersion.h>
 #include <ossim/imaging/ossimImageHandlerRegistry.h>
@@ -72,6 +74,20 @@ ossimGui::MainWindow::MainWindow(QWidget* parent)
    m_dataManager  = m_dataManagerWidget->dataManager();
    m_dataManager->setMdiArea(m_mdiArea);
    m_dataManagerWidget->setJobQueue(m_stagerQueue->getJobQueue());
+   m_dataManagerWidget->setMinimumWidth(260);
+   m_splitter->setStretchFactor(0, 0);
+   m_splitter->setStretchFactor(1, 1);
+   QTimer::singleShot(0, this, [this]() {
+      const int totalWidth = m_splitter->width();
+      if(totalWidth <= 0)
+         return;
+      const int proportionalWidth = totalWidth * 28 / 100;
+      const int managerWidth =
+         qBound(300, proportionalWidth, 380);
+      m_splitter->setSizes(
+         QList<int>() << managerWidth
+                      << qMax(1, totalWidth - managerWidth));
+   });
    // createModeSelector(toolbar);
 }
 

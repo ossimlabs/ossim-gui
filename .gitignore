@@ -1,1 +1,2 @@
 include/ossimGui/*.h
+!include/ossimGui/ObjectEditorFactory.h

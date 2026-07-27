@@ -67,6 +67,8 @@
 #include <ossimGui/ImageWriterJob.h>
 #include <ossimGui/ExportImageDialog.h>
 #include <ossimGui/MultiImageDialog.h>
+#include <ossimGui/ObjectEditorFactory.h>
+#include <ossimGui/PropertyEditorDialog.h>
 #include <ossimGui/AutoMeasurementDialog.h>
 #include <ossimGui/RegistrationOverlay.h>
 #include <ossimGui/RegPoint.h>
@@ -90,16 +92,52 @@
 namespace
 {
    const char* FIXED_AUTO_LABEL = "Fixed Auto";
-   const char* FIXED_OPENCV_AUTO_LABEL = "Fixed OpenCV Auto";
-   const char* FIXED_NATIVE_AFFINE_AUTO_LABEL = "Fixed Native Affine Auto";
-   const char* BUNDLE_ALL_FLOATING_AUTO_LABEL =
-      "Bundle All-Floating Auto";
-   const char* BUNDLE_NATIVE_AFFINE_AUTO_LABEL =
-      "Bundle Native Affine Auto";
-   const char* BUNDLE_NATIVE_AFFINE_MATCHER_AUTO_LABEL =
-      "Bundle Native Affine Matcher Auto";
-   const char* BUNDLE_NATIVE_AFFINE_STRIP_AUTO_LABEL =
-      "Bundle Native Affine Strip Auto";
+
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   std::string registrationResultStatus(
+      bool success,
+      bool canceled,
+      bool hasAdvisory)
+   {
+      if(canceled)
+         return "Canceled";
+      if(!success)
+         return "Failed";
+      if(hasAdvisory)
+         return "Completed with advisory";
+      return "Completed";
+   }
+#endif
+
+   ossimObject* editableObject(ossimGui::DataManagerItem* item)
+   {
+      if(!item)
+         return 0;
+      ossimGui::DataManager::Node* node = item->objectAsNode();
+      return node ? node->getObject() : item->object();
+   }
+
+   void showEditor(QWidget* editor)
+   {
+      if(!editor)
+         return;
+      editor->setAttribute(Qt::WA_DeleteOnClose);
+      editor->show();
+      editor->raise();
+      editor->activateWindow();
+   }
+
+   void showGenericProperties(ossimObject* object, QWidget* parent)
+   {
+      if(!object)
+         return;
+      ossimGui::PropertyEditorDialog* dialog =
+         new ossimGui::PropertyEditorDialog(parent);
+      dialog->setAttribute(Qt::WA_DeleteOnClose);
+      dialog->resize(640, 480);
+      dialog->setObject(object);
+      dialog->show();
+   }
 }
 
 #ifdef OSSIM_AUTOREGISTRATION_ENABLED
@@ -176,7 +214,7 @@ namespace
    {
       return QString("Registered: %1")
          .arg(QString::fromStdString(
-            matchMethod.empty() ? std::string("hybrid-phase-ncc") :
+            matchMethod.empty() ? std::string("Adaptive Auto") :
                                   matchMethod));
    }
 }
@@ -336,46 +374,66 @@ namespace ossimGui
                std::dynamic_pointer_cast<RegistrationSourceJob>(job);
             if(registrationJob)
             {
+               const bool canceled = registrationJob->isCanceled();
+               const std::string advisory =
+                  registrationJob->advisorySummary().string();
                evt->setHandlerList(registrationJob->sourceHandlersToReload());
                evt->setRegistrationReport(
                   registrationJob->reportText().empty()
                      ? registrationJob->resultSummary().string()
                      : registrationJob->reportText(),
                   registrationJob->reportPath().string());
-               if(!registrationJob->success())
+               evt->setRegistrationResult(
+                  registrationResultStatus(
+                     registrationJob->success(),
+                     canceled,
+                     !advisory.empty()),
+                  registrationJob->resultSummary().string(),
+                  advisory);
+               if(!registrationJob->success() && !canceled)
                {
                   evt->setWarningMessage(
                      "Registration failed",
                      registrationJob->resultSummary().string());
                }
-               else if(!registrationJob->advisorySummary().empty())
+               else if(!advisory.empty())
                {
                   evt->setWarningMessage(
                      "Registration quality advisory",
-                     registrationJob->advisorySummary().string());
+                     advisory);
                }
             }
             std::shared_ptr<BundleRegistrationSourceJob> bundleJob =
                std::dynamic_pointer_cast<BundleRegistrationSourceJob>(job);
             if(bundleJob)
             {
+               const bool canceled = bundleJob->isCanceled();
+               const std::string advisory =
+                  bundleJob->advisorySummary().string();
                evt->setHandlerList(bundleJob->sourceHandlersToReload());
                evt->setRegistrationReport(
                   bundleJob->reportText().empty()
                      ? bundleJob->resultSummary().string()
                      : bundleJob->reportText(),
                   bundleJob->reportPath().string());
-               if(!bundleJob->success())
+               evt->setRegistrationResult(
+                  registrationResultStatus(
+                     bundleJob->success(),
+                     canceled,
+                     !advisory.empty()),
+                  bundleJob->resultSummary().string(),
+                  advisory);
+               if(!bundleJob->success() && !canceled)
                {
                   evt->setWarningMessage(
                      "Bundle adjustment failed",
                      bundleJob->resultSummary().string());
                }
-               else if(!bundleJob->advisorySummary().empty())
+               else if(!advisory.empty())
                {
                   evt->setWarningMessage(
                      "Bundle adjustment quality advisory",
-                     bundleJob->advisorySummary().string());
+                     advisory);
                }
             }
             QCoreApplication::postEvent(m_dataManagerWidget, evt);
@@ -933,7 +991,9 @@ ossimGui::DataManagerRegistrationItem::DataManagerRegistrationItem(
    DataManager::Node* node)
 :DataManagerNodeItem(node),
  m_reportItem(0),
- m_reportPreview(0),
+ m_resultStatusLabel(0),
+ m_resultSummaryLabel(0),
+ m_resultAdvisoryLabel(0),
  m_reportPathLabel(0)
 {
    m_autoDelete = false;
@@ -956,7 +1016,10 @@ void ossimGui::DataManagerRegistrationItem::dropItems(
 
 void ossimGui::DataManagerRegistrationItem::setRegistrationReport(
    const std::string& reportText,
-   const std::string& reportPath)
+   const std::string& reportPath,
+   const std::string& status,
+   const std::string& summary,
+   const std::string& advisory)
 {
    m_reportText = QString::fromStdString(reportText);
    m_reportPath = QString::fromStdString(reportPath);
@@ -964,24 +1027,49 @@ void ossimGui::DataManagerRegistrationItem::setRegistrationReport(
    if(!m_reportItem)
    {
       m_reportItem = new DataManagerItem();
-      m_reportItem->setText(0, "Registration Report");
+      m_reportItem->setText(0, QString());
+      m_reportItem->setData(
+         0, Qt::AccessibleTextRole, "Registration Result");
       m_reportItem->setToolTip(
          0,
          "Double-click or use the context menu to open the full report.");
-      m_reportItem->setSizeHint(0, QSize(720, 285));
+      m_reportItem->setSizeHint(0, QSize(0, 230));
       addChild(m_reportItem);
 
       QWidget* reportWidget = new QWidget(treeWidget());
+      reportWidget->setAutoFillBackground(true);
       QVBoxLayout* reportLayout = new QVBoxLayout(reportWidget);
       reportLayout->setContentsMargins(6, 6, 6, 6);
 
-      QHBoxLayout* headingLayout = new QHBoxLayout();
-      QLabel* heading = new QLabel("Registration Report", reportWidget);
+      QLabel* heading = new QLabel("Registration Result", reportWidget);
       QFont headingFont = heading->font();
       headingFont.setBold(true);
       heading->setFont(headingFont);
-      headingLayout->addWidget(heading);
-      headingLayout->addStretch();
+      reportLayout->addWidget(heading);
+
+      QHBoxLayout* actionLayout = new QHBoxLayout();
+
+      QPushButton* rerunButton =
+         new QPushButton("Run Again", reportWidget);
+      rerunButton->setToolTip(
+         "Run this registration setup again with its current inputs.");
+      QObject::connect(rerunButton,
+                       &QPushButton::clicked,
+                       [this]() { execute(); });
+      actionLayout->addWidget(rerunButton);
+
+      QPushButton* swipeButton =
+         new QPushButton("Swipe", reportWidget);
+      swipeButton->setToolTip(
+         "Open the current registration inputs in a multi-layer swipe display.");
+      QObject::connect(
+         swipeButton,
+         &QPushButton::clicked,
+         [this]() {
+            if(dataManagerWidget())
+               dataManagerWidget()->swipeRegistrationInputs(this);
+         });
+      actionLayout->addWidget(swipeButton);
 
       QPushButton* openButton =
          new QPushButton("Open Full Report...", reportWidget);
@@ -990,8 +1078,27 @@ void ossimGui::DataManagerRegistrationItem::setRegistrationReport(
       QObject::connect(openButton,
                        &QPushButton::clicked,
                        [this]() { showRegistrationReport(); });
-      headingLayout->addWidget(openButton);
-      reportLayout->addLayout(headingLayout);
+      actionLayout->addWidget(openButton);
+      actionLayout->addStretch();
+      reportLayout->addLayout(actionLayout);
+
+      m_resultStatusLabel = new QLabel(reportWidget);
+      QFont statusFont = m_resultStatusLabel->font();
+      statusFont.setBold(true);
+      m_resultStatusLabel->setFont(statusFont);
+      reportLayout->addWidget(m_resultStatusLabel);
+
+      m_resultSummaryLabel = new QLabel(reportWidget);
+      m_resultSummaryLabel->setWordWrap(true);
+      m_resultSummaryLabel->setTextInteractionFlags(
+         Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
+      reportLayout->addWidget(m_resultSummaryLabel);
+
+      m_resultAdvisoryLabel = new QLabel(reportWidget);
+      m_resultAdvisoryLabel->setWordWrap(true);
+      m_resultAdvisoryLabel->setTextInteractionFlags(
+         Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
+      reportLayout->addWidget(m_resultAdvisoryLabel);
 
       m_reportPathLabel = new QLabel(reportWidget);
       m_reportPathLabel->setTextInteractionFlags(
@@ -999,21 +1106,30 @@ void ossimGui::DataManagerRegistrationItem::setRegistrationReport(
       m_reportPathLabel->setWordWrap(true);
       reportLayout->addWidget(m_reportPathLabel);
 
-      m_reportPreview = new QPlainTextEdit(reportWidget);
-      m_reportPreview->setReadOnly(true);
-      m_reportPreview->setLineWrapMode(QPlainTextEdit::NoWrap);
-      QFont reportFont = m_reportPreview->font();
-      reportFont.setFamily("monospace");
-      reportFont.setStyleHint(QFont::TypeWriter);
-      m_reportPreview->setFont(reportFont);
-      reportLayout->addWidget(m_reportPreview);
-
       if(dataManagerWidget())
       {
          dataManagerWidget()->setItemWidget(m_reportItem, 0, reportWidget);
       }
    }
 
+   if(m_resultStatusLabel)
+   {
+      m_resultStatusLabel->setText(
+         QString("Status: %1").arg(QString::fromStdString(status)));
+   }
+   if(m_resultSummaryLabel)
+   {
+      m_resultSummaryLabel->setText(
+         QString::fromStdString(summary));
+   }
+   if(m_resultAdvisoryLabel)
+   {
+      const QString advisoryText = QString::fromStdString(advisory);
+      m_resultAdvisoryLabel->setText(
+         advisoryText.isEmpty() ?
+            QString() : QString("Advisory: %1").arg(advisoryText));
+      m_resultAdvisoryLabel->setVisible(!advisoryText.isEmpty());
+   }
    if(m_reportPathLabel)
    {
       const QString pathText = m_reportPath.isEmpty()
@@ -1021,11 +1137,6 @@ void ossimGui::DataManagerRegistrationItem::setRegistrationReport(
          : QString("Report file: %1").arg(m_reportPath);
       m_reportPathLabel->setText(pathText);
       m_reportPathLabel->setToolTip(m_reportPath);
-   }
-   if(m_reportPreview)
-   {
-      m_reportPreview->setPlainText(m_reportText);
-      m_reportPreview->moveCursor(QTextCursor::Start);
    }
    setExpanded(true);
 }
@@ -2720,6 +2831,51 @@ void ossimGui::DataManagerWidget::swipeSelected()
    
 }
 
+void ossimGui::DataManagerWidget::swipeRegistrationInputs(
+   DataManagerRegistrationItem* item)
+{
+   if(!item || !item->objectAsNode())
+      return;
+
+   ossimConnectableObject* registration =
+      item->objectAsNode()->getObjectAs<ossimConnectableObject>();
+   if(!registration)
+      return;
+
+   ossimConnectableObject::ConnectableObjectList inputs;
+   ossimConnectableObject::ConnectableObjectList& registrationInputs =
+      registration->getInputList();
+   for(auto& input : registrationInputs)
+   {
+      if(input.valid() && dynamic_cast<ossimImageSource*>(input.get()))
+         inputs.push_back(input);
+   }
+   if(inputs.size() < 2)
+   {
+      QMessageBox::information(
+         this,
+         "Registration Swipe",
+         "At least two connected image inputs are needed for a swipe display.");
+      return;
+   }
+
+   ossimRefPtr<DataManager::Node> displayNode =
+      m_dataManager->createDefault2dImageDisplay(0, true);
+   ConnectableDisplayObject* display =
+      displayNode.valid() ?
+         displayNode->getObjectAs<ConnectableDisplayObject>() : 0;
+   if(!display)
+      return;
+
+   for(auto& input : inputs)
+      display->connectMyInputTo(input.get());
+
+   DataManagerEvent* event =
+      new DataManagerEvent(DataManagerEvent::COMMAND_DISPLAY_NODE);
+   event->setNodeList(displayNode.get());
+   QCoreApplication::postEvent(mainWindow(), event);
+}
+
 void ossimGui::DataManagerWidget::buildOverviewsForSelected(QAction* action)
 {
    buildOverviewsForSelected(action->text());
@@ -3558,326 +3714,6 @@ void ossimGui::DataManagerWidget::createWriterFromType(const QString& type)
    m_activeItemsMutex.unlock();
 }
 
-void ossimGui::DataManagerWidget::createFixedRegistration()
-{
-#ifdef OSSIM_AUTOREGISTRATION_ENABLED
-   createDefaultFixedRegistrationItem();
-#else
-   QMessageBox::warning(this,
-                        "Registration",
-                        "ossim-registration-source is not enabled in this build.");
-#endif
-}
-
-ossimGui::DataManagerRegistrationItem*
-ossimGui::DataManagerWidget::createDefaultFixedRegistrationItem()
-{
-#ifdef OSSIM_AUTOREGISTRATION_ENABLED
-   ossimRefPtr<ossimFixedRegistrationSource> registration =
-      createRegisteredRegistrationSource<ossimFixedRegistrationSource>();
-   if(!registration.valid())
-      return 0;
-   ossim_autoreg::AutoRegistrationOptions registrationOptions =
-      registration->autoRegistrationOptions();
-   RegistrationSetupOptions setupOptions =
-      ossim_autoreg::registrationSetupDefaults(
-         REGISTRATION_SETUP_FIXED_AUTO, std::string());
-   if(!ossim_autoreg::applyRegistrationSetupOptions(
-         registrationOptions, setupOptions))
-   {
-      return 0;
-   }
-   registration->setAutoRegistrationOptions(registrationOptions);
-
-   ossimRefPtr<ossimObject> obj = registration.get();
-   if(obj.valid())
-   {
-      std::lock_guard<std::mutex> lock(m_activeItemsMutex);
-      ossimRefPtr<DataManager::Node> node = m_dataManager->addSource(obj.get(), false);
-      if(node.valid())
-      {
-         node->setName(FIXED_AUTO_LABEL);
-         DataManagerRegistrationItem* item = new DataManagerRegistrationItem(node.get());
-         item->setFlags(item->flags()|Qt::ItemIsEditable);
-         m_registrationSources->addChild(item);
-         m_activeItems.insert(item);
-         return item;
-      }
-   }
-#endif
-   return 0;
-}
-
-void ossimGui::DataManagerWidget::createFixedOpenCvAutoRegistration()
-{
-#ifdef OSSIM_AUTOREGISTRATION_ENABLED
-   createDefaultFixedOpenCvAutoRegistrationItem();
-#else
-   QMessageBox::warning(this,
-                        "Registration",
-                        "ossim-registration-source is not enabled in this build.");
-#endif
-}
-
-ossimGui::DataManagerRegistrationItem*
-ossimGui::DataManagerWidget::createDefaultFixedOpenCvAutoRegistrationItem()
-{
-#ifdef OSSIM_AUTOREGISTRATION_ENABLED
-   ossimRefPtr<ossimFixedRegistrationSource> registration =
-      createRegisteredRegistrationSource<ossimFixedRegistrationSource>();
-   if(!registration.valid())
-      return 0;
-   if(!registration->applyAutoRegistrationPreset(
-         "fixed:opencv-phase-ransac"))
-   {
-      QMessageBox::warning(
-         this,
-         "Registration",
-         "The OpenCV phase-correlation registration preset is not available.");
-      return 0;
-   }
-   ossimRefPtr<ossimObject> obj = registration.get();
-   if(obj.valid())
-   {
-      std::lock_guard<std::mutex> lock(m_activeItemsMutex);
-      ossimRefPtr<DataManager::Node> node = m_dataManager->addSource(obj.get(), false);
-      if(node.valid())
-      {
-         node->setName(
-            registeredNodeName("opencv-phase-correlation").
-               toStdString().c_str());
-         DataManagerRegistrationItem* item = new DataManagerRegistrationItem(node.get());
-         item->setFlags(item->flags()|Qt::ItemIsEditable);
-         item->setToolTip(
-            0,
-            QString("%1\nTie point generators: %2")
-               .arg(registration->autoRegistrationSettingsSummary().c_str())
-               .arg(tiePointGeneratorSummary()));
-         m_registrationSources->addChild(item);
-         m_activeItems.insert(item);
-         return item;
-      }
-   }
-#endif
-   return 0;
-}
-
-void ossimGui::DataManagerWidget::createFixedNativeAffineAutoRegistration()
-{
-#ifdef OSSIM_AUTOREGISTRATION_ENABLED
-   createDefaultFixedNativeAffineAutoRegistrationItem();
-#else
-   QMessageBox::warning(this,
-                        "Registration",
-                        "ossim-registration-source is not enabled in this build.");
-#endif
-}
-
-ossimGui::DataManagerRegistrationItem*
-ossimGui::DataManagerWidget::createDefaultFixedNativeAffineAutoRegistrationItem()
-{
-#ifdef OSSIM_AUTOREGISTRATION_ENABLED
-   ossimRefPtr<ossimFixedRegistrationSource> registration =
-      createRegisteredRegistrationSource<ossimFixedRegistrationSource>();
-   if(!registration.valid())
-      return 0;
-   if(!registration->applyAutoRegistrationPreset("fixed:native-affine"))
-   {
-      QMessageBox::warning(
-         this,
-         "Registration",
-         "The native affine NCC registration preset is not available.");
-      return 0;
-   }
-   ossimRefPtr<ossimObject> obj = registration.get();
-   if(obj.valid())
-   {
-      std::lock_guard<std::mutex> lock(m_activeItemsMutex);
-      ossimRefPtr<DataManager::Node> node =
-         m_dataManager->addSource(obj.get(), false);
-      if(node.valid())
-      {
-         node->setName(FIXED_NATIVE_AFFINE_AUTO_LABEL);
-         DataManagerRegistrationItem* item =
-            new DataManagerRegistrationItem(node.get());
-         item->setFlags(item->flags()|Qt::ItemIsEditable);
-         item->setToolTip(
-            0,
-            QString("%1\nTie point generators: %2")
-               .arg(registration->autoRegistrationSettingsSummary().c_str())
-               .arg(tiePointGeneratorSummary()));
-         m_registrationSources->addChild(item);
-         m_activeItems.insert(item);
-         return item;
-      }
-   }
-#endif
-   return 0;
-}
-
-void ossimGui::DataManagerWidget::createBundleFloatingRegistration()
-{
-#ifdef OSSIM_AUTOREGISTRATION_ENABLED
-   createDefaultBundleFloatingRegistrationItem();
-#else
-   QMessageBox::information(this,
-                            "Registration",
-                            "ossim-registration-source is not enabled in this build.");
-#endif
-}
-
-void ossimGui::DataManagerWidget::createBundleNativeAffineAutoRegistration()
-{
-#ifdef OSSIM_AUTOREGISTRATION_ENABLED
-   createDefaultBundleNativeAffineAutoRegistrationItem();
-#else
-   QMessageBox::information(this,
-                            "Registration",
-                            "ossim-registration-source is not enabled in this build.");
-#endif
-}
-
-void ossimGui::DataManagerWidget::createBundleNativeAffineMatcherAutoRegistration()
-{
-#ifdef OSSIM_AUTOREGISTRATION_ENABLED
-   createDefaultBundleNativeAffineAutoRegistrationItem(
-      "bundle:native-affine-matcher-auto",
-      BUNDLE_NATIVE_AFFINE_MATCHER_AUTO_LABEL);
-#else
-   QMessageBox::information(this,
-                            "Registration",
-                            "ossim-registration-source is not enabled in this build.");
-#endif
-}
-
-void ossimGui::DataManagerWidget::createBundleNativeAffineStripAutoRegistration()
-{
-#ifdef OSSIM_AUTOREGISTRATION_ENABLED
-   createDefaultBundleNativeAffineAutoRegistrationItem(
-      "bundle:native-affine-strip",
-      BUNDLE_NATIVE_AFFINE_STRIP_AUTO_LABEL);
-#else
-   QMessageBox::information(this,
-                            "Registration",
-                            "ossim-registration-source is not enabled in this build.");
-#endif
-}
-
-ossimGui::DataManagerRegistrationItem*
-ossimGui::DataManagerWidget::createDefaultBundleFloatingRegistrationItem()
-{
-#ifdef OSSIM_AUTOREGISTRATION_ENABLED
-   ossim_autoreg::RegistrationSetupPreset preset;
-   if(!ossim_autoreg::RegistrationSetupPresetFactory::instance()->create(
-         "bundle:all-floating", preset))
-      return 0;
-   ossimRefPtr<ossimBundleAdjustmentRegistrationSource> bundle =
-      createRegisteredRegistrationSource<
-         ossimBundleAdjustmentRegistrationSource>();
-   if(!bundle.valid())
-      return 0;
-   bundle->setAllInputsFloating(true);
-   bundle->setLaunchPreset(preset.launchPreset);
-   applyBundleDefaultsToSource(bundle.get(), false);
-   ossim_autoreg::AutoRegistrationOptions registrationOptions =
-      bundle->autoRegistrationOptions();
-   if(!ossim_autoreg::applyRegistrationSetupOptions(
-         registrationOptions, preset.options))
-      return 0;
-   bundle->setAutoRegistrationOptions(registrationOptions);
-   ossimRefPtr<ossimObject> obj = bundle.get();
-   if(obj.valid())
-   {
-      std::lock_guard<std::mutex> lock(m_activeItemsMutex);
-      ossimRefPtr<DataManager::Node> node =
-         m_dataManager->addSource(obj.get(), false);
-      if(node.valid())
-      {
-         node->setName(BUNDLE_ALL_FLOATING_AUTO_LABEL);
-         DataManagerRegistrationItem* item =
-            new DataManagerRegistrationItem(node.get());
-         item->setFlags(item->flags()|Qt::ItemIsEditable);
-         m_registrationSources->addChild(item);
-         m_activeItems.insert(item);
-         return item;
-      }
-   }
-#endif
-   return 0;
-}
-
-ossimGui::DataManagerRegistrationItem*
-ossimGui::DataManagerWidget::createDefaultBundleNativeAffineAutoRegistrationItem(
-   const std::string& setupPreset,
-   const QString& nodeName)
-{
-#ifdef OSSIM_AUTOREGISTRATION_ENABLED
-   ossim_autoreg::RegistrationSetupPreset preset;
-   if(!ossim_autoreg::RegistrationSetupPresetFactory::instance()->create(
-         setupPreset, preset))
-      return 0;
-   const RegistrationSetupOptions& setupOptions = preset.options;
-   ossimRefPtr<ossimBundleAdjustmentRegistrationSource> bundle =
-      createRegisteredRegistrationSource<
-         ossimBundleAdjustmentRegistrationSource>();
-   if(!bundle.valid())
-      return 0;
-   bundle->setAllInputsFloating(true);
-   bundle->setLaunchPreset(preset.launchPreset);
-   applyBundleDefaultsToSource(bundle.get(), false);
-
-   ossim_autoreg::AutoRegistrationOptions registrationOptions =
-      bundle->autoRegistrationOptions();
-   if(!ossim_autoreg::applyRegistrationSetupOptions(
-         registrationOptions, setupOptions))
-   {
-      return 0;
-   }
-   const ossim_autoreg::BundleNativeMatcherPolicy nativeMatcherPolicy =
-      preset.bundleNativeMatcherPolicy;
-   registrationOptions.setBundleNativeMatcherPolicy(nativeMatcherPolicy);
-   if(setupOptions.bundlePairPolicy != BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN)
-      registrationOptions.setBundleNeighborSpan(0);
-   bundle->setAutoRegistrationOptions(registrationOptions);
-
-   ossimRefPtr<ossimObject> obj = bundle.get();
-   if(obj.valid())
-   {
-      std::lock_guard<std::mutex> lock(m_activeItemsMutex);
-      ossimRefPtr<DataManager::Node> node =
-         m_dataManager->addSource(obj.get(), false);
-      if(node.valid())
-      {
-         node->setName(nodeName.toStdString().c_str());
-         DataManagerRegistrationItem* item =
-            new DataManagerRegistrationItem(node.get());
-         item->setFlags(item->flags()|Qt::ItemIsEditable);
-         item->setToolTip(
-            0,
-            QString("Launch preset: %1\nMatcher: %2\nResampler: %3\nView GSD: %4\nMin score margin: %5\nDense seed budget: %6\nAuto dense seed budget: %7\nBundle pair policy: %8\nNative matcher policy: %9")
-               .arg(QString::fromStdString(preset.launchPreset))
-               .arg(QString::fromStdString(setupOptions.matchMethod))
-               .arg(QString::fromStdString(setupOptions.resamplerType))
-               .arg(setupOptions.viewGsd)
-               .arg(setupOptions.minScoreMargin)
-               .arg(static_cast<int>(setupOptions.denseGridSeedBudget))
-               .arg(setupOptions.autoDenseGridSeedBudget ? "true" : "false")
-               .arg(QString::fromStdString(
-                  bundlePairPolicyDescription(
-                     setupOptions.bundlePairPolicy,
-                     setupOptions.bundleNeighborSpan)))
-               .arg(QString::fromStdString(
-                  ossim_autoreg::bundleNativeMatcherPolicyName(
-                     nativeMatcherPolicy))));
-         m_registrationSources->addChild(item);
-         m_activeItems.insert(item);
-         return item;
-      }
-   }
-#endif
-   return 0;
-}
-
 QList<ossimGui::DataManagerItem*>
 ossimGui::DataManagerWidget::selectedRegistrationInputItems() const
 {
@@ -3899,13 +3735,16 @@ ossimGui::DataManagerWidget::selectedRegistrationInputItems() const
    return result;
 }
 
-void ossimGui::DataManagerWidget::connectAndExecuteSelectedRegistration(
-   DataManagerRegistrationItem* item)
+void ossimGui::DataManagerWidget::connectSelectedRegistration(
+   DataManagerRegistrationItem* item,
+   bool executeAfterCreate,
+   QList<DataManagerItem*> inputs)
 {
    if(!item)
       return;
 
-   QList<DataManagerItem*> inputs = selectedRegistrationInputItems();
+   if(inputs.empty())
+      inputs = selectedRegistrationInputItems();
    if(inputs.size() < 2)
    {
       QMessageBox::warning(this,
@@ -3917,102 +3756,104 @@ void ossimGui::DataManagerWidget::connectAndExecuteSelectedRegistration(
 
    item->dropItems(inputs);
    item->setSelected(true);
-   item->execute();
-}
-
-void ossimGui::DataManagerWidget::createFixedRegistrationFromSelection()
-{
-#ifdef OSSIM_AUTOREGISTRATION_ENABLED
-   connectAndExecuteSelectedRegistration(createDefaultFixedRegistrationItem());
-#else
-   QMessageBox::warning(this,
-                        "Registration",
-                        "ossim-registration-source is not enabled in this build.");
-#endif
-}
-
-void ossimGui::DataManagerWidget::createFixedOpenCvAutoRegistrationFromSelection()
-{
-#ifdef OSSIM_AUTOREGISTRATION_ENABLED
-   connectAndExecuteSelectedRegistration(
-      createDefaultFixedOpenCvAutoRegistrationItem());
-#else
-   QMessageBox::warning(this,
-                        "Registration",
-                        "ossim-registration-source is not enabled in this build.");
-#endif
-}
-
-void ossimGui::DataManagerWidget::createFixedNativeAffineAutoRegistrationFromSelection()
-{
-#ifdef OSSIM_AUTOREGISTRATION_ENABLED
-   connectAndExecuteSelectedRegistration(
-      createDefaultFixedNativeAffineAutoRegistrationItem());
-#else
-   QMessageBox::warning(this,
-                        "Registration",
-                        "ossim-registration-source is not enabled in this build.");
-#endif
-}
-
-void ossimGui::DataManagerWidget::createBundleFloatingRegistrationFromSelection()
-{
-#ifdef OSSIM_AUTOREGISTRATION_ENABLED
-   connectAndExecuteSelectedRegistration(
-      createDefaultBundleFloatingRegistrationItem());
-#else
-   QMessageBox::information(this,
-                            "Registration",
-                            "ossim-registration-source is not enabled in this build.");
-#endif
-}
-
-void ossimGui::DataManagerWidget::createBundleNativeAffineAutoRegistrationFromSelection()
-{
-#ifdef OSSIM_AUTOREGISTRATION_ENABLED
-   connectAndExecuteSelectedRegistration(
-      createDefaultBundleNativeAffineAutoRegistrationItem());
-#else
-   QMessageBox::information(this,
-                            "Registration",
-                            "ossim-registration-source is not enabled in this build.");
-#endif
-}
-
-void ossimGui::DataManagerWidget::createBundleNativeAffineMatcherAutoRegistrationFromSelection()
-{
-#ifdef OSSIM_AUTOREGISTRATION_ENABLED
-   connectAndExecuteSelectedRegistration(
-      createDefaultBundleNativeAffineAutoRegistrationItem(
-         "bundle:native-affine-matcher-auto",
-         BUNDLE_NATIVE_AFFINE_MATCHER_AUTO_LABEL));
-#else
-   QMessageBox::information(this,
-                            "Registration",
-                            "ossim-registration-source is not enabled in this build.");
-#endif
-}
-
-void ossimGui::DataManagerWidget::createBundleNativeAffineStripAutoRegistrationFromSelection()
-{
-#ifdef OSSIM_AUTOREGISTRATION_ENABLED
-   connectAndExecuteSelectedRegistration(
-      createDefaultBundleNativeAffineAutoRegistrationItem(
-         "bundle:native-affine-strip",
-         BUNDLE_NATIVE_AFFINE_STRIP_AUTO_LABEL));
-#else
-   QMessageBox::information(this,
-                            "Registration",
-                            "ossim-registration-source is not enabled in this build.");
-#endif
+   if(executeAfterCreate)
+      item->execute();
 }
 
 void ossimGui::DataManagerWidget::createRegistrationFromDialog()
 {
+   createRegistrationSetup(false);
+}
+
+void ossimGui::DataManagerWidget::createRegistrationFromSelectionDialog()
+{
+   createRegistrationSetup(true);
+}
+
+void ossimGui::DataManagerWidget::createRegistrationSetup(
+   bool connectSelectedImages,
+   const QString& presetType)
+{
 #ifdef OSSIM_AUTOREGISTRATION_ENABLED
-   RegistrationSetupOptions setupOptions;
-   if(!promptForRegistrationSetup(this, setupOptions))
+   const QList<DataManagerItem*> selectedInputs =
+      connectSelectedImages ? selectedRegistrationInputItems() :
+                              QList<DataManagerItem*>();
+   if(connectSelectedImages && selectedInputs.size() < 2)
+   {
+      QMessageBox::warning(this,
+                           "Registration",
+                           "Select at least two Sources or Chains before "
+                           "creating a registration path.");
       return;
+   }
+
+   RegistrationSetupOptions setupOptions;
+   ossim_autoreg::RegistrationSetupPreset setupPreset;
+   const bool hasPreset = !presetType.isEmpty();
+   QString presetDisplayName;
+   if(hasPreset)
+   {
+      if(!ossim_autoreg::RegistrationSetupPresetFactory::instance()->create(
+            presetType.toStdString(), setupPreset))
+      {
+         QMessageBox::warning(
+            this,
+            "Registration",
+            QString("The registered setup is unavailable: %1")
+               .arg(presetType));
+         return;
+      }
+      setupOptions = setupPreset.options;
+      const std::vector<ossim_autoreg::RegistrationComponentDescriptor>
+         descriptors =
+            ossim_autoreg::RegistrationSetupPresetFactory::instance()->
+               typeDescriptors();
+      for(const auto& descriptor : descriptors)
+      {
+         if(descriptor.typeName() == presetType.toStdString())
+         {
+            presetDisplayName = QString::fromStdString(
+               descriptor.displayName().empty() ?
+                  descriptor.typeName() : descriptor.displayName());
+            break;
+         }
+      }
+   }
+
+   bool executeAfterCreate = false;
+   std::vector<RegistrationSetupInput> setupInputs;
+   if(connectSelectedImages)
+   {
+      setupInputs.reserve(static_cast<std::size_t>(selectedInputs.size()));
+      for(int selectedIndex = 0;
+          selectedIndex < selectedInputs.size();
+          ++selectedIndex)
+      {
+         DataManagerItem* selectedInput = selectedInputs[selectedIndex];
+         ossimImageSource* source =
+            selectedInput && selectedInput->objectAsNode() ?
+               selectedInput->objectAsNode()->
+                  getObjectAs<ossimImageSource>() : 0;
+         setupInputs.push_back(RegistrationSetupInput(
+            selectedInput ? selectedInput->text(0).toStdString() :
+                            std::string("Input"),
+            source,
+            static_cast<std::size_t>(selectedIndex)));
+      }
+      const RegistrationSetupOptions* initialOptions =
+         hasPreset ? &setupOptions : 0;
+      if(!promptForRegistrationLaunch(
+            this, setupOptions, executeAfterCreate,
+            initialOptions, setupInputs))
+      {
+         return;
+      }
+   }
+   else if(!hasPreset && !promptForRegistrationSetup(this, setupOptions))
+   {
+      return;
+   }
+
    if(!ossim_autoreg::registrationSetupMatchMethodAvailable(
          setupOptions.matchMethod))
    {
@@ -4047,9 +3888,11 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
       bundle->setAllInputsFloating(
          setupOptions.approach == REGISTRATION_SETUP_BUNDLE_ALL_FLOATING);
       bundle->setLaunchPreset(
-         setupOptions.approach == REGISTRATION_SETUP_BUNDLE_ALL_FLOATING ?
-            "registration_setup_bundle_all_floating" :
-            "registration_setup_bundle_anchored");
+         hasPreset ? setupPreset.launchPreset :
+            (setupOptions.approach ==
+               REGISTRATION_SETUP_BUNDLE_ALL_FLOATING ?
+                  "registration_setup_bundle_all_floating" :
+                  "registration_setup_bundle_anchored"));
       applyBundleDefaultsToSource(
          bundle.get(),
          setupOptions.approach == REGISTRATION_SETUP_BUNDLE_ANCHORED);
@@ -4058,8 +3901,12 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
       bundle->setBundleInputPairs(setupOptions.bundleInputPairs);
       ossim_autoreg::AutoRegistrationOptions registrationOptions =
          bundle->autoRegistrationOptions();
-      if(!ossim_autoreg::applyRegistrationSetupOptions(
-            registrationOptions, setupOptions))
+      const bool optionsApplied = hasPreset ?
+         ossim_autoreg::applyRegistrationSetupPreset(
+            registrationOptions, setupPreset) :
+         ossim_autoreg::applyRegistrationSetupOptions(
+            registrationOptions, setupOptions);
+      if(!optionsApplied)
       {
          QMessageBox::warning(
             this,
@@ -4069,11 +3916,12 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
       }
       bundle->setAutoRegistrationOptions(registrationOptions);
       obj = bundle.get();
-      nodeName = bundle->allInputsFloating() ?
-         "Bundle All-Floating Registration" :
-         "Bundle Anchored Registration";
+      nodeName = !presetDisplayName.isEmpty() ? presetDisplayName :
+         (bundle->allInputsFloating() ?
+            "Bundle All-Floating Registration" :
+            "Bundle Anchored Registration");
       toolTip =
-         QString("Launch preset: %1\nMatcher: %2\nResampler: %3\nView GSD: %4\nMin score margin: %5\nDense seed budget: %6\nAuto dense seed budget: %7\nTie timing diagnostics: %8\nBundle pair policy: %9\nBundle solver: %10\nOpenCV RANSAC prefilter: %11\nOpenCV RANSAC threshold: %12")
+         QString("Launch preset: %1\nMatcher: %2\nResampler: %3\nView GSD: %4\nMin score margin: %5\nDense seed budget: %6\nAuto dense seed budget: %7\nTie timing diagnostics: %8\nBundle pair policy: %9\nBundle solver: %10")
             .arg(bundle->launchPreset().c_str())
             .arg(QString::fromStdString(setupOptions.matchMethod))
             .arg(QString::fromStdString(setupOptions.resamplerType))
@@ -4087,9 +3935,7 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
                   setupOptions.bundlePairPolicy,
                   setupOptions.bundleNeighborSpan)))
             .arg(QString::fromStdString(
-               setupOptions.bundleLinearSolverType))
-            .arg(setupOptions.opencvRansacPrefilter ? "true" : "false")
-            .arg(setupOptions.opencvRansacThresholdPixels);
+               setupOptions.bundleLinearSolverType));
    }
    else
    {
@@ -4105,8 +3951,12 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
       }
       ossim_autoreg::AutoRegistrationOptions registrationOptions =
          registration->autoRegistrationOptions();
-      if(!ossim_autoreg::applyRegistrationSetupOptions(
-            registrationOptions, setupOptions))
+      const bool optionsApplied = hasPreset ?
+         ossim_autoreg::applyRegistrationSetupPreset(
+            registrationOptions, setupPreset) :
+         ossim_autoreg::applyRegistrationSetupOptions(
+            registrationOptions, setupOptions);
+      if(!optionsApplied)
       {
          QMessageBox::warning(
             this,
@@ -4116,11 +3966,12 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
       }
       registration->setAutoRegistrationOptions(registrationOptions);
       obj = registration.get();
-      nodeName = setupOptions.matchMethod.empty() ?
-         QString(FIXED_AUTO_LABEL) :
-         registeredNodeName(setupOptions.matchMethod);
+      nodeName = !presetDisplayName.isEmpty() ? presetDisplayName :
+         (setupOptions.matchMethod.empty() ?
+            QString(FIXED_AUTO_LABEL) :
+            registeredNodeName(setupOptions.matchMethod));
       toolTip =
-         QString("%1\nMatcher: %2\nResampler: %3\nSupport pass resampler: %4\nView GSD: %5\nMin score margin: %6\nNative low-grid policy: %7\nParallel floating inputs: %8\nAdaptive bank threads: %9\nDense seed budget: %10\nAuto dense seed budget: %11\nTie timing diagnostics: %12\nOpenCV RANSAC prefilter: %13\nOpenCV RANSAC threshold: %14")
+         QString("%1\nMatcher: %2\nResampler: %3\nSupport pass resampler: %4\nView GSD: %5\nMin score margin: %6\nParallel floating inputs: %7\nAdaptive bank threads: %8\nDense seed budget: %9\nAuto dense seed budget: %10\nTie timing diagnostics: %11")
             .arg(registration->autoRegistrationSettingsSummary().c_str())
             .arg(QString::fromStdString(
                setupOptions.matchMethod.empty() ?
@@ -4133,7 +3984,6 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
                   setupOptions.supportPassMatcherResampler))
             .arg(setupOptions.viewGsd)
             .arg(setupOptions.minScoreMargin)
-            .arg(QString::fromStdString(setupOptions.nativeLowGridPolicy))
             .arg(static_cast<int>(
                setupOptions.maxConcurrentRegistrations))
             .arg(static_cast<int>(
@@ -4141,11 +3991,10 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
             .arg(static_cast<int>(
                setupOptions.denseGridSeedBudget))
             .arg(setupOptions.autoDenseGridSeedBudget ? "true" : "false")
-            .arg(setupOptions.tiePointTimingDiagnostics ? "true" : "false")
-            .arg(setupOptions.opencvRansacPrefilter ? "true" : "false")
-            .arg(setupOptions.opencvRansacThresholdPixels);
+            .arg(setupOptions.tiePointTimingDiagnostics ? "true" : "false");
    }
 
+   DataManagerRegistrationItem* createdItem = 0;
    if(obj.valid())
    {
       std::lock_guard<std::mutex> lock(m_activeItemsMutex);
@@ -4160,12 +4009,64 @@ void ossimGui::DataManagerWidget::createRegistrationFromDialog()
          item->setToolTip(0, toolTip);
          m_registrationSources->addChild(item);
          m_activeItems.insert(item);
+         createdItem = item;
       }
+   }
+   if(connectSelectedImages && createdItem)
+   {
+      QList<DataManagerItem*> orderedInputs;
+      for(const RegistrationSetupInput& setupInput : setupInputs)
+      {
+         if(setupInput.originalIndex <
+            static_cast<std::size_t>(selectedInputs.size()))
+         {
+            orderedInputs.push_back(
+               selectedInputs[static_cast<int>(
+                  setupInput.originalIndex)]);
+         }
+      }
+      connectSelectedRegistration(
+         createdItem, executeAfterCreate, orderedInputs);
    }
 #else
    QMessageBox::warning(this,
                         "Registration",
                         "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
+void ossimGui::DataManagerWidget::populateQuickRegistrationMenu(
+   QMenu* menu,
+   bool connectSelectedImages)
+{
+   if(!menu)
+      return;
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   const std::vector<ossim_autoreg::RegistrationComponentDescriptor>
+      descriptors =
+         ossim_autoreg::RegistrationSetupPresetFactory::instance()->
+            typeDescriptors();
+   for(const auto& descriptor : descriptors)
+   {
+      QAction* action = menu->addAction(QString::fromStdString(
+         descriptor.displayName().empty() ?
+            descriptor.typeName() : descriptor.displayName()));
+      action->setToolTip(
+         QString::fromStdString(descriptor.description()));
+      action->setStatusTip(
+         QString::fromStdString(descriptor.description()));
+      const QString presetType =
+         QString::fromStdString(descriptor.typeName());
+      connect(action, &QAction::triggered,
+              [this, connectSelectedImages, presetType]() {
+                 createRegistrationSetup(
+                    connectSelectedImages, presetType);
+              });
+   }
+   if(descriptors.empty())
+      menu->setEnabled(false);
+#else
+   menu->setEnabled(false);
 #endif
 }
 
@@ -4822,7 +4723,10 @@ bool	ossimGui::DataManagerWidget::event( QEvent * e )
                         {
                            registrationItem->setRegistrationReport(
                               wEvent->registrationReportText(),
-                              wEvent->registrationReportPath());
+                              wEvent->registrationReportPath(),
+                              wEvent->registrationStatus(),
+                              wEvent->registrationSummary(),
+                              wEvent->registrationAdvisory());
                         }
                         ossimConnectableObject* connectable = (*iter)->objectAsNode()->getObjectAs<ossimConnectableObject>();
                         if(connectable)
@@ -5036,6 +4940,46 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
    bool hasItems = false;
    QMenu* menu = 0;
    menu = new QMenu(this);
+   ossimObject* activeObject = editableObject(activeItem);
+   const std::vector<ObjectEditorDescriptor> tailoredEditors =
+      ObjectEditorFactory::instance()->editorsFor(activeObject);
+   const bool hasGenericProperties =
+      dynamic_cast<ossimPropertyInterface*>(activeObject) != 0;
+   if(!tailoredEditors.empty())
+   {
+      QAction* editAction = menu->addAction("Edit...");
+      editAction->setToolTip(
+         QString::fromStdString(tailoredEditors.front().description()));
+      connect(editAction, &QAction::triggered,
+              [this, activeObject]() {
+                 showEditor(ObjectEditorFactory::instance()->createBest(
+                    activeObject, this));
+              });
+
+      QMenu* editWithMenu = menu->addMenu("Edit With...");
+      for(const ObjectEditorDescriptor& descriptor : tailoredEditors)
+      {
+         QAction* editorAction = editWithMenu->addAction(
+            QString::fromStdString(descriptor.displayName()));
+         editorAction->setToolTip(
+            QString::fromStdString(descriptor.description()));
+         connect(editorAction, &QAction::triggered,
+                 [this, activeObject, descriptor]() {
+                    showEditor(descriptor.create(activeObject, this));
+                 });
+      }
+   }
+   if(hasGenericProperties)
+   {
+      QAction* propertiesAction = menu->addAction("Properties...");
+      connect(propertiesAction, &QAction::triggered,
+              [this, activeObject]() {
+                 showGenericProperties(activeObject, this);
+              });
+   }
+   if(!tailoredEditors.empty() || hasGenericProperties)
+      menu->addSeparator();
+
    DataManagerRegistrationItem* reportRegistrationItem =
       activeItem
          ? dynamic_cast<DataManagerRegistrationItem*>(activeItem->parent())
@@ -5084,74 +5028,19 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
    else if(dynamic_cast<DataManagerRegistrationFolder*> (activeItem))
    {
       QMenu* registrationMenu = new QMenu("Registration");
-      QAction* setupAction = registrationMenu->addAction("Setup...");
-      registrationMenu->addSeparator();
-      QAction* fixedAction = registrationMenu->addAction(FIXED_AUTO_LABEL);
-      QAction* fixedOpenCvAction =
-         registrationMenu->addAction(FIXED_OPENCV_AUTO_LABEL);
-      QAction* fixedNativeAffineAction =
-         registrationMenu->addAction(FIXED_NATIVE_AFFINE_AUTO_LABEL);
-      QAction* bundleFloatingAction =
-         registrationMenu->addAction(BUNDLE_ALL_FLOATING_AUTO_LABEL);
-      QAction* bundleNativeAffineAction =
-         registrationMenu->addAction(BUNDLE_NATIVE_AFFINE_AUTO_LABEL);
-      QAction* bundleNativeAffineMatcherAutoAction =
-         registrationMenu->addAction(
-            BUNDLE_NATIVE_AFFINE_MATCHER_AUTO_LABEL);
-      QAction* bundleNativeAffineStripAction =
-         registrationMenu->addAction(BUNDLE_NATIVE_AFFINE_STRIP_AUTO_LABEL);
-      bundleNativeAffineAction->setToolTip(
-         "General native-affine bundle default for mixed overlap sets.");
-      bundleNativeAffineAction->setStatusTip(
-         "General native-affine bundle default for mixed overlap sets.");
-      bundleNativeAffineMatcherAutoAction->setToolTip(
-         "Native-affine bundle with automatic native matcher fallback selection.");
-      bundleNativeAffineMatcherAutoAction->setStatusTip(
-         "Native-affine bundle with automatic native matcher fallback selection.");
-      bundleNativeAffineStripAction->setToolTip(
-         "Use adjacent pairs when selected images are ordered along a strip or flightline.");
-      bundleNativeAffineStripAction->setStatusTip(
-         "Use adjacent pairs when selected images are ordered along a strip or flightline.");
+      QAction* setupAction =
+         registrationMenu->addAction("New Registration Setup...");
+      QMenu* quickRegistrationMenu =
+         registrationMenu->addMenu("Quick Registration");
+      populateQuickRegistrationMenu(quickRegistrationMenu, false);
 #ifndef OSSIM_AUTOREGISTRATION_ENABLED
       setupAction->setEnabled(false);
-      fixedAction->setEnabled(false);
-      fixedOpenCvAction->setEnabled(false);
-      fixedNativeAffineAction->setEnabled(false);
-      bundleFloatingAction->setEnabled(false);
-      bundleNativeAffineAction->setEnabled(false);
-      bundleNativeAffineMatcherAutoAction->setEnabled(false);
-      bundleNativeAffineStripAction->setEnabled(false);
 #endif
       menu->addMenu(registrationMenu);
       connect(setupAction,
               SIGNAL(triggered(bool)),
               this,
               SLOT(createRegistrationFromDialog()));
-      connect(fixedAction, SIGNAL(triggered(bool)), this, SLOT(createFixedRegistration()));
-      connect(fixedOpenCvAction,
-              SIGNAL(triggered(bool)),
-              this,
-              SLOT(createFixedOpenCvAutoRegistration()));
-      connect(fixedNativeAffineAction,
-              SIGNAL(triggered(bool)),
-              this,
-              SLOT(createFixedNativeAffineAutoRegistration()));
-      connect(bundleFloatingAction,
-              SIGNAL(triggered(bool)),
-              this,
-              SLOT(createBundleFloatingRegistration()));
-      connect(bundleNativeAffineAction,
-              SIGNAL(triggered(bool)),
-              this,
-              SLOT(createBundleNativeAffineAutoRegistration()));
-      connect(bundleNativeAffineMatcherAutoAction,
-              SIGNAL(triggered(bool)),
-              this,
-              SLOT(createBundleNativeAffineMatcherAutoRegistration()));
-      connect(bundleNativeAffineStripAction,
-              SIGNAL(triggered(bool)),
-              this,
-              SLOT(createBundleNativeAffineStripAutoRegistration()));
    }
    else if(dynamic_cast<DataManagerRegistrationItem*> (activeItem))
    {
@@ -5286,71 +5175,19 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
      if(nImageChainSelections>0||nRawSourceSelections>0)
      {
         QMenu* registrationMenu = new QMenu("Registration");
-        QAction* fixedRegistrationAction =
-           registrationMenu->addAction(FIXED_AUTO_LABEL);
-        QAction* fixedOpenCvAction =
-           registrationMenu->addAction(FIXED_OPENCV_AUTO_LABEL);
-        QAction* fixedNativeAffineAction =
-           registrationMenu->addAction(FIXED_NATIVE_AFFINE_AUTO_LABEL);
-        QAction* bundleRegistrationAction =
-           registrationMenu->addAction(BUNDLE_ALL_FLOATING_AUTO_LABEL);
-        QAction* bundleNativeAffineAction =
-           registrationMenu->addAction(BUNDLE_NATIVE_AFFINE_AUTO_LABEL);
-        QAction* bundleNativeAffineMatcherAutoAction =
-           registrationMenu->addAction(
-              BUNDLE_NATIVE_AFFINE_MATCHER_AUTO_LABEL);
-        QAction* bundleNativeAffineStripAction =
-           registrationMenu->addAction(BUNDLE_NATIVE_AFFINE_STRIP_AUTO_LABEL);
-        bundleNativeAffineAction->setToolTip(
-           "General native-affine bundle default for mixed overlap sets.");
-        bundleNativeAffineAction->setStatusTip(
-           "General native-affine bundle default for mixed overlap sets.");
-        bundleNativeAffineMatcherAutoAction->setToolTip(
-           "Native-affine bundle with automatic native matcher fallback selection.");
-        bundleNativeAffineMatcherAutoAction->setStatusTip(
-           "Native-affine bundle with automatic native matcher fallback selection.");
-        bundleNativeAffineStripAction->setToolTip(
-           "Use adjacent pairs when selected images are ordered along a strip or flightline.");
-        bundleNativeAffineStripAction->setStatusTip(
-           "Use adjacent pairs when selected images are ordered along a strip or flightline.");
+        QAction* registerSelectedAction =
+           registrationMenu->addAction("Register Selected Images...");
+        QMenu* quickRegistrationMenu =
+           registrationMenu->addMenu("Quick Registration");
+        populateQuickRegistrationMenu(quickRegistrationMenu, true);
 #ifndef OSSIM_AUTOREGISTRATION_ENABLED
-        fixedRegistrationAction->setEnabled(false);
-        fixedOpenCvAction->setEnabled(false);
-        fixedNativeAffineAction->setEnabled(false);
-        bundleRegistrationAction->setEnabled(false);
-        bundleNativeAffineAction->setEnabled(false);
-        bundleNativeAffineMatcherAutoAction->setEnabled(false);
-        bundleNativeAffineStripAction->setEnabled(false);
+        registerSelectedAction->setEnabled(false);
 #endif
         menu->addMenu(registrationMenu);
-        connect(fixedRegistrationAction,
+        connect(registerSelectedAction,
                 SIGNAL(triggered(bool)),
                 this,
-                SLOT(createFixedRegistrationFromSelection()));
-        connect(fixedOpenCvAction,
-                SIGNAL(triggered(bool)),
-                this,
-                SLOT(createFixedOpenCvAutoRegistrationFromSelection()));
-        connect(fixedNativeAffineAction,
-                SIGNAL(triggered(bool)),
-                this,
-                SLOT(createFixedNativeAffineAutoRegistrationFromSelection()));
-        connect(bundleRegistrationAction,
-                SIGNAL(triggered(bool)),
-                this,
-                SLOT(createBundleFloatingRegistrationFromSelection()));
-        connect(bundleNativeAffineAction,
-                SIGNAL(triggered(bool)),
-                this,
-                SLOT(createBundleNativeAffineAutoRegistrationFromSelection()));
-        connect(bundleNativeAffineMatcherAutoAction,
-                SIGNAL(triggered(bool)),
-                this,
-                SLOT(createBundleNativeAffineMatcherAutoRegistrationFromSelection()));
-        connect(bundleNativeAffineStripAction,
-                SIGNAL(triggered(bool)),
-                this,
-                SLOT(createBundleNativeAffineStripAutoRegistrationFromSelection()));
+                SLOT(createRegistrationFromSelectionDialog()));
 
         if(nRawSourceSelections>0)
         {
