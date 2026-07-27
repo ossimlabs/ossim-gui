@@ -115,6 +115,9 @@ All notable changes to `ossim-gui` are documented here.
 > through factories, while selected-image registration has guided preflight,
 > stable sizing, explicit run intent, concise results, and built-in swipe
 > verification without teaching the GUI concrete algorithms.
+> Image interaction modes now use the same extension-friendly pattern, while
+> Standard Navigation stays quietly in charge until another applicable mode
+> is actually registered.
 
 ### Fixed
 - Open GeoCell context menus through Qt's context-menu event so the mouse
@@ -130,6 +133,14 @@ All notable changes to `ossim-gui` are documented here.
   (`37b931e`).
 
 ### Added
+- Add a generic object-manipulator registry for image-view interaction modes
+  (`750f876`).
+  - Register existing Standard Navigation as the default provider.
+  - Discover, prioritize, create, replace, and unregister manipulators by
+    object type or applicability predicate.
+  - Expose named manipulator replacement through `ImageScrollView`.
+  - Show an interaction-mode chooser only when more than one provider applies,
+    preserving the current single-mode toolbar and navigation behavior.
 - Add a generic tailored-editor registry and a factory-driven selected-image
   registration workflow (`7ce314e`).
   - Keep `Properties...` as the generic fallback while existing image tools and
