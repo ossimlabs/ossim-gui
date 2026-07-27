@@ -21,6 +21,7 @@
 #include <ossim/imaging/ossimImageGeometry.h>
 #include <ossim/base/ossimConnectableObjectListener.h>
 #include <ossim/parallel/ossimJobQueue.h>
+#include <string>
 #include <vector>
 namespace ossimGui
 {
@@ -251,7 +252,9 @@ namespace ossimGui
       ImageScrollView ( QGraphicsScene * scene, QWidget * parent = 0 );
       ~ImageScrollView ();	
       void setManipulator(ImageViewManipulator* manipulator);
+      bool setManipulator(const std::string& name, ossimObject* object = 0);
       ImageViewManipulator* manipulator();
+      const std::string& manipulatorName()const{return m_manipulatorName;}
       
       void setConnectableObject(ConnectableImageObject* c);
       ConnectableImageObject* connectableObject();
@@ -362,6 +365,7 @@ namespace ossimGui
       DataManager::ExploitationModeType m_exploitationMode;
       
       ossimRefPtr<ImageViewManipulator> m_manipulator;
+      std::string                       m_manipulatorName;
       mutable ossimRefPtr<ConnectableImageObject> m_connectableObject;
       
       RegistrationOverlay*              m_regOverlay;

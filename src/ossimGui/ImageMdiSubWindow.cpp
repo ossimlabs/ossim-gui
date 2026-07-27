@@ -7,6 +7,7 @@
 #include <ossimGui/ImageScrollView.h>
 #include <ossimGui/ImageViewManipulator.h>
 #include <ossimGui/ObjectEditorFactory.h>
+#include <ossimGui/ObjectManipulatorFactory.h>
 #include <ossimGui/PolygonRemapperDialog.h>
 #include <ossimGui/PositionInformationDialog.h>
 #include <ossimGui/SetViewVisitor.h>
@@ -35,6 +36,7 @@
 #include <QApplication>
 #include <QFileDialog>
 #include <QMessageBox>
+#include <QSignalBlocker>
 #include <iostream>
 #include <fstream>
 
@@ -609,6 +611,8 @@ void ossimGui::ImageActions::addActions(QMainWindow* mainWindow)
    QToolButton* zoomInButton = toolbar->findChild<QToolButton*>("zoomInButton");
    QToolButton* zoomOutButton = toolbar->findChild<QToolButton*>("zoomOutButton");
    QComboBox* syncingOptions = toolbar->findChild<QComboBox*>("syncingOptions");
+   QComboBox* manipulatorOptions =
+      toolbar->findChild<QComboBox*>("manipulatorOptions");
    if(!m_visitor.m_imageRenderers.empty())
    {
       ossimImageRenderer* renderer = dynamic_cast<ossimImageRenderer*>(m_visitor.m_imageRenderers[0].get());
@@ -755,6 +759,62 @@ void ossimGui::ImageActions::addActions(QMainWindow* mainWindow)
       {
          zoomOutButton->setEnabled(false);
       }
+   }
+
+   ossimObject* manipulatorTarget =
+      m_widget->connectableObject() ?
+         m_widget->connectableObject()->getInput(0) : 0;
+   const std::vector<ObjectManipulatorDescriptor> manipulators =
+      ObjectManipulatorFactory::instance()->manipulatorsFor(
+         manipulatorTarget, m_widget);
+   if(manipulators.size() > 1)
+   {
+      if(!manipulatorOptions)
+      {
+         manipulatorOptions = new QComboBox();
+         manipulatorOptions->setObjectName("manipulatorOptions");
+         manipulatorOptions->setToolTip(
+            "Choose how pointer and keyboard input interact with this view.");
+         toolbar->addWidget(manipulatorOptions);
+      }
+      const QSignalBlocker blocker(manipulatorOptions);
+      manipulatorOptions->clear();
+      int selectedIndex = 0;
+      for(std::size_t index = 0; index < manipulators.size(); ++index)
+      {
+         const ObjectManipulatorDescriptor& descriptor = manipulators[index];
+         manipulatorOptions->addItem(
+            QString::fromStdString(descriptor.displayName()),
+            QString::fromStdString(descriptor.name()));
+         manipulatorOptions->setItemData(
+            static_cast<int>(index),
+            QString::fromStdString(descriptor.description()),
+            Qt::ToolTipRole);
+         if(descriptor.name() == m_widget->manipulatorName())
+            selectedIndex = static_cast<int>(index);
+      }
+      manipulatorOptions->setCurrentIndex(selectedIndex);
+      manipulatorOptions->setVisible(true);
+      manipulatorOptions->setEnabled(true);
+      connect(
+         manipulatorOptions,
+         QOverload<int>::of(&QComboBox::activated),
+         this,
+         [this, manipulatorOptions](int index) {
+            if(index < 0)
+               return;
+            ossimObject* target =
+               m_widget->connectableObject() ?
+                  m_widget->connectableObject()->getInput(0) : 0;
+            m_widget->setManipulator(
+               manipulatorOptions->itemData(index).toString().toStdString(),
+               target);
+         });
+   }
+   else if(manipulatorOptions)
+   {
+      manipulatorOptions->setEnabled(false);
+      manipulatorOptions->setVisible(false);
    }
 
    QComboBox* layerOptions = toolbar->findChild<QComboBox*>("layerOptions");
@@ -906,6 +966,11 @@ void ossimGui::ImageActions::removeActions(QMainWindow* mainWindow)
          widget->disconnect(this);
       }
       widget = imageToolBar->findChild<QWidget*>("layerOptions");
+      if(widget)
+      {
+         widget->disconnect(this);
+      }
+      widget = imageToolBar->findChild<QWidget*>("manipulatorOptions");
       if(widget)
       {
          widget->disconnect(this);
@@ -1310,4 +1375,3 @@ bool ossimGui::ImageMdiSubWindow::event(QEvent* evt)
    }
    return MdiSubWindowBase::event(evt);
 }
-

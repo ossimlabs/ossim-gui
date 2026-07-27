@@ -4,6 +4,7 @@
 #include <ossimGui/GatherImageViewProjTransVisitor.h>
 #include <ossimGui/MetricOverlay.h>
 #include <ossimGui/RegistrationOverlay.h>
+#include <ossimGui/ObjectManipulatorFactory.h>
 #include <ossimGui/RegPoint.h>
 #include <ossimGui/RoiSelection.h>
 #include <ossim/base/ossimVisitor.h>
@@ -226,6 +227,7 @@ ImageScrollView::ImageScrollView (QWidget* parent)
      m_multiLayerAlgorithm( BOX_SWIPE_ALGORITHM ),
      m_exploitationMode( DataManager::NO_MODE ),
      m_manipulator(0),
+     m_manipulatorName(),
      m_connectableObject(0),
      m_regOverlay(0),
      m_metricOverlay(0),
@@ -237,7 +239,14 @@ ImageScrollView::ImageScrollView (QWidget* parent)
    m_oldTrackPoint.makeNan();
    m_inputBounds.makeNan();
    m_imageViewJob->setCallback(std::make_shared<Callback>(this));
-   m_manipulator = new ImageViewManipulator(this);
+   m_manipulator =
+      ObjectManipulatorFactory::instance()->createBest(
+         0, this, &m_manipulatorName);
+   if(!m_manipulator.valid())
+   {
+      m_manipulator = new ImageViewManipulator(this);
+      m_manipulatorName = "standard-navigation";
+   }
    viewport()->setCursor(Qt::CrossCursor);
    m_regOverlay = new RegistrationOverlay("Reg", scene());
    m_metricOverlay = new MetricOverlay("Met", scene());
@@ -275,6 +284,7 @@ ImageScrollView::ImageScrollView (QGraphicsScene* scene, QWidget* parent)
      m_multiLayerAlgorithm( BOX_SWIPE_ALGORITHM ),
      m_exploitationMode( DataManager::NO_MODE ),
      m_manipulator(0),
+     m_manipulatorName(),
      m_connectableObject(0),
      m_regOverlay(0),
      m_metricOverlay(0),
@@ -285,7 +295,14 @@ ImageScrollView::ImageScrollView (QGraphicsScene* scene, QWidget* parent)
    m_oldTrackPoint.makeNan();
    m_inputBounds.makeNan();
    m_imageViewJob->setCallback(std::make_shared<Callback>(this));
-   m_manipulator = new ImageViewManipulator(this);
+   m_manipulator =
+      ObjectManipulatorFactory::instance()->createBest(
+         0, this, &m_manipulatorName);
+   if(!m_manipulator.valid())
+   {
+      m_manipulator = new ImageViewManipulator(this);
+      m_manipulatorName = "standard-navigation";
+   }
    viewport()->setCursor(Qt::CrossCursor);
    m_regOverlay = new RegistrationOverlay( "Reg", scene );
    m_metricOverlay = new MetricOverlay("Met", scene);
@@ -308,7 +325,8 @@ ImageScrollView::ImageScrollView (QGraphicsScene* scene, QWidget* parent)
 
 ImageScrollView::~ImageScrollView()
 {
-   m_manipulator->setImageScrollView(0);
+   if(m_manipulator.valid())
+      m_manipulator->setImageScrollView(0);
    m_imageViewJob->cancel();
    if(m_connectableObject.get()&&m_listener)
    {
@@ -331,12 +349,30 @@ ImageScrollView::~ImageScrollView()
 }
 void ImageScrollView::setManipulator(ImageViewManipulator* manipulator)
 {
+   if(!manipulator)
+      return;
    if(m_manipulator.valid())
    {
       m_manipulator->setImageScrollView(0);
    }
    m_manipulator = manipulator;
+   m_manipulatorName.clear();
    manipulator->setImageScrollView(this);
+}
+
+bool ImageScrollView::setManipulator(
+   const std::string& name,
+   ossimObject* object)
+{
+   ImageViewManipulator* replacement =
+      ObjectManipulatorFactory::instance()->create(
+         name, object, this);
+   if(!replacement)
+      return false;
+   setManipulator(replacement);
+   m_manipulatorName = name;
+   replacement->initializeToCurrentView();
+   return true;
 }
 
 ImageViewManipulator* ImageScrollView::manipulator()
