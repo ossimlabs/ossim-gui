@@ -111,6 +111,10 @@ All notable changes to `ossim-gui` are documented here.
 > to manage the interface instead of quietly moonlighting as an engine.
 > Completed registration reports are now easier to reopen, read, wrap, and
 > copy from either the registration object or its report child.
+> GeoCell now discovers tailored editors and quick-registration workflows
+> through factories, while selected-image registration has guided preflight,
+> stable sizing, explicit run intent, concise results, and built-in swipe
+> verification without teaching the GUI concrete algorithms.
 
 ### Fixed
 - Open GeoCell context menus through Qt's context-menu event so the mouse
@@ -126,6 +130,22 @@ All notable changes to `ossim-gui` are documented here.
   (`37b931e`).
 
 ### Added
+- Add a generic tailored-editor registry and a factory-driven selected-image
+  registration workflow (`7ce314e`).
+  - Keep `Properties...` as the generic fallback while existing image tools and
+    Registration Setup register as tailored editors.
+  - Build Quick Registration choices from public autoregistration descriptors
+    instead of GUI-owned matcher menus.
+  - Preflight selected input order, entries, geometry mobility, overlap, roles,
+    anchors, and explicit pairs before setup creation or execution.
+  - Separate `Create Setup` from `Run Registration`, with execution disabled
+    when the selected inputs cannot run the requested workflow.
+  - Present completion status, summary, advisory, rerun, full-report, and
+    multi-layer swipe actions in the registration object.
+  - Keep Basic and Advanced fields in stable tabs, improve field and path
+    sizing, and give the Data Manager a responsive initial width.
+  - Manually verify fixed/floating native-affine NCC registration, geometry
+    persistence, live adjustment, result reporting, and swipe inspection.
 - Make completed registration reports directly accessible from the
   registration object and report child through context menus and double-click,
   and add copy-all, line-wrap, and resizable full-report controls. Verified
