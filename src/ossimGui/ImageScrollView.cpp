@@ -225,6 +225,8 @@ ImageScrollView::ImageScrollView (QWidget* parent)
      m_jobQueue( std::make_shared<DisplayTimerJobQueue>() ),
      m_inputBounds(),
      m_multiLayerAlgorithm( BOX_SWIPE_ALGORITHM ),
+     m_topSwipeLayer(0),
+     m_bottomSwipeLayer(1),
      m_exploitationMode( DataManager::NO_MODE ),
      m_manipulator(0),
      m_manipulatorName(),
@@ -282,6 +284,8 @@ ImageScrollView::ImageScrollView (QGraphicsScene* scene, QWidget* parent)
      m_jobQueue( std::make_shared<DisplayTimerJobQueue>() ),
      m_inputBounds(),
      m_multiLayerAlgorithm( BOX_SWIPE_ALGORITHM ),
+     m_topSwipeLayer(0),
+     m_bottomSwipeLayer(1),
      m_exploitationMode( DataManager::NO_MODE ),
      m_manipulator(0),
      m_manipulatorName(),
@@ -722,8 +726,8 @@ void ImageScrollView::paintMultiLayer(QPainter& painter, const QRectF& /* rect *
 {
    if(m_multiLayerAlgorithm != ANIMATION_ALGORITHM)
    {
-      ossimRefPtr<Layer> topLayer       = m_layers->layer((ossim_uint32)0);
-      ossimRefPtr<Layer> bottomLayer    = m_layers->layer((ossim_uint32)1);
+      ossimRefPtr<Layer> topLayer = m_layers->layer(m_topSwipeLayer);
+      ossimRefPtr<Layer> bottomLayer = m_layers->layer(m_bottomSwipeLayer);
       if(topLayer.valid()&&bottomLayer.valid())
       {
          ossimRefPtr<StaticTileImageCache> topTileCache = topLayer->tileCache();
@@ -823,6 +827,20 @@ void ImageScrollView::paintMultiLayer(QPainter& painter, const QRectF& /* rect *
    else
    {
    }
+}
+
+void ImageScrollView::setMultiLayerPair(ossim_uint32 topLayer,
+                                        ossim_uint32 bottomLayer)
+{
+   if(topLayer == bottomLayer ||
+      topLayer >= m_layers->numberOfLayers() ||
+      bottomLayer >= m_layers->numberOfLayers())
+   {
+      return;
+   }
+   m_topSwipeLayer = topLayer;
+   m_bottomSwipeLayer = bottomLayer;
+   viewport()->update();
 }
 
 void ImageScrollView::mouseDoubleClickEvent ( QMouseEvent * e )
@@ -1138,7 +1156,7 @@ void ossimGui::ImageScrollView::zoomAnnotation()
    }
 }
 
-// Called by ImageViewManipulator::setViewToChains()
+// Emitted by geometry refresh handling after a view transform changes.
 void ossimGui::ImageScrollView::emitViewChanged()
 {
    emit viewChanged();

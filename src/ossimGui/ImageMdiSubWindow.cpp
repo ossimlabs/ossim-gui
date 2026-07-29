@@ -42,6 +42,14 @@
 
 namespace
 {
+   QWidget* topLevelOwner(QWidget* widget)
+   {
+      QWidget* owner = widget;
+      while(owner && owner->parentWidget())
+         owner = owner->parentWidget();
+      return owner ? owner : widget;
+   }
+
    void showObjectEditor(const std::string& name,
                          ossimObject* object,
                          QWidget* parent)
@@ -316,7 +324,8 @@ void ossimGui::ImageActions::editGeometryAdjustments()
 {
    if(!m_visitor.m_imageAdjustments.empty())
    {
-      AdjustableParameterEditor* editor = new AdjustableParameterEditor(m_widget);
+      AdjustableParameterEditor* editor =
+         new AdjustableParameterEditor(topLevelOwner(m_widget), Qt::Tool);
       editor->setObject(m_visitor.m_imageAdjustments[0].get());
       editor->show();
    }

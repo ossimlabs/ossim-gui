@@ -98,12 +98,14 @@ LIST(REMOVE_ITEM OSSIMGUI_SRCS
    "${CMAKE_CURRENT_SOURCE_DIR}/src/ossimGui/RegistrationSetupDialog.cpp"
    "${CMAKE_CURRENT_SOURCE_DIR}/src/ossimGui/RegistrationSourceJobSupport.cpp"
    "${CMAKE_CURRENT_SOURCE_DIR}/src/ossimGui/FixedRegistrationSourceJob.cpp"
-   "${CMAKE_CURRENT_SOURCE_DIR}/src/ossimGui/BundleRegistrationSourceJob.cpp")
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/ossimGui/BundleRegistrationSourceJob.cpp"
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/ossimGui/RegistrationTiePointWorkbench.cpp")
 LIST(APPEND OSSIMGUI_SRCS
    "${CMAKE_CURRENT_SOURCE_DIR}/src/ossimGui/RegistrationSetupDialog.cpp"
    "${CMAKE_CURRENT_SOURCE_DIR}/src/ossimGui/RegistrationSourceJobSupport.cpp"
    "${CMAKE_CURRENT_SOURCE_DIR}/src/ossimGui/FixedRegistrationSourceJob.cpp"
-   "${CMAKE_CURRENT_SOURCE_DIR}/src/ossimGui/BundleRegistrationSourceJob.cpp")
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/ossimGui/BundleRegistrationSourceJob.cpp"
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/ossimGui/RegistrationTiePointWorkbench.cpp")
 
 SET(ADDITIONAL_LIBRARIES "")
 SET(OSSIMPLANET_LIB "")

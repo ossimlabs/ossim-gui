@@ -80,6 +80,7 @@
 #ifdef OSSIM_AUTOREGISTRATION_ENABLED
 #include "RegistrationSourceJobs.h"
 #include "RegistrationSetupDialog.h"
+#include "RegistrationTiePointWorkbench.h"
 #include <ossim/registration/ossimBundleAdjustmentRegistrationSource.h>
 #include <ossim/registration/ossimFixedRegistrationSource.h>
 #include <ossim/registration/ossimRegistrationSourceFactory.h>
@@ -1001,6 +1002,12 @@ ossimGui::DataManagerRegistrationItem::DataManagerRegistrationItem(
 
 ossimGui::DataManagerRegistrationItem::~DataManagerRegistrationItem()
 {
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   if(m_tiePointInspector)
+      m_tiePointInspector->close();
+   if(m_tiePointDisplay)
+      m_tiePointDisplay->close();
+#endif
 }
 
 void ossimGui::DataManagerRegistrationItem::dropItems(
@@ -1070,6 +1077,17 @@ void ossimGui::DataManagerRegistrationItem::setRegistrationReport(
                dataManagerWidget()->swipeRegistrationInputs(this);
          });
       actionLayout->addWidget(swipeButton);
+
+      QPushButton* inspectButton =
+         new QPushButton("Inspect Ties", reportWidget);
+      inspectButton->setToolTip(
+         "Inspect tie points from this completed registration without "
+         "running it again.");
+      QObject::connect(
+         inspectButton,
+         &QPushButton::clicked,
+         [this]() { inspectTiePoints(); });
+      actionLayout->addWidget(inspectButton);
 
       QPushButton* openButton =
          new QPushButton("Open Full Report...", reportWidget);
@@ -1218,6 +1236,42 @@ void ossimGui::DataManagerRegistrationItem::showRegistrationReport()
 
 void ossimGui::DataManagerRegistrationItem::execute()
 {
+   executeRegistration(false);
+}
+
+void ossimGui::DataManagerRegistrationItem::executeWithTiePointWorkbench()
+{
+   executeRegistration(true);
+}
+
+void ossimGui::DataManagerRegistrationItem::inspectTiePoints()
+{
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   if(!objectAsNode() || !dataManagerWidget())
+      return;
+   ossimFixedRegistrationSource* registration =
+      objectAsNode()->getObjectAs<ossimFixedRegistrationSource>();
+   if(!registration)
+   {
+      QMessageBox::information(
+         treeWidget(),
+         "Tie Point Workbench",
+         "The first workbench prototype supports fixed registration.");
+      return;
+   }
+   dataManagerWidget()->createTiePointWorkbench(
+      this, registration, true);
+#else
+   QMessageBox::warning(
+      treeWidget(),
+      "Tie Point Workbench",
+      "ossim-registration-source is not enabled in this build.");
+#endif
+}
+
+void ossimGui::DataManagerRegistrationItem::executeRegistration(
+   bool showTiePointWorkbench)
+{
 #ifdef OSSIM_AUTOREGISTRATION_ENABLED
    if(!objectAsNode())
    {
@@ -1255,12 +1309,23 @@ void ossimGui::DataManagerRegistrationItem::execute()
       {
          if(registration)
          {
+            std::shared_ptr<RegistrationTiePointSnapshotMailbox>
+               tiePointMailbox;
+            if(showTiePointWorkbench)
+            {
+               tiePointMailbox =
+                  dataManagerWidget()->createTiePointWorkbench(
+                     this, registration);
+               if(!tiePointMailbox)
+                  return;
+            }
             std::shared_ptr<RegistrationSourceJob> job =
                std::make_shared<RegistrationSourceJob>(
                   registration,
                   dataManagerWidget(),
                   dataManagerWidget()->shutdownRequested(),
-                  ossimString(text(0).toStdString()));
+                  ossimString(text(0).toStdString()),
+                  tiePointMailbox);
             job->setCallback(
                std::make_shared<RegistrationSourceJobCallback>(
                   dataManagerWidget(),
@@ -1271,6 +1336,16 @@ void ossimGui::DataManagerRegistrationItem::execute()
          }
          else if(bundleRegistration)
          {
+            if(showTiePointWorkbench)
+            {
+               QMessageBox::information(
+                  treeWidget(),
+                  "Tie Point Workbench",
+                  "The first workbench prototype supports fixed registration. "
+                  "Bundle snapshots will be added after this interaction is "
+                  "evaluated.");
+               return;
+            }
             std::shared_ptr<BundleRegistrationSourceJob> job =
                std::make_shared<BundleRegistrationSourceJob>(
                   bundleRegistration,
@@ -2875,6 +2950,119 @@ void ossimGui::DataManagerWidget::swipeRegistrationInputs(
    event->setNodeList(displayNode.get());
    QCoreApplication::postEvent(mainWindow(), event);
 }
+
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+std::shared_ptr<ossimGui::RegistrationTiePointSnapshotMailbox>
+ossimGui::DataManagerWidget::createTiePointWorkbench(
+   DataManagerRegistrationItem* item,
+   ossimFixedRegistrationSource* source,
+   bool includeExistingSnapshots)
+{
+   if(!item || !source || !item->objectAsNode())
+      return std::shared_ptr<RegistrationTiePointSnapshotMailbox>();
+
+   ossimConnectableObject* registration =
+      item->objectAsNode()->getObjectAs<ossimConnectableObject>();
+   if(!registration)
+      return std::shared_ptr<RegistrationTiePointSnapshotMailbox>();
+
+   ossimConnectableObject::ConnectableObjectList inputs;
+   for(auto& input : registration->getInputList())
+   {
+      if(input.valid() && dynamic_cast<ossimImageSource*>(input.get()))
+         inputs.push_back(input);
+   }
+   if(inputs.size() < 2)
+   {
+      QMessageBox::information(
+         this,
+         "Tie Point Workbench",
+         "At least two connected image inputs are needed.");
+      return std::shared_ptr<RegistrationTiePointSnapshotMailbox>();
+   }
+
+   if(!includeExistingSnapshots && item->tiePointDisplay())
+   {
+      if(item->tiePointInspector())
+         item->tiePointInspector()->close();
+      item->tiePointDisplay()->close();
+      item->setTiePointInspector(0);
+      item->setTiePointDisplay(0);
+      item->setTiePointMailbox(
+         std::shared_ptr<RegistrationTiePointSnapshotMailbox>());
+   }
+
+   ImageMdiSubWindow* subWindow = includeExistingSnapshots ?
+      dynamic_cast<ImageMdiSubWindow*>(item->tiePointDisplay()) : 0;
+   if(subWindow && subWindow->scrollWidget())
+   {
+      if(item->tiePointInspector())
+      {
+         item->tiePointInspector()->show();
+         item->tiePointInspector()->raise();
+         item->tiePointInspector()->activateWindow();
+         return item->tiePointMailbox();
+      }
+   }
+   else
+   {
+      item->setTiePointDisplay(0);
+   }
+
+   std::shared_ptr<RegistrationTiePointSnapshotMailbox> mailbox =
+      std::make_shared<RegistrationTiePointSnapshotMailbox>();
+   if(includeExistingSnapshots)
+   {
+      const std::vector<ossimFixedRegistrationSource::TiePointSnapshot>
+         snapshots = source->latestTiePointSnapshots();
+      if(snapshots.empty())
+      {
+         QMessageBox::information(
+            this,
+            "Tie Point Workbench",
+            "This registration does not have a retained tie-point result yet.");
+         return std::shared_ptr<RegistrationTiePointSnapshotMailbox>();
+      }
+      for(const auto& snapshot : snapshots)
+         mailbox->publish(snapshot);
+      mailbox->finish(true, "Inspecting the existing registration result.");
+   }
+
+   if(!subWindow)
+   {
+      ossimRefPtr<DataManager::Node> displayNode =
+         m_dataManager->createDefault2dImageDisplay(0, true);
+      ConnectableDisplayObject* display =
+         displayNode.valid() ?
+            displayNode->getObjectAs<ConnectableDisplayObject>() : 0;
+      if(!display)
+         return std::shared_ptr<RegistrationTiePointSnapshotMailbox>();
+
+      for(auto& input : inputs)
+         display->connectMyInputTo(input.get());
+
+      subWindow = dynamic_cast<ImageMdiSubWindow*>(display->display());
+      if(!subWindow || !subWindow->scrollWidget())
+         return std::shared_ptr<RegistrationTiePointSnapshotMailbox>();
+
+      DataManagerEvent* event =
+         new DataManagerEvent(DataManagerEvent::COMMAND_DISPLAY_NODE);
+      event->setNodeList(displayNode.get());
+      QCoreApplication::postEvent(mainWindow(), event);
+      item->setTiePointDisplay(subWindow);
+   }
+
+   QWidget* workbench = createRegistrationTiePointWorkbench(
+      mainWindow(), source, subWindow->scrollWidget(), mailbox);
+   if(workbench)
+   {
+      item->setTiePointInspector(workbench);
+      item->setTiePointMailbox(mailbox);
+      workbench->show();
+   }
+   return mailbox;
+}
+#endif
 
 void ossimGui::DataManagerWidget::buildOverviewsForSelected(QAction* action)
 {
@@ -5050,6 +5238,36 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
 #ifdef OSSIM_AUTOREGISTRATION_ENABLED
       DataManagerRegistrationItem* registrationItem =
          dynamic_cast<DataManagerRegistrationItem*> (activeItem);
+      ossimFixedRegistrationSource* fixedRegistration = 0;
+      if(registrationItem && registrationItem->objectAsNode())
+      {
+         fixedRegistration = registrationItem->objectAsNode()->
+            getObjectAs<ossimFixedRegistrationSource>();
+      }
+      if(fixedRegistration)
+      {
+         QAction* inspectAction =
+            menu->addAction("Run with Tie Point Workbench...");
+         inspectAction->setToolTip(
+            "Experimental live, scalable tie-point visualization.");
+         connect(inspectAction,
+                 &QAction::triggered,
+                 [registrationItem]() {
+                    registrationItem->executeWithTiePointWorkbench();
+                 });
+         if(registrationItem->hasRegistrationReport())
+         {
+            QAction* existingTiesAction =
+               menu->addAction("Inspect Existing Tie Points...");
+            existingTiesAction->setToolTip(
+               "Open the retained tie points without running registration.");
+            connect(existingTiesAction,
+                    &QAction::triggered,
+                    [registrationItem]() {
+                       registrationItem->inspectTiePoints();
+                    });
+         }
+      }
       if(registrationItem && registrationItem->hasRegistrationReport())
       {
          QAction* reportAction =

@@ -3,6 +3,7 @@
 #ifdef OSSIM_AUTOREGISTRATION_ENABLED
 
 #include "RegistrationSourceJobSupport.h"
+#include "RegistrationTiePointWorkbench.h"
 
 #include <ossim/base/ossimEvent.h>
 #include <ossim/base/ossimRefreshEvent.h>
@@ -44,6 +45,9 @@ namespace
          m_source->setProgressCallback(
             std::function<void(
                const ossimFixedRegistrationSource::ProgressInfo&)>());
+         m_source->setTiePointSnapshotCallback(
+            std::function<void(
+               const ossimFixedRegistrationSource::TiePointSnapshot&)>());
          m_source->setApplyResultCallback(
             std::function<bool(
                const ossimFixedRegistrationSource::RegistrationResult&)>());
@@ -61,7 +65,9 @@ namespace ossimGui
       ossimFixedRegistrationSource* registrationSource,
       DataManagerWidget* dataManagerWidget,
       std::shared_ptr<std::atomic_bool> shutdownRequested,
-      const ossimString& label)
+      const ossimString& label,
+      std::shared_ptr<RegistrationTiePointSnapshotMailbox>
+         tiePointMailbox)
    :m_registrationSource(registrationSource),
     m_dataManagerWidget(dataManagerWidget),
     m_shutdownRequested(shutdownRequested),
@@ -72,6 +78,7 @@ namespace ossimGui
     m_launchSettings(registrationSource
                         ? registrationSource->autoRegistrationSettingsSummary()
                         : std::string()),
+    m_tiePointMailbox(std::move(tiePointMailbox)),
     m_success(false)
    {
       setId("ossimGui::RegistrationSourceJob");
@@ -322,6 +329,13 @@ namespace ossimGui
                   updateProgressName(progress);
                }
             });
+         m_registrationSource->setTiePointSnapshotCallback(
+            [this](
+               const ossimFixedRegistrationSource::TiePointSnapshot&
+                  snapshot) {
+               if(m_tiePointMailbox && !widgetShutdownRequested())
+                  m_tiePointMailbox->publish(snapshot);
+            });
          m_registrationSource->setApplyResultsToInputs(false);
          m_registrationSource->setApplyResultCallback(
             [this](
@@ -333,6 +347,12 @@ namespace ossimGui
             m_registrationSource.get());
          m_success = m_registrationSource->executeRegistration();
          callbackScope.reset();
+         if(m_tiePointMailbox)
+         {
+            m_tiePointMailbox->finish(
+               m_success,
+               m_registrationSource->registrationSummary());
+         }
          if(widgetShutdownRequested())
          {
             m_success = false;

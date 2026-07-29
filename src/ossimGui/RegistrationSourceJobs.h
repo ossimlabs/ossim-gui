@@ -17,6 +17,7 @@
 namespace ossimGui
 {
    class DataManagerWidget;
+   class RegistrationTiePointSnapshotMailbox;
 
    class RegistrationSourceJob : public ossimJob
    {
@@ -25,7 +26,10 @@ namespace ossimGui
          ossimFixedRegistrationSource* registrationSource,
          DataManagerWidget* dataManagerWidget,
          std::shared_ptr<std::atomic_bool> shutdownRequested,
-         const ossimString& label);
+         const ossimString& label,
+         std::shared_ptr<RegistrationTiePointSnapshotMailbox>
+            tiePointMailbox =
+               std::shared_ptr<RegistrationTiePointSnapshotMailbox>());
 
       bool success() const;
       const ossimString& resultSummary() const;
@@ -64,6 +68,8 @@ namespace ossimGui
       std::string m_reportText;
       ossimFilename m_reportPath;
       DataManagerWidgetEvent::HandlerListType m_sourceHandlersToReload;
+      std::shared_ptr<RegistrationTiePointSnapshotMailbox>
+         m_tiePointMailbox;
       bool m_success;
    };
 

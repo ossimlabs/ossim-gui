@@ -7,6 +7,7 @@
 #include <QTreeWidgetItem>
 #include <QStandardItem>
 #include <QMenu>
+#include <QPointer>
 #include <QtCore/QModelIndex>
 #include <QCheckBox>
 #include <QComboBox>
@@ -27,6 +28,7 @@ class QLabel;
 class QPlainTextEdit;
 
 class ossimSensorModelTuple;
+class ossimFixedRegistrationSource;
 
 namespace ossimGui{
    
@@ -358,6 +360,8 @@ namespace ossimGui{
       virtual ~DataManagerRegistrationItem();
       virtual void dropItems(QList<DataManagerItem*>& chainItemList);
       virtual void execute();
+      void executeWithTiePointWorkbench();
+      void inspectTiePoints();
       void setRegistrationReport(const std::string& reportText,
                                  const std::string& reportPath,
                                  const std::string& status,
@@ -366,6 +370,35 @@ namespace ossimGui{
       bool hasRegistrationReport()const;
       bool ownsRegistrationReportItem(const QTreeWidgetItem* item)const;
       void showRegistrationReport();
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+      QWidget* tiePointDisplay() const
+      {
+         return m_tiePointDisplay.data();
+      }
+      QWidget* tiePointInspector() const
+      {
+         return m_tiePointInspector.data();
+      }
+      void setTiePointDisplay(QWidget* value)
+      {
+         m_tiePointDisplay = value;
+      }
+      void setTiePointInspector(QWidget* value)
+      {
+         m_tiePointInspector = value;
+      }
+      const std::shared_ptr<class RegistrationTiePointSnapshotMailbox>&
+      tiePointMailbox() const
+      {
+         return m_tiePointMailbox;
+      }
+      void setTiePointMailbox(
+         const std::shared_ptr<class RegistrationTiePointSnapshotMailbox>&
+            value)
+      {
+         m_tiePointMailbox = value;
+      }
+#endif
 
    protected:
       QTreeWidgetItem* m_reportItem;
@@ -375,6 +408,15 @@ namespace ossimGui{
       QLabel* m_reportPathLabel;
       QString m_reportText;
       QString m_reportPath;
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+      QPointer<QWidget> m_tiePointDisplay;
+      QPointer<QWidget> m_tiePointInspector;
+      std::shared_ptr<class RegistrationTiePointSnapshotMailbox>
+         m_tiePointMailbox;
+#endif
+
+   private:
+      void executeRegistration(bool showTiePointWorkbench);
    };
 
    class OSSIMGUI_DLL DataManagerRegistrationFolder : public DataManagerFolder
@@ -610,6 +652,12 @@ namespace ossimGui{
       bool isPreparingForShutdown()const;
       std::shared_ptr<std::atomic_bool> shutdownRequested()const{return m_shutdownRequested;}
       void swipeRegistrationInputs(DataManagerRegistrationItem* item);
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+      std::shared_ptr<class RegistrationTiePointSnapshotMailbox>
+         createTiePointWorkbench(DataManagerRegistrationItem* item,
+                                 ossimFixedRegistrationSource* source,
+                                 bool includeExistingSnapshots = false);
+#endif
       bool openDataManager(const ossimFilename& file);
       void refresh();
       QModelIndex indexFromDataManagerItem(DataManagerItem* item, int col=0);

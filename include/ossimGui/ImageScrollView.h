@@ -139,6 +139,10 @@ namespace ossimGui
             {
                m_widget->refreshDisplay();
             }
+            if(refreshType & ossimRefreshEvent::REFRESH_GEOMETRY)
+            {
+               m_widget->emitViewChanged();
+            }
             if(refreshType & ossimRefreshEvent::REFRESH_POSITION)
             {
                m_widget->centerOn(event.getPosition().x, event.getPosition().y);
@@ -285,6 +289,10 @@ namespace ossimGui
       void refreshDisplay();
       void setMultiLayerAlgorithm(int algorithm){m_multiLayerAlgorithm = static_cast<MultiLayerAlgorithmType> (algorithm);}
       ossim_int32 multiLayerAlgorithmType()const{return m_multiLayerAlgorithm;}
+      void setMultiLayerPair(ossim_uint32 topLayer,
+                             ossim_uint32 bottomLayer);
+      ossim_uint32 topSwipeLayer() const { return m_topSwipeLayer; }
+      ossim_uint32 bottomSwipeLayer() const { return m_bottomSwipeLayer; }
       void setExploitationMode(int expMode);
       void setAutoMeasActive(const bool state);
       ossim_int32 exploitationMode()const{return m_exploitationMode;}
@@ -312,6 +320,7 @@ namespace ossimGui
       ossimGui::MetricOverlay* metOverlay()const{return m_metricOverlay;}
 
       void emitViewChanged();
+      void emitTracking(const ossimDpt& pt);
       
    signals:
       
@@ -343,7 +352,6 @@ namespace ossimGui
       virtual void drawForeground ( QPainter * painter, const QRectF & rect );
       void paintMultiLayer(QPainter& painter, const QRectF & rect);
       void updateSceneRect();
-      void emitTracking(const ossimDpt& pt);
       
       ossimDpt                          m_lastClickedPoint;
       ossimDpt                          m_trackPoint;
@@ -362,6 +370,8 @@ namespace ossimGui
       std::shared_ptr<ossimJobQueue>    m_jobQueue;
       ossimDrect                        m_inputBounds;
       MultiLayerAlgorithmType           m_multiLayerAlgorithm;
+      ossim_uint32                      m_topSwipeLayer;
+      ossim_uint32                      m_bottomSwipeLayer;
       DataManager::ExploitationModeType m_exploitationMode;
       
       ossimRefPtr<ImageViewManipulator> m_manipulator;
