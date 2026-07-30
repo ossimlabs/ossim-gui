@@ -118,6 +118,10 @@ All notable changes to `ossim-gui` are documented here.
 > Image interaction modes now use the same extension-friendly pattern, while
 > Standard Navigation stays quietly in charge until another applicable mode
 > is actually registered.
+> Completed fixed and bundle registrations now have a reusable tie-point
+> inspection workbench with scalable markers, edge selection, synchronized
+> swipe views, and predictable window reuse. Geometry adjustments also gain a
+> visible Lock-header checkbox for locking or unlocking all parameters at once.
 
 ### Fixed
 - Open GeoCell context menus through Qt's context-menu event so the mouse
@@ -133,6 +137,22 @@ All notable changes to `ossim-gui` are documented here.
   (`37b931e`).
 
 ### Added
+- Add reusable fixed and bundle tie-point inspection to completed registration
+  results (`9106fa3`, `9c0655e`).
+  - Render fixed/moving observations, applied corrections, removed ties, and
+    scalable selection markers in a dedicated always-on-top workbench.
+  - Retain completed fixed snapshots and bundle pair evidence so inspection
+    does not rerun registration.
+  - Select bundle edges and tie rows while keeping the shared swipe display
+    centered and synchronized across zoom and partial-overlap inputs.
+  - Reuse one swipe display per registration from both `Swipe` and
+    `Inspect Ties`, recreating it only after the retained display closes.
+  - Use `ossimDrect` intersection and union bounds for the selected swipe pair
+    while preserving the established swipe compositing behavior.
+  - Add a tri-state checkbox to the `Lock` column heading for locking or
+    unlocking every parameter in the current geometry adjustment.
+  - Manually verify fixed and all-image Celtic bundle inspection, edge
+    selection, zoom behavior, window reuse, and parameter locking.
 - Add a generic object-manipulator registry for image-view interaction modes
   (`750f876`).
   - Register existing Standard Navigation as the default provider.
