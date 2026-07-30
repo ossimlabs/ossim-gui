@@ -1251,16 +1251,25 @@ void ossimGui::DataManagerRegistrationItem::inspectTiePoints()
       return;
    ossimFixedRegistrationSource* registration =
       objectAsNode()->getObjectAs<ossimFixedRegistrationSource>();
-   if(!registration)
+   if(registration)
    {
-      QMessageBox::information(
-         treeWidget(),
-         "Tie Point Workbench",
-         "The first workbench prototype supports fixed registration.");
+      dataManagerWidget()->createTiePointWorkbench(
+         this, registration, true);
       return;
    }
-   dataManagerWidget()->createTiePointWorkbench(
-      this, registration, true);
+   ossimBundleAdjustmentRegistrationSource* bundleRegistration =
+      objectAsNode()->
+         getObjectAs<ossimBundleAdjustmentRegistrationSource>();
+   if(bundleRegistration)
+   {
+      dataManagerWidget()->createTiePointWorkbench(
+         this, bundleRegistration, true);
+      return;
+   }
+   QMessageBox::information(
+      treeWidget(),
+      "Tie Point Workbench",
+      "This registration source does not expose inspectable tie points.");
 #else
    QMessageBox::warning(
       treeWidget(),
@@ -2899,7 +2908,11 @@ void ossimGui::DataManagerWidget::swipeSelected()
          }
       }
       ++itemsIter;
-   }   
+   }
+   ImageMdiSubWindow* subWindow =
+      dynamic_cast<ImageMdiSubWindow*>(connectableDisplay->display());
+   if(subWindow && subWindow->scrollWidget())
+      subWindow->scrollWidget()->synchronizeLayerViews();
    DataManagerEvent* event = new DataManagerEvent(DataManagerEvent::COMMAND_DISPLAY_NODE);
    event->setNodeList(node.get());
    QCoreApplication::postEvent(mainWindow(), event);
@@ -2911,6 +2924,19 @@ void ossimGui::DataManagerWidget::swipeRegistrationInputs(
 {
    if(!item || !item->objectAsNode())
       return;
+
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+   ImageMdiSubWindow* existingDisplay =
+      dynamic_cast<ImageMdiSubWindow*>(item->tiePointDisplay());
+   if(existingDisplay && existingDisplay->scrollWidget())
+   {
+      existingDisplay->show();
+      existingDisplay->raise();
+      existingDisplay->activateWindow();
+      return;
+   }
+   item->setTiePointDisplay(0);
+#endif
 
    ossimConnectableObject* registration =
       item->objectAsNode()->getObjectAs<ossimConnectableObject>();
@@ -2944,6 +2970,15 @@ void ossimGui::DataManagerWidget::swipeRegistrationInputs(
 
    for(auto& input : inputs)
       display->connectMyInputTo(input.get());
+   ImageMdiSubWindow* subWindow =
+      dynamic_cast<ImageMdiSubWindow*>(display->display());
+   if(subWindow && subWindow->scrollWidget())
+   {
+      subWindow->scrollWidget()->synchronizeLayerViews();
+#ifdef OSSIM_AUTOREGISTRATION_ENABLED
+      item->setTiePointDisplay(subWindow);
+#endif
+   }
 
    DataManagerEvent* event =
       new DataManagerEvent(DataManagerEvent::COMMAND_DISPLAY_NODE);
@@ -3044,6 +3079,129 @@ ossimGui::DataManagerWidget::createTiePointWorkbench(
       subWindow = dynamic_cast<ImageMdiSubWindow*>(display->display());
       if(!subWindow || !subWindow->scrollWidget())
          return std::shared_ptr<RegistrationTiePointSnapshotMailbox>();
+      subWindow->scrollWidget()->synchronizeLayerViews();
+
+      DataManagerEvent* event =
+         new DataManagerEvent(DataManagerEvent::COMMAND_DISPLAY_NODE);
+      event->setNodeList(displayNode.get());
+      QCoreApplication::postEvent(mainWindow(), event);
+      item->setTiePointDisplay(subWindow);
+   }
+
+   QWidget* workbench = createRegistrationTiePointWorkbench(
+      mainWindow(), source, subWindow->scrollWidget(), mailbox);
+   if(workbench)
+   {
+      item->setTiePointInspector(workbench);
+      item->setTiePointMailbox(mailbox);
+      workbench->show();
+   }
+   return mailbox;
+}
+
+std::shared_ptr<ossimGui::RegistrationTiePointSnapshotMailbox>
+ossimGui::DataManagerWidget::createTiePointWorkbench(
+   DataManagerRegistrationItem* item,
+   ossimBundleAdjustmentRegistrationSource* source,
+   bool includeExistingSnapshots)
+{
+   if(!item || !source || !item->objectAsNode())
+      return std::shared_ptr<RegistrationTiePointSnapshotMailbox>();
+
+   ossimConnectableObject* registration =
+      item->objectAsNode()->getObjectAs<ossimConnectableObject>();
+   if(!registration)
+      return std::shared_ptr<RegistrationTiePointSnapshotMailbox>();
+
+   ossimConnectableObject::ConnectableObjectList inputs;
+   for(auto& input : registration->getInputList())
+   {
+      if(input.valid() && dynamic_cast<ossimImageSource*>(input.get()))
+         inputs.push_back(input);
+   }
+   if(inputs.size() < 2)
+   {
+      QMessageBox::information(
+         this,
+         "Tie Point Workbench",
+         "At least two connected image inputs are needed.");
+      return std::shared_ptr<RegistrationTiePointSnapshotMailbox>();
+   }
+
+   ImageMdiSubWindow* subWindow = includeExistingSnapshots ?
+      dynamic_cast<ImageMdiSubWindow*>(item->tiePointDisplay()) : 0;
+   if(subWindow && subWindow->scrollWidget())
+   {
+      if(item->tiePointInspector())
+      {
+         item->tiePointInspector()->show();
+         item->tiePointInspector()->raise();
+         item->tiePointInspector()->activateWindow();
+         return item->tiePointMailbox();
+      }
+   }
+   else
+   {
+      item->setTiePointDisplay(0);
+   }
+
+   std::shared_ptr<RegistrationTiePointSnapshotMailbox> mailbox =
+      std::make_shared<RegistrationTiePointSnapshotMailbox>();
+   if(includeExistingSnapshots)
+   {
+      const std::vector<
+         ossimBundleAdjustmentRegistrationSource::PairResult>& pairResults =
+            source->registrationResult().pairResults();
+      for(const auto& pair : pairResults)
+      {
+         if(pair.tiePoints().empty())
+            continue;
+         RegistrationTiePointSnapshot snapshot;
+         snapshot.setFirstInputIndex(pair.firstInputIndex());
+         snapshot.setSecondInputIndex(pair.secondInputIndex());
+         snapshot.setBundleEdge(true);
+         snapshot.setTiePoints(pair.tiePoints());
+         std::ostringstream message;
+         message << "completed bundle edge with "
+                 << pair.tiePoints().size() << " tie point(s)";
+         if(pair.residualSummary().validResidualCount() > 0)
+         {
+            message << ", final RMS "
+                    << pair.residualSummary().rmsPixels() << " px";
+         }
+         snapshot.setMessage(message.str());
+         mailbox->publish(snapshot);
+      }
+      std::uint64_t revision = 0;
+      std::vector<RegistrationTiePointSnapshot> snapshots;
+      if(!mailbox->read(revision, snapshots) || snapshots.empty())
+      {
+         QMessageBox::information(
+            this,
+            "Tie Point Workbench",
+            "This bundle adjustment does not have retained pair tie points.");
+         return std::shared_ptr<RegistrationTiePointSnapshotMailbox>();
+      }
+      mailbox->finish(true, "Inspecting the existing bundle result.");
+   }
+
+   if(!subWindow)
+   {
+      ossimRefPtr<DataManager::Node> displayNode =
+         m_dataManager->createDefault2dImageDisplay(0, true);
+      ConnectableDisplayObject* display =
+         displayNode.valid() ?
+            displayNode->getObjectAs<ConnectableDisplayObject>() : 0;
+      if(!display)
+         return std::shared_ptr<RegistrationTiePointSnapshotMailbox>();
+
+      for(auto& input : inputs)
+         display->connectMyInputTo(input.get());
+
+      subWindow = dynamic_cast<ImageMdiSubWindow*>(display->display());
+      if(!subWindow || !subWindow->scrollWidget())
+         return std::shared_ptr<RegistrationTiePointSnapshotMailbox>();
+      subWindow->scrollWidget()->synchronizeLayerViews();
 
       DataManagerEvent* event =
          new DataManagerEvent(DataManagerEvent::COMMAND_DISPLAY_NODE);
@@ -5286,6 +5444,18 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
       }
       if(bundleRegistration)
       {
+         if(registrationItem->hasRegistrationReport())
+         {
+            QAction* existingTiesAction =
+               menu->addAction("Inspect Existing Bundle Tie Points...");
+            existingTiesAction->setToolTip(
+               "Inspect retained bundle edges without running adjustment.");
+            connect(existingTiesAction,
+                    &QAction::triggered,
+                    [registrationItem]() {
+                       registrationItem->inspectTiePoints();
+                    });
+         }
          QAction* allFloatingAction = menu->addAction("All Images Float");
          allFloatingAction->setCheckable(true);
          allFloatingAction->setChecked(

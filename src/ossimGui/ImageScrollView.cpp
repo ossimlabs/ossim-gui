@@ -2,6 +2,7 @@
 #include <ossimGui/ImageScrollView.h>
 #include <ossimGui/DisplayTimerJobQueue.h>
 #include <ossimGui/GatherImageViewProjTransVisitor.h>
+#include <ossimGui/SetViewVisitor.h>
 #include <ossimGui/MetricOverlay.h>
 #include <ossimGui/RegistrationOverlay.h>
 #include <ossimGui/ObjectManipulatorFactory.h>
@@ -227,6 +228,7 @@ ImageScrollView::ImageScrollView (QWidget* parent)
      m_multiLayerAlgorithm( BOX_SWIPE_ALGORITHM ),
      m_topSwipeLayer(0),
      m_bottomSwipeLayer(1),
+     m_swipePairOverlapBounds(),
      m_exploitationMode( DataManager::NO_MODE ),
      m_manipulator(0),
      m_manipulatorName(),
@@ -240,6 +242,7 @@ ImageScrollView::ImageScrollView (QWidget* parent)
    m_trackPoint.makeNan();
    m_oldTrackPoint.makeNan();
    m_inputBounds.makeNan();
+   m_swipePairOverlapBounds.makeNan();
    m_imageViewJob->setCallback(std::make_shared<Callback>(this));
    m_manipulator =
       ObjectManipulatorFactory::instance()->createBest(
@@ -286,6 +289,7 @@ ImageScrollView::ImageScrollView (QGraphicsScene* scene, QWidget* parent)
      m_multiLayerAlgorithm( BOX_SWIPE_ALGORITHM ),
      m_topSwipeLayer(0),
      m_bottomSwipeLayer(1),
+     m_swipePairOverlapBounds(),
      m_exploitationMode( DataManager::NO_MODE ),
      m_manipulator(0),
      m_manipulatorName(),
@@ -298,6 +302,7 @@ ImageScrollView::ImageScrollView (QGraphicsScene* scene, QWidget* parent)
    m_trackPoint.makeNan();
    m_oldTrackPoint.makeNan();
    m_inputBounds.makeNan();
+   m_swipePairOverlapBounds.makeNan();
    m_imageViewJob->setCallback(std::make_shared<Callback>(this));
    m_manipulator =
       ObjectManipulatorFactory::instance()->createBest(
@@ -401,7 +406,7 @@ void ImageScrollView::setConnectableObject(ConnectableImageObject* c)
 void ImageScrollView::refreshDisplay()
 {
    m_layers->flushDisplayCaches();
-   m_inputBounds = m_connectableObject->getBounds();
+   updateInputBounds();
    updateSceneRect();
 
    if(m_jobQueue)
@@ -409,6 +414,29 @@ void ImageScrollView::refreshDisplay()
       if(!m_imageViewJob->isRunning()) m_imageViewJob->ready();
       m_jobQueue->add(m_imageViewJob);
    }
+}
+
+bool ImageScrollView::synchronizeLayerViews()
+{
+   if(!m_connectableObject.valid())
+      return false;
+
+   ossimTypeNameVisitor rendererVisitor("ossimImageRenderer", true);
+   m_connectableObject->accept(rendererVisitor);
+   ossimViewInterface* referenceView =
+      dynamic_cast<ossimViewInterface*>(rendererVisitor.getObject());
+   ossimObject* commonView =
+      referenceView ? referenceView->getView() : 0;
+   if(!commonView)
+      return false;
+
+   SetViewVisitor setViewVisitor(commonView);
+   m_connectableObject->accept(setViewVisitor);
+   setViewVisitor.setView();
+   if(m_manipulator.valid())
+      m_manipulator->initializeToCurrentView();
+   refreshDisplay();
+   return true;
 }
    
 ossimDrect ImageScrollView::viewportBoundsInSceneSpace()const
@@ -421,11 +449,64 @@ void ImageScrollView::setJobQueue(std::shared_ptr<ossimJobQueue> jobQueue)
 {
    m_jobQueue = jobQueue;
 }
+
+ossimDrect ImageScrollView::layerBounds(ossim_uint32 layerIndex)
+{
+   ImageScrollView::Layer* layer = m_layers->layer(layerIndex);
+   ossimImageSource* source = layer ? layer->chain() : 0;
+   if(source)
+      return source->getBoundingRect();
+   ossimDrect result;
+   result.makeNan();
+   return result;
+}
+
+void ImageScrollView::updateInputBounds()
+{
+   m_swipePairOverlapBounds.makeNan();
+   ossimDrect allInputBounds;
+   allInputBounds.makeNan();
+   if(m_connectableObject.valid())
+      allInputBounds = m_connectableObject->getBounds();
+
+   const bool pairSwipe =
+      m_multiLayerAlgorithm == HORIZONTAL_SWIPE_ALGORITHM ||
+      m_multiLayerAlgorithm == VERTICAL_SWIPE_ALGORITHM ||
+      m_multiLayerAlgorithm == BOX_SWIPE_ALGORITHM ||
+      m_multiLayerAlgorithm == CIRCLE_SWIPE_ALGORITHM;
+   if(!pairSwipe ||
+      m_topSwipeLayer >= m_layers->numberOfLayers() ||
+      m_bottomSwipeLayer >= m_layers->numberOfLayers())
+   {
+      m_inputBounds = allInputBounds;
+      return;
+   }
+
+   const ossimDrect topBounds = layerBounds(m_topSwipeLayer);
+   const ossimDrect bottomBounds = layerBounds(m_bottomSwipeLayer);
+   if(!topBounds.hasNans() && !bottomBounds.hasNans())
+   {
+      m_swipePairOverlapBounds = topBounds.clipToRect(bottomBounds);
+      m_inputBounds = topBounds.combine(bottomBounds);
+   }
+   else if(!topBounds.hasNans())
+   {
+      m_inputBounds = topBounds;
+   }
+   else if(!bottomBounds.hasNans())
+   {
+      m_inputBounds = bottomBounds;
+   }
+   else
+   {
+      m_inputBounds = allInputBounds;
+   }
+}
    
 void ImageScrollView::inputConnected(ossim_int32 /* idx */)
 {
    m_layers->adjustLayers(m_connectableObject.get());
-   m_inputBounds = m_connectableObject->getBounds();
+   updateInputBounds();
    updateSceneRect();
    if(m_connectableObject->getNumberOfInputs() == 1)
    {
@@ -448,7 +529,7 @@ void ImageScrollView::inputDisconnected(ossim_int32 /* idx */)
 {
    m_layers->adjustLayers(m_connectableObject.get());
    
-   m_inputBounds = m_connectableObject->getBounds();
+   updateInputBounds();
    
    updateSceneRect();
    
@@ -728,105 +809,124 @@ void ImageScrollView::paintMultiLayer(QPainter& painter, const QRectF& /* rect *
    {
       ossimRefPtr<Layer> topLayer = m_layers->layer(m_topSwipeLayer);
       ossimRefPtr<Layer> bottomLayer = m_layers->layer(m_bottomSwipeLayer);
-      if(topLayer.valid()&&bottomLayer.valid())
+      if(topLayer.valid() && bottomLayer.valid())
       {
-         ossimRefPtr<StaticTileImageCache> topTileCache = topLayer->tileCache();
-         ossimRefPtr<StaticTileImageCache> bottomTileCache = bottomLayer->tileCache();
-         
-         if(topTileCache.valid()&&bottomTileCache.valid())
+         ossimRefPtr<StaticTileImageCache> topTileCache =
+            topLayer->tileCache();
+         ossimRefPtr<StaticTileImageCache> bottomTileCache =
+            bottomLayer->tileCache();
+         if(topTileCache.valid() && bottomTileCache.valid())
          {
-            ossimIrect rect = topTileCache->getRect();
-            QRectF rectF(rect.ul().x, rect.ul().y, rect.width(), rect.height());   // = m_scrollToLocal.mapRect(QRectF(rect.ul().x, rect.ul().y, rect.width(), rect.height()));
-            ossimIpt topOriginOffset = ossimDpt(rectF.x(), rectF.y());
-            // for scrolling we need to offset from the tile location to the actual rect indicated by the viewport.
-            // 
-            ossim_uint32 w = rect.width();
-            ossim_uint32 h = rect.height();
+            const ossimIrect rect = topTileCache->getRect();
+            const ossimIpt topOriginOffset = rect.ul();
+            const ossim_uint32 width = rect.width();
+            const ossim_uint32 height = rect.height();
             switch(m_multiLayerAlgorithm)
             {
                case HORIZONTAL_SWIPE_ALGORITHM:
                {
-                  ossim_float64 topLayerx     = topOriginOffset.x;
-                  ossim_float64 bottomLayerx  = m_activePointEnd.x();
-                  ossim_float64 topLayerWidth = bottomLayerx - topLayerx;
-                  painter.drawImage(topLayerx, topOriginOffset.y, 
-                                    topTileCache->getCache(),0,0,topLayerWidth,h);
-                  painter.drawImage(topLayerx+topLayerWidth, topOriginOffset.y, bottomTileCache->getCache(), topLayerWidth, 0);
+                  const ossim_float64 topLayerX = topOriginOffset.x;
+                  const ossim_float64 bottomLayerX = m_activePointEnd.x();
+                  const ossim_float64 topLayerWidth =
+                     bottomLayerX - topLayerX;
+                  painter.drawImage(
+                     topLayerX, topOriginOffset.y,
+                     topTileCache->getCache(),
+                     0, 0, topLayerWidth, height);
+                  painter.drawImage(
+                     topLayerX + topLayerWidth, topOriginOffset.y,
+                     bottomTileCache->getCache(),
+                     topLayerWidth, 0);
                   break;
                }
                case VERTICAL_SWIPE_ALGORITHM:
                {
-                  ossim_int64 topLayery    = topOriginOffset.y;
-                  ossim_int64 bottomLayery = m_activePointEnd.y();
-                  ossim_int64 topLayerHeight = bottomLayery - topLayery;
-                  painter.drawImage(topOriginOffset.x, topLayery, topTileCache->getCache(), 0, 0, w, topLayerHeight);
-                  painter.drawImage(topOriginOffset.x, topLayery+topLayerHeight, bottomTileCache->getCache(), 0, topLayerHeight);
+                  const ossim_int64 topLayerY = topOriginOffset.y;
+                  const ossim_int64 bottomLayerY = m_activePointEnd.y();
+                  const ossim_int64 topLayerHeight =
+                     bottomLayerY - topLayerY;
+                  painter.drawImage(
+                     topOriginOffset.x, topLayerY,
+                     topTileCache->getCache(),
+                     0, 0, width, topLayerHeight);
+                  painter.drawImage(
+                     topOriginOffset.x, topLayerY + topLayerHeight,
+                     bottomTileCache->getCache(),
+                     0, topLayerHeight);
                   break;
                }
                case BOX_SWIPE_ALGORITHM:
                {
-                  painter.drawImage(topOriginOffset.x, topOriginOffset.y, topTileCache->getCache());
-                  ossim_float64 minx = ossim::min(m_activePointStart.x(), m_activePointEnd.x());
-                  ossim_float64 maxx = ossim::max(m_activePointStart.x(), m_activePointEnd.x());
-                  ossim_float64 miny = ossim::min(m_activePointStart.y(), m_activePointEnd.y());
-                  ossim_float64 maxy = ossim::max(m_activePointStart.y(), m_activePointEnd.y());
-                  ossim_float64 w = maxx-minx;
-                  ossim_float64 h = maxy-miny;
-                  ossim_float64 x = minx;
-                  ossim_float64 y = miny;
-                  //QPointF scrollPoint = m_localToScroll.map(QPointF(x,y));
-                  ossimDrect cacheRect = bottomTileCache->getRect();
-                  ossimDpt delta = ossimDpt(x,y) - cacheRect.ul();
-                  
-                  painter.drawImage(x, y, bottomTileCache->getCache(), delta.x, delta.y, w, h);
+                  painter.drawImage(
+                     topOriginOffset.x, topOriginOffset.y,
+                     topTileCache->getCache());
+                  const ossim_float64 minX =
+                     ossim::min(m_activePointStart.x(),
+                                m_activePointEnd.x());
+                  const ossim_float64 maxX =
+                     ossim::max(m_activePointStart.x(),
+                                m_activePointEnd.x());
+                  const ossim_float64 minY =
+                     ossim::min(m_activePointStart.y(),
+                                m_activePointEnd.y());
+                  const ossim_float64 maxY =
+                     ossim::max(m_activePointStart.y(),
+                                m_activePointEnd.y());
+                  const ossimDrect cacheRect = bottomTileCache->getRect();
+                  const ossimDpt delta =
+                     ossimDpt(minX, minY) - cacheRect.ul();
+                  painter.drawImage(
+                     minX, minY, bottomTileCache->getCache(),
+                     delta.x, delta.y, maxX - minX, maxY - minY);
                   break;
                }
                case CIRCLE_SWIPE_ALGORITHM:
                {
-                  // QImage& cacheImage = topTileCache->getCache();
-                  // draw top and then overlay the bottom
-                  ossim_float64 minx = ossim::min(m_activePointStart.x(), m_activePointEnd.x());
-                  ossim_float64 maxx = ossim::max(m_activePointStart.x(), m_activePointEnd.x());
-                  ossim_float64 miny = ossim::min(m_activePointStart.y(), m_activePointEnd.y());
-                  ossim_float64 maxy = ossim::max(m_activePointStart.y(), m_activePointEnd.y());
-                  ossim_float64 w = maxx-minx;
-                  ossim_float64 h = maxy-miny;
-                  ossim_float64 x = minx;
-                  ossim_float64 y = miny;
-                  
-                  if(w < 1) w = 1;
-                  if(h < 1) h = 1;
-                  //QPointF scrollPoint = m_localToScroll.map(QPointF(x,y));
-                  // ossimDpt cachePt = ossimDpt(scrollPoint.x(), scrollPoint.y()) - topTileCache->getRect().ul();
+                  const ossim_float64 minX =
+                     ossim::min(m_activePointStart.x(),
+                                m_activePointEnd.x());
+                  const ossim_float64 maxX =
+                     ossim::max(m_activePointStart.x(),
+                                m_activePointEnd.x());
+                  const ossim_float64 minY =
+                     ossim::min(m_activePointStart.y(),
+                                m_activePointEnd.y());
+                  const ossim_float64 maxY =
+                     ossim::max(m_activePointStart.y(),
+                                m_activePointEnd.y());
+                  const ossim_float64 ellipseWidth =
+                     ossim::max(1.0, maxX - minX);
+                  const ossim_float64 ellipseHeight =
+                     ossim::max(1.0, maxY - minY);
                   painter.save();
-                  painter.drawImage(topOriginOffset.x, topOriginOffset.y, topTileCache->getCache());
+                  painter.drawImage(
+                     topOriginOffset.x, topOriginOffset.y,
+                     topTileCache->getCache());
                   painter.setBrush(QBrush(bottomTileCache->getCache()));
                   painter.setPen(Qt::NoPen);
-                  
-                  // this part is a little tricky but for the texturing to be placed in the ellipse properly
-                  // I had to add a translation for the painter because the cache might extend past the current scroll region because it
-                  // is on tile boundaries
-                  //
-                  // Because we shift for texturing with the QBrush we must undo the shift when drawing the ellipse so it lines up with
-                  // the mouse draws.  The topOriginOffset holds the shift.
-                  //
                   painter.translate(topOriginOffset.x, topOriginOffset.y);
-                  painter.drawEllipse(x-topOriginOffset.x,y-topOriginOffset.y,w,h);
+                  painter.drawEllipse(
+                     minX - topOriginOffset.x,
+                     minY - topOriginOffset.y,
+                     ellipseWidth, ellipseHeight);
                   painter.restore();
                   break;
                }
                default:
-               {
                   break;
-               }
             }
          }
-         // refreshDisplay();
       }
    }
-   else
-   {
-   }
+}
+
+void ImageScrollView::setMultiLayerAlgorithm(int algorithm)
+{
+   m_multiLayerAlgorithm =
+      static_cast<MultiLayerAlgorithmType>(algorithm);
+   updateInputBounds();
+   updateSceneRect();
+   viewport()->update();
 }
 
 void ImageScrollView::setMultiLayerPair(ossim_uint32 topLayer,
@@ -840,6 +940,8 @@ void ImageScrollView::setMultiLayerPair(ossim_uint32 topLayer,
    }
    m_topSwipeLayer = topLayer;
    m_bottomSwipeLayer = bottomLayer;
+   updateInputBounds();
+   updateSceneRect();
    viewport()->update();
 }
 

@@ -4,13 +4,38 @@
 // #include <QtGui/QDialog>
 #include <QCheckBox>
 #include <QDialog>
+#include <QHeaderView>
 #include <QSlider>
 #include <ossimGui/Export.h>
 #include <ossim/base/ossimConnectableObject.h>
 #include <ossim/base/ossimAdjustableParameterInterface.h>
 #include <ossim/base/ossimFilename.h>
+class QMouseEvent;
+class QResizeEvent;
 namespace ossimGui
 {
+   class AdjustableParameterLockHeader : public QHeaderView
+   {
+      Q_OBJECT
+   public:
+      AdjustableParameterLockHeader(int lockSection, QWidget* parent = 0);
+      void setLockState(Qt::CheckState state);
+      void setLockControlEnabled(bool enabled);
+
+   signals:
+      void lockStateRequested(bool locked);
+
+   protected:
+      void mousePressEvent(QMouseEvent* event) override;
+      void resizeEvent(QResizeEvent* event) override;
+      void updateLockCheckBoxGeometry();
+
+      int m_lockSection;
+      Qt::CheckState m_lockState;
+      bool m_lockControlEnabled;
+      QCheckBox* m_lockCheckBox;
+   };
+
    class AdjustableParameterSlider : public QSlider
    {
       Q_OBJECT
@@ -84,6 +109,7 @@ namespace ossimGui
       void copyAdjustment();
       void deleteAdjustment();
       void selectionListChanged();
+      void setAllParametersLocked(bool locked);
       void adjustmentDescriptionChanged(const QString&);
       void setSource(const QString&);
       
@@ -98,6 +124,7 @@ namespace ossimGui
       ossimRefPtr<ossimObject>            m_object;
       ossimAdjustableParameterInterface*  m_interface;
       ossimFilename                       m_filename;
+      AdjustableParameterLockHeader*      m_lockHeader;
    };
 }
 

@@ -287,12 +287,17 @@ namespace ossimGui
       void setTrackPoint(const ossimDpt& position);
       void setJobQueue(std::shared_ptr<ossimJobQueue> jobQueue);
       void refreshDisplay();
-      void setMultiLayerAlgorithm(int algorithm){m_multiLayerAlgorithm = static_cast<MultiLayerAlgorithmType> (algorithm);}
+      bool synchronizeLayerViews();
+      void setMultiLayerAlgorithm(int algorithm);
       ossim_int32 multiLayerAlgorithmType()const{return m_multiLayerAlgorithm;}
       void setMultiLayerPair(ossim_uint32 topLayer,
                              ossim_uint32 bottomLayer);
       ossim_uint32 topSwipeLayer() const { return m_topSwipeLayer; }
       ossim_uint32 bottomSwipeLayer() const { return m_bottomSwipeLayer; }
+      const ossimDrect& swipePairOverlapBounds() const
+      {
+         return m_swipePairOverlapBounds;
+      }
       void setExploitationMode(int expMode);
       void setAutoMeasActive(const bool state);
       ossim_int32 exploitationMode()const{return m_exploitationMode;}
@@ -351,6 +356,8 @@ namespace ossimGui
       virtual void drawBackground ( QPainter * painter, const QRectF & rect );
       virtual void drawForeground ( QPainter * painter, const QRectF & rect );
       void paintMultiLayer(QPainter& painter, const QRectF & rect);
+      ossimDrect layerBounds(ossim_uint32 layerIndex);
+      void updateInputBounds();
       void updateSceneRect();
       
       ossimDpt                          m_lastClickedPoint;
@@ -372,6 +379,7 @@ namespace ossimGui
       MultiLayerAlgorithmType           m_multiLayerAlgorithm;
       ossim_uint32                      m_topSwipeLayer;
       ossim_uint32                      m_bottomSwipeLayer;
+      ossimDrect                        m_swipePairOverlapBounds;
       DataManager::ExploitationModeType m_exploitationMode;
       
       ossimRefPtr<ImageViewManipulator> m_manipulator;

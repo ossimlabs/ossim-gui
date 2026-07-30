@@ -29,6 +29,7 @@ class QPlainTextEdit;
 
 class ossimSensorModelTuple;
 class ossimFixedRegistrationSource;
+class ossimBundleAdjustmentRegistrationSource;
 
 namespace ossimGui{
    
@@ -657,6 +658,11 @@ namespace ossimGui{
          createTiePointWorkbench(DataManagerRegistrationItem* item,
                                  ossimFixedRegistrationSource* source,
                                  bool includeExistingSnapshots = false);
+      std::shared_ptr<class RegistrationTiePointSnapshotMailbox>
+         createTiePointWorkbench(
+            DataManagerRegistrationItem* item,
+            ossimBundleAdjustmentRegistrationSource* source,
+            bool includeExistingSnapshots = false);
 #endif
       bool openDataManager(const ossimFilename& file);
       void refresh();

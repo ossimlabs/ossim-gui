@@ -6,6 +6,8 @@
 #include <ossim/imaging/ossimImageHandler.h>
 #include <QTableWidgetItem>
 #include <QFileDialog>
+#include <QMouseEvent>
+#include <QResizeEvent>
 static const int NAME_INDEX       = 0;
 static const int LOCK_INDEX       = 1;
 static const int SIGMA_INDEX      = 2;
@@ -30,12 +32,106 @@ void ensureEditableAdjustment(ossimAdjustableParameterInterface* interface)
 }
 }
 
+ossimGui::AdjustableParameterLockHeader::
+AdjustableParameterLockHeader(int lockSection, QWidget* parent)
+:QHeaderView(Qt::Horizontal, parent),
+ m_lockSection(lockSection),
+ m_lockState(Qt::Unchecked),
+ m_lockControlEnabled(false),
+ m_lockCheckBox(new QCheckBox(viewport()))
+{
+   setToolTip("Check to lock all adjustable parameters; clear to unlock all.");
+   m_lockCheckBox->setTristate(true);
+   m_lockCheckBox->setToolTip(toolTip());
+   m_lockCheckBox->setEnabled(false);
+   connect(m_lockCheckBox, &QCheckBox::clicked,
+           this, [this](bool checked) {
+              emit lockStateRequested(checked);
+           });
+   connect(this, &QHeaderView::sectionResized,
+           this, [this]() { updateLockCheckBoxGeometry(); });
+   connect(this, &QHeaderView::sectionMoved,
+           this, [this]() { updateLockCheckBoxGeometry(); });
+}
+
+void ossimGui::AdjustableParameterLockHeader::setLockState(
+   Qt::CheckState state)
+{
+   if(m_lockState != state)
+   {
+      m_lockState = state;
+      m_lockCheckBox->blockSignals(true);
+      m_lockCheckBox->setCheckState(state);
+      m_lockCheckBox->blockSignals(false);
+   }
+}
+
+void ossimGui::AdjustableParameterLockHeader::setLockControlEnabled(
+   bool enabled)
+{
+   if(m_lockControlEnabled != enabled)
+   {
+      m_lockControlEnabled = enabled;
+      m_lockCheckBox->setEnabled(enabled);
+   }
+}
+
+void ossimGui::AdjustableParameterLockHeader::resizeEvent(
+   QResizeEvent* event)
+{
+   QHeaderView::resizeEvent(event);
+   updateLockCheckBoxGeometry();
+}
+
+void ossimGui::AdjustableParameterLockHeader::
+updateLockCheckBoxGeometry()
+{
+   const int sectionPosition = sectionViewportPosition(m_lockSection);
+   const QSize checkBoxSize = m_lockCheckBox->sizeHint();
+   m_lockCheckBox->setGeometry(
+      sectionPosition + 4,
+      (viewport()->height() - checkBoxSize.height()) / 2,
+      checkBoxSize.width(),
+      checkBoxSize.height());
+   m_lockCheckBox->raise();
+}
+
+void ossimGui::AdjustableParameterLockHeader::mousePressEvent(
+   QMouseEvent* event)
+{
+   if(m_lockControlEnabled &&
+      logicalIndexAt(event->pos()) == m_lockSection)
+   {
+      emit lockStateRequested(m_lockState != Qt::Checked);
+      event->accept();
+      return;
+   }
+   QHeaderView::mousePressEvent(event);
+}
+
 ossimGui::AdjustableParameterEditor::AdjustableParameterEditor(QWidget* parent, Qt::WindowFlags f)
 :QDialog(parent, f),
-m_interface(0)
+m_interface(0),
+m_lockHeader(0)
 {
    setupUi(this);
    setAttribute(Qt::WA_DeleteOnClose);
+   m_lockHeader =
+      new AdjustableParameterLockHeader(
+         LOCK_INDEX, m_adjustableParameterTable);
+   m_adjustableParameterTable->setHorizontalHeader(m_lockHeader);
+   QTableWidgetItem* lockHeaderItem =
+      m_adjustableParameterTable->horizontalHeaderItem(LOCK_INDEX);
+   if(lockHeaderItem)
+   {
+      lockHeaderItem->setTextAlignment(Qt::AlignRight |
+                                       Qt::AlignVCenter);
+   }
+   m_adjustableParameterTable->setColumnWidth(LOCK_INDEX, 80);
+   connect(m_lockHeader,
+           SIGNAL(lockStateRequested(bool)),
+           this,
+           SLOT(setAllParametersLocked(bool)));
    connect(m_adjustableParameterTable, SIGNAL(cellChanged(int, int)), this, SLOT(valueChanged(int, int)));
    connect(m_resetButton, SIGNAL(clicked()), this, SLOT(resetTable()));
    connect(m_modelDefaultsButton, SIGNAL(clicked()), this, SLOT(reloadModelDefaults()));
@@ -153,6 +249,11 @@ void ossimGui::AdjustableParameterEditor::transferToTable()
    {
       m_adjustableParameterTable->clearContents();
       m_adjustableParameterTable->setRowCount(0);
+      if(m_lockHeader)
+      {
+         m_lockHeader->setLockControlEnabled(false);
+         m_lockHeader->setLockState(Qt::Unchecked);
+      }
       return;
    }
    if(m_interface)
@@ -162,6 +263,8 @@ void ossimGui::AdjustableParameterEditor::transferToTable()
       int numAdjustables = m_interface->getNumberOfAdjustableParameters();
       if(numAdjustables > 0)
       {
+         bool anyLocked = false;
+         bool anyUnlocked = false;
          if(m_adjustableParameterTable->rowCount() != numAdjustables)
          {
             m_adjustableParameterTable->setRowCount(numAdjustables);
@@ -173,6 +276,8 @@ void ossimGui::AdjustableParameterEditor::transferToTable()
             double parameter         = m_interface->getAdjustableParameter(idx);
             double offset           = m_interface->computeParameterOffset(idx);
             bool lockFlag            = m_interface->getParameterLockFlag(idx);
+            anyLocked = anyLocked || lockFlag;
+            anyUnlocked = anyUnlocked || !lockFlag;
             
             if(!m_adjustableParameterTable->item(idx, NAME_INDEX))
             {
@@ -258,11 +363,24 @@ void ossimGui::AdjustableParameterEditor::transferToTable()
                slider->blockSignals(false);
             }
          }
+         if(m_lockHeader)
+         {
+            m_lockHeader->setLockControlEnabled(true);
+            m_lockHeader->setLockState(
+               anyLocked && anyUnlocked ?
+                  Qt::PartiallyChecked :
+                  (anyLocked ? Qt::Checked : Qt::Unchecked));
+         }
       }
       else 
       {
          m_adjustableParameterTable->clearContents();
          m_adjustableParameterTable->setRowCount(0);
+         if(m_lockHeader)
+         {
+            m_lockHeader->setLockControlEnabled(false);
+            m_lockHeader->setLockState(Qt::Unchecked);
+         }
       }
 
       m_adjustableParameterTable->blockSignals(false);
@@ -368,6 +486,23 @@ void ossimGui::AdjustableParameterEditor::selectionListChanged()
       transferToDialog();
       fireRefreshEvent();
    }
+}
+
+void ossimGui::AdjustableParameterEditor::setAllParametersLocked(bool locked)
+{
+   if(!m_interface ||
+      m_interface->getNumberOfAdjustableParameters() < 1)
+   {
+      return;
+   }
+
+   m_interface->setDirtyFlag(true);
+   if(locked)
+      m_interface->lockAllParametersCurrentAdjustment();
+   else
+      m_interface->unlockAllParametersCurrentAdjustment();
+   transferToTable();
+   fireRefreshEvent();
 }
 
 void ossimGui::AdjustableParameterEditor::valueChanged(int row, int col)

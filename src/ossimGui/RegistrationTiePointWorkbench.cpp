@@ -264,11 +264,13 @@ namespace
    public:
       TiePointWorkbenchDialog(
          QWidget* parent,
-         ossimFixedRegistrationSource* source,
+         ossimFixedRegistrationSource* fixedSource,
+         ossimBundleAdjustmentRegistrationSource* bundleSource,
          ossimGui::ImageScrollView* view,
          std::shared_ptr<ossimGui::RegistrationTiePointSnapshotMailbox> mailbox)
          : QDialog(parent),
-           m_source(source),
+           m_source(fixedSource),
+           m_bundleSource(bundleSource),
            m_view(view),
            m_mailbox(std::move(mailbox)),
            m_overlay(new TiePointBatchItem()),
@@ -288,14 +290,20 @@ namespace
          resize(720, 520);
 
          QVBoxLayout* layout = new QVBoxLayout(this);
+         const bool bundleMode = m_bundleSource.valid();
          QLabel* legend = new QLabel(
-            "<b style='color:#00ffff'>Cyan circle</b>: fixed observation "
-            "&nbsp; "
-            "<b style='color:#ff28dc'>Magenta X</b>: moving observation "
-            "&nbsp; "
-            "<b style='color:#ffe100'>Yellow arrow</b>: applied correction "
-            "(before to after) &nbsp; "
-            "<b style='color:#ff3728'>Red X</b>: removed in latest update",
+            bundleMode ?
+               "<b style='color:#00ffff'>Cyan circle</b>: first image "
+               "observation &nbsp; "
+               "<b style='color:#ff28dc'>Magenta X</b>: second image "
+               "observation" :
+               "<b style='color:#00ffff'>Cyan circle</b>: fixed observation "
+               "&nbsp; "
+               "<b style='color:#ff28dc'>Magenta X</b>: moving observation "
+               "&nbsp; "
+               "<b style='color:#ffe100'>Yellow arrow</b>: applied correction "
+               "(before to after) &nbsp; "
+               "<b style='color:#ff3728'>Red X</b>: removed in latest update",
             this);
          legend->setTextFormat(Qt::RichText);
          layout->addWidget(legend);
@@ -303,7 +311,9 @@ namespace
          layout->addWidget(m_status);
 
          QHBoxLayout* pairLayout = new QHBoxLayout();
-         pairLayout->addWidget(new QLabel("Registration pair", this));
+         pairLayout->addWidget(
+            new QLabel(bundleMode ? "Bundle edge" : "Registration pair",
+                       this));
          pairLayout->addWidget(m_pairSelection, 1);
          layout->addLayout(pairLayout);
 
@@ -314,6 +324,7 @@ namespace
          m_autoCenter->setChecked(true);
          QCheckBox* links = new QCheckBox("Show applied correction", this);
          links->setChecked(true);
+         links->setVisible(!bundleMode);
          links->setToolTip(
             "Draw the moving model's predicted location before registration "
             "to its predicted location after registration.");
@@ -334,9 +345,14 @@ namespace
 
          m_table->setColumnCount(7);
          m_table->setHorizontalHeaderLabels(
-            QStringList() << "#" << "Score" << "Applied px"
-                          << "Fixed X" << "Fixed Y"
-                          << "Moving X" << "Moving Y");
+            bundleMode ?
+               (QStringList() << "#" << "Score" << "Applied px"
+                              << "First X" << "First Y"
+                              << "Second X" << "Second Y") :
+               (QStringList() << "#" << "Score" << "Applied px"
+                              << "Fixed X" << "Fixed Y"
+                              << "Moving X" << "Moving Y"));
+         m_table->setColumnHidden(2, bundleMode);
          m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
          m_table->setSelectionMode(QAbstractItemView::SingleSelection);
          m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -449,22 +465,53 @@ namespace
          return 0;
       }
 
+      ossimImageGeometry* inputGeometry(ossim_uint32 inputIndex) const
+      {
+         if(m_source.valid())
+         {
+            const ossimFixedRegistrationSource::InputWrapper* input =
+               m_source->inputWrapper(inputIndex);
+            return input ? input->geometry() : 0;
+         }
+         if(m_bundleSource.valid())
+         {
+            const ossimBundleAdjustmentRegistrationSource::InputWrapper*
+               input = m_bundleSource->inputWrapper(inputIndex);
+            return input ? input->registrationImage().geometry() : 0;
+         }
+         return 0;
+      }
+
+      ossimImageSource* inputSource(ossim_uint32 inputIndex) const
+      {
+         if(m_source.valid())
+         {
+            const ossimFixedRegistrationSource::InputWrapper* input =
+               m_source->inputWrapper(inputIndex);
+            return input ? input->source() : 0;
+         }
+         if(m_bundleSource.valid())
+         {
+            const ossimBundleAdjustmentRegistrationSource::InputWrapper*
+               input = m_bundleSource->inputWrapper(inputIndex);
+            return input ? input->source() : 0;
+         }
+         return 0;
+      }
+
       bool mapImagePoint(ossim_uint32 inputIndex,
                          const ossimDpt& imagePoint,
                          ossimGui::IvtGeomTransform* commonView,
                          QPointF& viewPoint,
                          ossimGpt* resolvedGround = 0) const
       {
-         if(!m_source.valid() || !m_view)
+         if((!m_source.valid() && !m_bundleSource.valid()) || !m_view)
             return false;
-         const ossimFixedRegistrationSource::InputWrapper* input =
-            m_source->inputWrapper(inputIndex);
-         ossimImageGeometry* inputGeometry =
-            input ? input->geometry() : 0;
-         if(inputGeometry)
+         ossimImageGeometry* geometry = inputGeometry(inputIndex);
+         if(geometry)
          {
             ossimGpt ground;
-            inputGeometry->localToWorld(imagePoint, ground);
+            geometry->localToWorld(imagePoint, ground);
             if(resolvedGround)
                *resolvedGround = ground;
             if(commonView && !ground.isLatLonNan())
@@ -481,9 +528,10 @@ namespace
 
          // Direct layer mapping is a fallback when a common ground/view
          // conversion is unavailable.
+         ossimImageSource* source = inputSource(inputIndex);
          ossimGui::ImageScrollView::Layer* layer =
-            input && m_view->layers() ?
-               m_view->layers()->layer(input->source()) : 0;
+            source && m_view->layers() ?
+               m_view->layers()->layer(source) : 0;
          ossimImageSource* layerSource = layer ? layer->chain() : 0;
          if(layerSource)
          {
@@ -506,10 +554,10 @@ namespace
          // Geometry mapping is a fallback for chains without an explicit
          // image/view transform.
          ossimImageGeometry* viewGeometry = m_view->getGeometry();
-         if(!inputGeometry || !viewGeometry)
+         if(!geometry || !viewGeometry)
             return false;
          ossimGpt ground;
-         inputGeometry->localToWorld(imagePoint, ground);
+         geometry->localToWorld(imagePoint, ground);
          if(ground.isLatLonNan())
             return false;
          ossimDpt mapped;
@@ -579,35 +627,35 @@ namespace
          if(!m_view || !m_overlay || m_ties.empty())
             return;
 
-         QRectF tieBounds = m_overlay->sceneBoundingRect();
+         const QRectF overlayBounds = m_overlay->sceneBoundingRect();
+         ossimDrect tieBounds(overlayBounds.left(),
+                              overlayBounds.top(),
+                              overlayBounds.right(),
+                              overlayBounds.bottom());
          const ossimDrect visible = m_view->viewportBoundsInSceneSpace();
          if(!visible.hasNans())
          {
-            tieBounds.adjust(-visible.width() * 0.5,
-                             -visible.height() * 0.5,
-                              visible.width() * 0.5,
-                              visible.height() * 0.5);
+            tieBounds = ossimDrect(
+               tieBounds.ul().x - visible.width() * 0.5,
+               tieBounds.ul().y - visible.height() * 0.5,
+               tieBounds.lr().x + visible.width() * 0.5,
+               tieBounds.lr().y + visible.height() * 0.5);
          }
 
-         QRectF inputBounds;
          const ossimDrect& input = m_view->getInputBounds();
-         if(!input.hasNans())
-         {
-            inputBounds = QRectF(input.ul().x,
-                                 input.ul().y,
-                                 input.width(),
-                                 input.height());
-         }
-         m_view->setSceneRect(
-            inputBounds.isNull() ? tieBounds : inputBounds.united(tieBounds));
+         const ossimDrect sceneBounds =
+            input.hasNans() ? tieBounds : input.combine(tieBounds);
+         m_view->setSceneRect(sceneBounds.ul().x,
+                              sceneBounds.ul().y,
+                              sceneBounds.width(),
+                              sceneBounds.height());
       }
 
       void pollMailbox()
       {
          if(!m_mailbox)
             return;
-         std::vector<ossimFixedRegistrationSource::TiePointSnapshot>
-            snapshots;
+         std::vector<ossimGui::RegistrationTiePointSnapshot> snapshots;
          if(m_mailbox->read(m_revision, snapshots))
             updateAvailablePairs(snapshots);
 
@@ -626,16 +674,15 @@ namespace
       }
 
       void updateAvailablePairs(
-         const std::vector<
-            ossimFixedRegistrationSource::TiePointSnapshot>& snapshots)
+         const std::vector<ossimGui::RegistrationTiePointSnapshot>& snapshots)
       {
-         ossim_uint32 selectedFixed = 0;
-         ossim_uint32 selectedMoving = 0;
+         ossim_uint32 selectedFirst = 0;
+         ossim_uint32 selectedSecond = 0;
          const bool preserveSelection = m_haveSnapshot;
          if(preserveSelection)
          {
-            selectedFixed = m_latestSnapshot.fixedInputIndex();
-            selectedMoving = m_latestSnapshot.movingInputIndex();
+            selectedFirst = m_latestSnapshot.firstInputIndex();
+            selectedSecond = m_latestSnapshot.secondInputIndex();
          }
 
          m_snapshots = snapshots;
@@ -644,15 +691,19 @@ namespace
          m_pairSelection->clear();
          for(std::size_t index = 0; index < m_snapshots.size(); ++index)
          {
-            const ossimFixedRegistrationSource::TiePointSnapshot& snapshot =
+            const ossimGui::RegistrationTiePointSnapshot& snapshot =
                m_snapshots[index];
             m_pairSelection->addItem(
-               QString("Fixed input %1  \u2194  Floating input %2")
-                  .arg(snapshot.fixedInputIndex())
-                  .arg(snapshot.movingInputIndex()));
+               snapshot.bundleEdge() ?
+                  QString("Input %1  \u2194  Input %2")
+                     .arg(snapshot.firstInputIndex())
+                     .arg(snapshot.secondInputIndex()) :
+                  QString("Fixed input %1  \u2194  Floating input %2")
+                     .arg(snapshot.firstInputIndex())
+                     .arg(snapshot.secondInputIndex()));
             if(preserveSelection &&
-               snapshot.fixedInputIndex() == selectedFixed &&
-               snapshot.movingInputIndex() == selectedMoving)
+               snapshot.firstInputIndex() == selectedFirst &&
+               snapshot.secondInputIndex() == selectedSecond)
             {
                selectedIndex = static_cast<int>(index);
             }
@@ -667,14 +718,14 @@ namespace
       {
          if(index < 0 || index >= static_cast<int>(m_snapshots.size()))
             return;
-         const ossimFixedRegistrationSource::TiePointSnapshot& snapshot =
+         const ossimGui::RegistrationTiePointSnapshot& snapshot =
             m_snapshots[static_cast<std::size_t>(index)];
          const bool pairChanged =
             m_haveSnapshot &&
-            (m_latestSnapshot.fixedInputIndex() !=
-                snapshot.fixedInputIndex() ||
-             m_latestSnapshot.movingInputIndex() !=
-                snapshot.movingInputIndex());
+            (m_latestSnapshot.firstInputIndex() !=
+                snapshot.firstInputIndex() ||
+             m_latestSnapshot.secondInputIndex() !=
+                snapshot.secondInputIndex());
          if(pairChanged)
          {
             m_requestedSelection = m_selected >= 0 ? m_selected : 0;
@@ -684,14 +735,14 @@ namespace
          }
          if(m_view)
          {
-            m_view->setMultiLayerPair(snapshot.fixedInputIndex(),
-                                      snapshot.movingInputIndex());
+            m_view->setMultiLayerPair(snapshot.firstInputIndex(),
+                                      snapshot.secondInputIndex());
          }
          applySnapshot(snapshot);
       }
 
       void applySnapshot(
-         const ossimFixedRegistrationSource::TiePointSnapshot& snapshot)
+         const ossimGui::RegistrationTiePointSnapshot& snapshot)
       {
          m_latestSnapshot = snapshot;
          m_haveSnapshot = true;
@@ -713,10 +764,10 @@ namespace
             tie.fixedImage = observation.fixedPoint();
             tie.movingImage = observation.movingPoint();
             tie.score = observation.score();
-            if(mapImagePoint(snapshot.fixedInputIndex(),
+            if(mapImagePoint(snapshot.firstInputIndex(),
                              tie.fixedImage, commonView.get(), tie.fixed,
                              &tie.fixedGround) &&
-               mapImagePoint(snapshot.movingInputIndex(),
+               mapImagePoint(snapshot.secondInputIndex(),
                              tie.movingImage, commonView.get(), tie.moving,
                              &tie.movingGround))
             {
@@ -731,12 +782,12 @@ namespace
                   const ossimDpt& after =
                      finalResiduals[observationIndex].
                         predictedMovingPoint();
-                  if(mapImagePoint(snapshot.movingInputIndex(),
+                  if(mapImagePoint(snapshot.secondInputIndex(),
                                    before,
                                    commonView.get(),
                                    tie.displacementStart,
                                    &tie.displacementStartGround) &&
-                     mapImagePoint(snapshot.movingInputIndex(),
+                     mapImagePoint(snapshot.secondInputIndex(),
                                    after,
                                    commonView.get(),
                                    tie.displacementEnd,
@@ -877,6 +928,7 @@ namespace
       }
 
       ossimRefPtr<ossimFixedRegistrationSource> m_source;
+      ossimRefPtr<ossimBundleAdjustmentRegistrationSource> m_bundleSource;
       QPointer<ossimGui::ImageScrollView> m_view;
       std::shared_ptr<ossimGui::RegistrationTiePointSnapshotMailbox> m_mailbox;
       TiePointBatchItem* m_overlay;
@@ -886,8 +938,8 @@ namespace
       QCheckBox* m_autoCenter;
       std::vector<RenderedTie> m_ties;
       std::vector<RenderedTie> m_removed;
-      std::vector<ossimFixedRegistrationSource::TiePointSnapshot> m_snapshots;
-      ossimFixedRegistrationSource::TiePointSnapshot m_latestSnapshot;
+      std::vector<ossimGui::RegistrationTiePointSnapshot> m_snapshots;
+      ossimGui::RegistrationTiePointSnapshot m_latestSnapshot;
       std::uint64_t m_revision;
       int m_selected;
       int m_requestedSelection;
@@ -897,15 +949,14 @@ namespace
 }
 
 void ossimGui::RegistrationTiePointSnapshotMailbox::publish(
-   const ossimFixedRegistrationSource::TiePointSnapshot& snapshot)
+   const RegistrationTiePointSnapshot& snapshot)
 {
    std::lock_guard<std::mutex> lock(m_mutex);
    const auto existing =
       std::find_if(m_snapshots.begin(), m_snapshots.end(),
-         [&snapshot](
-            const ossimFixedRegistrationSource::TiePointSnapshot& current) {
-            return current.floatingInputIndex() ==
-                   snapshot.floatingInputIndex();
+         [&snapshot](const RegistrationTiePointSnapshot& current) {
+            return current.firstInputIndex() == snapshot.firstInputIndex() &&
+                   current.secondInputIndex() == snapshot.secondInputIndex();
          });
    if(existing == m_snapshots.end())
       m_snapshots.push_back(snapshot);
@@ -914,10 +965,25 @@ void ossimGui::RegistrationTiePointSnapshotMailbox::publish(
    ++m_revision;
 }
 
+void ossimGui::RegistrationTiePointSnapshotMailbox::publish(
+   const ossimFixedRegistrationSource::TiePointSnapshot& sourceSnapshot)
+{
+   RegistrationTiePointSnapshot snapshot;
+   snapshot.setFirstInputIndex(sourceSnapshot.fixedInputIndex());
+   snapshot.setSecondInputIndex(sourceSnapshot.movingInputIndex());
+   snapshot.setPassIndex(sourceSnapshot.passIndex());
+   snapshot.setPassCount(sourceSnapshot.passCount());
+   snapshot.setMessage(sourceSnapshot.message());
+   snapshot.setTiePoints(sourceSnapshot.tiePoints());
+   snapshot.setInitialTiePointResiduals(
+      sourceSnapshot.initialTiePointResiduals());
+   snapshot.setTiePointResiduals(sourceSnapshot.tiePointResiduals());
+   publish(snapshot);
+}
+
 bool ossimGui::RegistrationTiePointSnapshotMailbox::read(
    std::uint64_t& revision,
-   std::vector<ossimFixedRegistrationSource::TiePointSnapshot>& snapshots)
-   const
+   std::vector<RegistrationTiePointSnapshot>& snapshots) const
 {
    std::lock_guard<std::mutex> lock(m_mutex);
    if(revision == m_revision)
@@ -955,7 +1021,18 @@ QWidget* ossimGui::createRegistrationTiePointWorkbench(
    ImageScrollView* view,
    const std::shared_ptr<RegistrationTiePointSnapshotMailbox>& mailbox)
 {
-   return new TiePointWorkbenchDialog(parent, source, view, mailbox);
+   return new TiePointWorkbenchDialog(
+      parent, source, 0, view, mailbox);
+}
+
+QWidget* ossimGui::createRegistrationTiePointWorkbench(
+   QWidget* parent,
+   ossimBundleAdjustmentRegistrationSource* source,
+   ImageScrollView* view,
+   const std::shared_ptr<RegistrationTiePointSnapshotMailbox>& mailbox)
+{
+   return new TiePointWorkbenchDialog(
+      parent, 0, source, view, mailbox);
 }
 
 #endif
