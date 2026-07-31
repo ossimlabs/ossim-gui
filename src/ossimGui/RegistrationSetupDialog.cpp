@@ -24,6 +24,7 @@
 #include <QGroupBox>
 #include <QHeaderView>
 #include <QHBoxLayout>
+#include <QItemSelectionModel>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -40,6 +41,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <queue>
 #include <sstream>
 
 namespace ossimGui
@@ -190,6 +192,7 @@ namespace ossimGui
         m_setupInputs(inputs),
         m_preflightTable(0),
         m_preflightSummary(0),
+        m_excludeSelectedButton(0),
         m_excludeNonOverlappingButton(0),
         m_runButton(0),
         m_approach(0),
@@ -428,6 +431,12 @@ namespace ossimGui
                  [this](int) { updateBundlePairPolicyControls(); });
          connect(m_bundleAnchorInputIndexes, &QLineEdit::textChanged,
                  [this](const QString&) { updatePreflight(); });
+         connect(m_bundleInputPairs, &QLineEdit::textChanged,
+                 [this](const QString&) { updatePreflight(); });
+         connect(m_bundleNeighborSpan,
+                 static_cast<void (QSpinBox::*)(int)>(
+                    &QSpinBox::valueChanged),
+                 [this](int) { updatePreflight(); });
 
          QFormLayout* basicLeftForm = new QFormLayout();
          configureRegistrationForm(basicLeftForm);
@@ -501,7 +510,7 @@ namespace ossimGui
             m_preflightTable->setEditTriggers(
                QAbstractItemView::NoEditTriggers);
             m_preflightTable->setSelectionMode(
-               QAbstractItemView::SingleSelection);
+               QAbstractItemView::ExtendedSelection);
             m_preflightTable->setSelectionBehavior(
                QAbstractItemView::SelectRows);
             m_preflightTable->setTextElideMode(Qt::ElideLeft);
@@ -560,10 +569,13 @@ namespace ossimGui
                new QPushButton("Move Up", this);
             QPushButton* moveDownButton =
                new QPushButton("Move Down", this);
+            m_excludeSelectedButton =
+               new QPushButton("Exclude Selected", this);
             m_excludeNonOverlappingButton =
                new QPushButton("Exclude Non-overlapping", this);
             moveUpButton->setMinimumHeight(30);
             moveDownButton->setMinimumHeight(30);
+            m_excludeSelectedButton->setMinimumHeight(30);
             m_excludeNonOverlappingButton->setMinimumHeight(30);
             moveUpButton->setToolTip(
                "Move the selected image earlier in registration input order.");
@@ -573,13 +585,23 @@ namespace ossimGui
                "Exclude images with determinable geometry that does not "
                "overlap any other selected image. Images remain in the Data "
                "Manager.");
+            m_excludeSelectedButton->setToolTip(
+               "Exclude the selected images from this registration. Use "
+               "Command/Control or Shift to select multiple rows. Images "
+               "remain in the Data Manager.");
             connect(moveUpButton, &QPushButton::clicked,
                     [this]() { moveSelectedInput(-1); });
             connect(moveDownButton, &QPushButton::clicked,
                     [this]() { moveSelectedInput(1); });
             connect(m_excludeNonOverlappingButton, &QPushButton::clicked,
                     [this]() { excludeNonOverlappingInputs(); });
+            connect(m_excludeSelectedButton, &QPushButton::clicked,
+                    [this]() { excludeSelectedInputs(); });
+            connect(m_preflightTable->selectionModel(),
+                    &QItemSelectionModel::selectionChanged,
+                    [this]() { updateExcludeSelectedButton(); });
             orderingLayout->addWidget(m_excludeNonOverlappingButton);
+            orderingLayout->addWidget(m_excludeSelectedButton);
             orderingLayout->addWidget(moveUpButton);
             orderingLayout->addWidget(moveDownButton);
             preflightLayout->addLayout(orderingLayout);
@@ -793,7 +815,51 @@ namespace ossimGui
 
       void excludeNonOverlappingInputs()
       {
-         const std::vector<std::size_t> removed = isolatedInputIndexes();
+         excludeInputs(isolatedInputIndexes(),
+                       "Exclude Non-overlapping Images");
+      }
+
+      void updateExcludeSelectedButton()
+      {
+         if(!m_excludeSelectedButton || !m_preflightTable)
+            return;
+         const int selectedCount =
+            m_preflightTable->selectionModel()->selectedRows().size();
+         m_excludeSelectedButton->setEnabled(selectedCount > 0);
+         m_excludeSelectedButton->setText(
+            selectedCount > 0 ?
+               QString("Exclude Selected (%1)").arg(selectedCount) :
+               QString("Exclude Selected"));
+      }
+
+      void excludeSelectedInputs()
+      {
+         if(!m_preflightTable)
+            return;
+         std::vector<std::size_t> selectedIndexes;
+         const QModelIndexList selectedRows =
+            m_preflightTable->selectionModel()->selectedRows();
+         selectedIndexes.reserve(
+            static_cast<std::size_t>(selectedRows.size()));
+         for(const QModelIndex& selectedRow : selectedRows)
+         {
+            if(selectedRow.row() >= 0 &&
+               selectedRow.row() < static_cast<int>(m_setupInputs.size()))
+            {
+               selectedIndexes.push_back(
+                  static_cast<std::size_t>(selectedRow.row()));
+            }
+         }
+         std::sort(selectedIndexes.begin(), selectedIndexes.end());
+         excludeInputs(
+            selectedIndexes,
+            selectedIndexes.size() == 1 ?
+               "Exclude Selected Image" : "Exclude Selected Images");
+      }
+
+      void excludeInputs(const std::vector<std::size_t>& removed,
+                         const QString& title)
+      {
          if(removed.empty())
             return;
 
@@ -801,7 +867,7 @@ namespace ossimGui
          for(std::size_t index : removed)
             removedLabels.push_back(m_preflightLabels[index]);
          const QMessageBox::StandardButton response = QMessageBox::warning(
-            this, "Exclude Non-overlapping Images",
+            this, title,
             QString("Exclude %1 image(s) from this registration?\n\n%2\n\n"
                     "The images will remain in the Data Manager.")
                .arg(static_cast<int>(removed.size()))
@@ -827,11 +893,17 @@ namespace ossimGui
             return;
          }
 
+         std::vector<bool> removeInput(m_setupInputs.size(), false);
+         for(std::size_t index : removed)
+         {
+            if(index < removeInput.size())
+               removeInput[index] = true;
+         }
          std::vector<int> remappedIndexes(m_setupInputs.size(), -1);
          std::size_t nextIndex = 0;
          for(std::size_t index = 0; index < m_setupInputs.size(); ++index)
          {
-            if(!m_preflightIsolated[index])
+            if(!removeInput[index])
                remappedIndexes[index] = static_cast<int>(nextIndex++);
          }
 
@@ -877,7 +949,7 @@ namespace ossimGui
             m_setupInputs.size() - removed.size());
          for(std::size_t index = 0; index < m_setupInputs.size(); ++index)
          {
-            if(!m_preflightIsolated[index])
+            if(!removeInput[index])
                retainedInputs.push_back(m_setupInputs[index]);
          }
          m_setupInputs.swap(retainedInputs);
@@ -1320,6 +1392,9 @@ namespace ossimGui
          int fixedOrAnchorCount = 0;
          int availableGeometryCount = 0;
          int validAnchorCount = 0;
+         std::vector<std::size_t> floatingIndexes;
+         std::vector<std::size_t> fixedOrControlIndexes;
+         std::vector<std::size_t> usableAnchorIndexes;
          const std::vector<std::size_t> isolated = isolatedInputIndexes();
 
          for(std::size_t index = 0;
@@ -1346,11 +1421,13 @@ namespace ossimGui
                {
                   role = "Floating";
                   ++floatingCount;
+                  floatingIndexes.push_back(index);
                }
                else
                {
                   role = "Fixed geometry";
                   ++fixedOrAnchorCount;
+                  fixedOrControlIndexes.push_back(index);
                }
             }
             else if(approach == REGISTRATION_SETUP_BUNDLE_ANCHORED)
@@ -1363,17 +1440,21 @@ namespace ossimGui
                   role = "Anchor";
                   ++fixedOrAnchorCount;
                   ++validAnchorCount;
+                  fixedOrControlIndexes.push_back(index);
+                  usableAnchorIndexes.push_back(index);
                }
                else if(input.mobility ==
                        ossim_autoreg::REGISTRATION_SETUP_INPUT_MOVABLE)
                {
                   role = "Floating";
                   ++floatingCount;
+                  floatingIndexes.push_back(index);
                }
                else
                {
                   role = "Fixed geometry";
                   ++fixedOrAnchorCount;
+                  fixedOrControlIndexes.push_back(index);
                }
             }
             else if(input.mobility ==
@@ -1381,16 +1462,19 @@ namespace ossimGui
             {
                role = "Fixed / Control";
                ++fixedOrAnchorCount;
+               fixedOrControlIndexes.push_back(index);
             }
             else if(!haveFixedEligible && index == 0)
             {
                role = "Fixed / Control (fallback)";
                ++fixedOrAnchorCount;
+               fixedOrControlIndexes.push_back(index);
             }
             else
             {
                role = "Floating";
                ++floatingCount;
+               floatingIndexes.push_back(index);
             }
 
             QString geometry;
@@ -1461,6 +1545,194 @@ namespace ossimGui
                static_cast<int>(index), 5, overlapItem);
          }
 
+         const auto hasApproximateOverlap =
+            [this](std::size_t first, std::size_t second) {
+               const ossim_autoreg::RegistrationSetupOverlapInfo overlap =
+                  ossim_autoreg::registrationSetupOverlapInfo(
+                     m_setupInputs[first].source,
+                     m_setupInputs[second].source);
+               return overlap.available && overlap.normalizedAreaRatio > 0.0;
+            };
+         std::vector<std::size_t> pairingWarningIndexes;
+         QString pairingWarningText;
+         QString pairingWarningToolTip;
+         std::vector<ossim_autoreg::BundleImagePair> explicitPairs;
+         const bool validPairs = parseRegistrationInputPairs(
+            m_bundleInputPairs->text().trimmed().toStdString(),
+            explicitPairs);
+         const BundlePairPolicy pairPolicy =
+            static_cast<BundlePairPolicy>(
+               m_bundlePairPolicy->itemData(
+                  m_bundlePairPolicy->currentIndex()).toInt());
+         const auto pairAllowed =
+            [this, pairPolicy, validPairs, &explicitPairs](
+               std::size_t first, std::size_t second) {
+               if(second < first)
+                  std::swap(first, second);
+               if(pairPolicy == BUNDLE_PAIR_POLICY_EXPLICIT)
+               {
+                  if(!validPairs)
+                     return false;
+                  return std::any_of(
+                     explicitPairs.begin(), explicitPairs.end(),
+                     [first, second](
+                        const ossim_autoreg::BundleImagePair& pair) {
+                        return pair.firstImageIndex() == first &&
+                               pair.secondImageIndex() == second;
+                     });
+               }
+               if(pairPolicy == BUNDLE_PAIR_POLICY_NEIGHBOR_SPAN)
+               {
+                  return second - first <=
+                     static_cast<std::size_t>(
+                        m_bundleNeighborSpan->value());
+               }
+               return true;
+            };
+         if(approach != REGISTRATION_SETUP_BUNDLE_ALL_FLOATING &&
+            approach != REGISTRATION_SETUP_BUNDLE_ANCHORED)
+         {
+            for(std::size_t floatingIndex : floatingIndexes)
+            {
+               const bool overlapsControl = std::any_of(
+                  fixedOrControlIndexes.begin(),
+                  fixedOrControlIndexes.end(),
+                  [floatingIndex, &hasApproximateOverlap](
+                     std::size_t controlIndex) {
+                     return hasApproximateOverlap(
+                        floatingIndex, controlIndex);
+                  });
+               if(!overlapsControl &&
+                  !m_preflightIsolated[floatingIndex])
+               {
+                  pairingWarningIndexes.push_back(floatingIndex);
+               }
+            }
+            pairingWarningText = "no fixed/control overlap";
+            pairingWarningToolTip =
+               "This floating image overlaps selected imagery but not a "
+               "usable fixed/control input.";
+         }
+         else if(approach == REGISTRATION_SETUP_BUNDLE_ANCHORED &&
+                 !usableAnchorIndexes.empty())
+         {
+            std::vector<bool> reachable(m_setupInputs.size(), false);
+            std::queue<std::size_t> pending;
+            for(std::size_t anchorIndex : usableAnchorIndexes)
+            {
+               reachable[anchorIndex] = true;
+               pending.push(anchorIndex);
+            }
+            while(!pending.empty())
+            {
+               const std::size_t first = pending.front();
+               pending.pop();
+               for(std::size_t second = 0;
+                   second < m_setupInputs.size();
+                   ++second)
+               {
+                  if(reachable[second] || first == second ||
+                     m_preflightInputs[second].mobility ==
+                        ossim_autoreg::
+                           REGISTRATION_SETUP_INPUT_GEOMETRY_UNAVAILABLE ||
+                     !pairAllowed(first, second) ||
+                     !hasApproximateOverlap(first, second))
+                  {
+                     continue;
+                  }
+                  reachable[second] = true;
+                  pending.push(second);
+               }
+            }
+            for(std::size_t floatingIndex : floatingIndexes)
+            {
+               if(!reachable[floatingIndex] &&
+                  !m_preflightIsolated[floatingIndex])
+               {
+                  pairingWarningIndexes.push_back(floatingIndex);
+               }
+            }
+            pairingWarningText = "no overlap path to anchor";
+            pairingWarningToolTip =
+               "This floating image has no approximate overlap path to a "
+               "selected anchor under the current bundle pair policy.";
+         }
+         else if(approach == REGISTRATION_SETUP_BUNDLE_ALL_FLOATING &&
+                 (pairPolicy != BUNDLE_PAIR_POLICY_EXPLICIT || validPairs))
+         {
+            std::vector<int> componentIndexes(m_setupInputs.size(), -1);
+            int componentCount = 0;
+            for(std::size_t seed = 0; seed < m_setupInputs.size(); ++seed)
+            {
+               if(componentIndexes[seed] >= 0 ||
+                  m_preflightInputs[seed].mobility ==
+                     ossim_autoreg::
+                        REGISTRATION_SETUP_INPUT_GEOMETRY_UNAVAILABLE)
+               {
+                  continue;
+               }
+               componentIndexes[seed] = componentCount;
+               std::queue<std::size_t> pending;
+               pending.push(seed);
+               while(!pending.empty())
+               {
+                  const std::size_t first = pending.front();
+                  pending.pop();
+                  for(std::size_t second = 0;
+                      second < m_setupInputs.size();
+                      ++second)
+                  {
+                     if(componentIndexes[second] >= 0 || first == second ||
+                        m_preflightInputs[second].mobility ==
+                           ossim_autoreg::
+                              REGISTRATION_SETUP_INPUT_GEOMETRY_UNAVAILABLE ||
+                        !pairAllowed(first, second) ||
+                        !hasApproximateOverlap(first, second))
+                     {
+                        continue;
+                     }
+                     componentIndexes[second] = componentCount;
+                     pending.push(second);
+                  }
+               }
+               ++componentCount;
+            }
+            if(componentCount > 1)
+            {
+               for(std::size_t index = 0;
+                   index < m_preflightInputs.size();
+                   ++index)
+               {
+                  if(componentIndexes[index] >= 0 &&
+                     !m_preflightIsolated[index])
+                  {
+                     pairingWarningIndexes.push_back(index);
+                  }
+               }
+               pairingWarningText = "disconnected overlap graph";
+               pairingWarningToolTip = QString(
+                  "The selected images form %1 approximate overlap "
+                  "components under the current bundle pair policy.")
+                  .arg(componentCount);
+            }
+         }
+
+         for(std::size_t index : pairingWarningIndexes)
+         {
+            QTableWidgetItem* overlapItem = m_preflightTable->item(
+               static_cast<int>(index), 5);
+            if(!overlapItem)
+               continue;
+            overlapItem->setText(
+               QString("%1; %2")
+                  .arg(overlapItem->text(), pairingWarningText));
+            overlapItem->setForeground(QBrush(QColor(180, 90, 0)));
+            QFont warningFont = overlapItem->font();
+            warningFont.setBold(true);
+            overlapItem->setFont(warningFont);
+            overlapItem->setToolTip(pairingWarningToolTip);
+         }
+
          QString summary = QString("%1 fixed/anchor, %2 floating")
             .arg(fixedOrAnchorCount)
             .arg(floatingCount);
@@ -1474,6 +1746,7 @@ namespace ossimGui
          }
          else if(!floatingCount)
             summary += "; no movable floating input is available";
+         QStringList preflightWarningDetails;
          if(!isolated.empty())
          {
             summary += QString(
@@ -1482,14 +1755,26 @@ namespace ossimGui
             QStringList isolatedLabels;
             for(std::size_t index : isolated)
                isolatedLabels.push_back(m_preflightLabels[index]);
-            m_preflightSummary->setToolTip(
+            preflightWarningDetails.push_back(
                QString("Non-overlapping registration inputs:\n%1")
                   .arg(isolatedLabels.join("\n")));
          }
-         else
+         if(!pairingWarningIndexes.empty())
          {
-            m_preflightSummary->setToolTip(QString());
+            summary += QString(
+               "; <b>Warning: %1 selected image(s) with %2</b>")
+               .arg(static_cast<int>(pairingWarningIndexes.size()))
+               .arg(pairingWarningText);
+            QStringList pairingWarningLabels;
+            for(std::size_t index : pairingWarningIndexes)
+               pairingWarningLabels.push_back(m_preflightLabels[index]);
+            preflightWarningDetails.push_back(
+               QString("Registration inputs with %1:\n%2")
+                  .arg(pairingWarningText,
+                       pairingWarningLabels.join("\n")));
          }
+         m_preflightSummary->setToolTip(
+            preflightWarningDetails.join("\n\n"));
 
          m_executionEligible =
             availableGeometryCount >= 2 && floatingCount > 0;
@@ -1542,6 +1827,7 @@ namespace ossimGui
                   QString("Exclude Non-overlapping (%1)")
                      .arg(static_cast<int>(isolated.size())));
          }
+         updateExcludeSelectedButton();
          m_preflightSummary->setText(summary);
       }
 
@@ -1553,6 +1839,7 @@ namespace ossimGui
       std::vector<RegistrationSetupInput> m_setupInputs;
       QTableWidget* m_preflightTable;
       QLabel* m_preflightSummary;
+      QPushButton* m_excludeSelectedButton;
       QPushButton* m_excludeNonOverlappingButton;
       QPushButton* m_runButton;
       std::vector<QString> m_preflightLabels;
