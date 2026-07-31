@@ -11,11 +11,14 @@
 #include <ossim_autoreg/TiePointGenerator.h>
 
 #include <QAbstractSpinBox>
+#include <QBrush>
 #include <QCheckBox>
+#include <QColor>
 #include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
+#include <QFont>
 #include <QFormLayout>
 #include <QGuiApplication>
 #include <QGroupBox>
@@ -187,6 +190,7 @@ namespace ossimGui
         m_setupInputs(inputs),
         m_preflightTable(0),
         m_preflightSummary(0),
+        m_excludeNonOverlappingButton(0),
         m_runButton(0),
         m_approach(0),
         m_matchMethod(0),
@@ -515,41 +519,7 @@ namespace ossimGui
                "Hover over an input to see its complete name and source.");
             m_preflightTable->setMaximumHeight(190);
 
-            for(std::size_t index = 0; index < inputs.size(); ++index)
-            {
-               m_preflightLabels.push_back(
-                  QString::fromStdString(inputs[index].label));
-               m_preflightInputs.push_back(
-                  ossim_autoreg::registrationSetupInputInfo(
-                     inputs[index].source));
-
-               int availablePeerCount = 0;
-               int overlapPeerCount = 0;
-               double maximumOverlap = 0.0;
-               for(std::size_t peerIndex = 0;
-                   peerIndex < inputs.size();
-                   ++peerIndex)
-               {
-                  if(peerIndex == index)
-                     continue;
-                  const ossim_autoreg::RegistrationSetupOverlapInfo overlap =
-                     ossim_autoreg::registrationSetupOverlapInfo(
-                        inputs[index].source, inputs[peerIndex].source);
-                  if(!overlap.available)
-                     continue;
-                  ++availablePeerCount;
-                  maximumOverlap =
-                     std::max(maximumOverlap, overlap.normalizedAreaRatio);
-                  if(overlap.normalizedAreaRatio > 0.0)
-                     ++overlapPeerCount;
-               }
-               m_preflightOverlaps.push_back(
-                  availablePeerCount ?
-                     QString("%1 peer(s), max %2%")
-                        .arg(overlapPeerCount)
-                        .arg(maximumOverlap * 100.0, 0, 'f', 0) :
-                     QString("Unavailable"));
-            }
+            refreshPreflightInputs();
             m_preflightTable->selectRow(0);
 
             m_preflightSummary = new QLabel(this);
@@ -590,16 +560,26 @@ namespace ossimGui
                new QPushButton("Move Up", this);
             QPushButton* moveDownButton =
                new QPushButton("Move Down", this);
+            m_excludeNonOverlappingButton =
+               new QPushButton("Exclude Non-overlapping", this);
             moveUpButton->setMinimumHeight(30);
             moveDownButton->setMinimumHeight(30);
+            m_excludeNonOverlappingButton->setMinimumHeight(30);
             moveUpButton->setToolTip(
                "Move the selected image earlier in registration input order.");
             moveDownButton->setToolTip(
                "Move the selected image later in registration input order.");
+            m_excludeNonOverlappingButton->setToolTip(
+               "Exclude images with determinable geometry that does not "
+               "overlap any other selected image. Images remain in the Data "
+               "Manager.");
             connect(moveUpButton, &QPushButton::clicked,
                     [this]() { moveSelectedInput(-1); });
             connect(moveDownButton, &QPushButton::clicked,
                     [this]() { moveSelectedInput(1); });
+            connect(m_excludeNonOverlappingButton, &QPushButton::clicked,
+                    [this]() { excludeNonOverlappingInputs(); });
+            orderingLayout->addWidget(m_excludeNonOverlappingButton);
             orderingLayout->addWidget(moveUpButton);
             orderingLayout->addWidget(moveDownButton);
             preflightLayout->addLayout(orderingLayout);
@@ -730,6 +710,189 @@ namespace ossimGui
          return value;
       }
 
+      void refreshPreflightInputs()
+      {
+         m_preflightLabels.clear();
+         m_preflightInputs.clear();
+         m_preflightOverlaps.clear();
+         m_preflightIsolated.clear();
+
+         m_preflightLabels.reserve(m_setupInputs.size());
+         m_preflightInputs.reserve(m_setupInputs.size());
+         m_preflightOverlaps.reserve(m_setupInputs.size());
+         m_preflightIsolated.reserve(m_setupInputs.size());
+         for(std::size_t index = 0; index < m_setupInputs.size(); ++index)
+         {
+            m_preflightLabels.push_back(
+               QString::fromStdString(m_setupInputs[index].label));
+            m_preflightInputs.push_back(
+               ossim_autoreg::registrationSetupInputInfo(
+                  m_setupInputs[index].source));
+
+            int availablePeerCount = 0;
+            int overlapPeerCount = 0;
+            double maximumOverlap = 0.0;
+            for(std::size_t peerIndex = 0;
+                peerIndex < m_setupInputs.size();
+                ++peerIndex)
+            {
+               if(peerIndex == index)
+                  continue;
+               const ossim_autoreg::RegistrationSetupOverlapInfo overlap =
+                  ossim_autoreg::registrationSetupOverlapInfo(
+                     m_setupInputs[index].source,
+                     m_setupInputs[peerIndex].source);
+               if(!overlap.available)
+                  continue;
+               ++availablePeerCount;
+               maximumOverlap =
+                  std::max(maximumOverlap, overlap.normalizedAreaRatio);
+               if(overlap.normalizedAreaRatio > 0.0)
+                  ++overlapPeerCount;
+            }
+
+            const int expectedPeerCount =
+               static_cast<int>(m_setupInputs.size()) - 1;
+            const bool isolated =
+               expectedPeerCount > 0 &&
+               availablePeerCount == expectedPeerCount &&
+               overlapPeerCount == 0;
+            m_preflightIsolated.push_back(isolated);
+            if(isolated)
+            {
+               m_preflightOverlaps.push_back("No overlap");
+            }
+            else if(!availablePeerCount)
+            {
+               m_preflightOverlaps.push_back("Unavailable");
+            }
+            else
+            {
+               QString overlapText = QString("%1 peer(s), max %2%")
+                  .arg(overlapPeerCount)
+                  .arg(maximumOverlap * 100.0, 0, 'f', 0);
+               if(availablePeerCount != expectedPeerCount)
+                  overlapText += "; some unavailable";
+               m_preflightOverlaps.push_back(overlapText);
+            }
+         }
+      }
+
+      std::vector<std::size_t> isolatedInputIndexes() const
+      {
+         std::vector<std::size_t> result;
+         for(std::size_t index = 0;
+             index < m_preflightIsolated.size();
+             ++index)
+         {
+            if(m_preflightIsolated[index])
+               result.push_back(index);
+         }
+         return result;
+      }
+
+      void excludeNonOverlappingInputs()
+      {
+         const std::vector<std::size_t> removed = isolatedInputIndexes();
+         if(removed.empty())
+            return;
+
+         QStringList removedLabels;
+         for(std::size_t index : removed)
+            removedLabels.push_back(m_preflightLabels[index]);
+         const QMessageBox::StandardButton response = QMessageBox::warning(
+            this, "Exclude Non-overlapping Images",
+            QString("Exclude %1 image(s) from this registration?\n\n%2\n\n"
+                    "The images will remain in the Data Manager.")
+               .arg(static_cast<int>(removed.size()))
+               .arg(removedLabels.join("\n")),
+            QMessageBox::Yes | QMessageBox::Cancel,
+            QMessageBox::Cancel);
+         if(response != QMessageBox::Yes)
+            return;
+
+         std::vector<ossim_uint32> anchors;
+         std::vector<ossim_autoreg::BundleImagePair> pairs;
+         const bool validAnchors = parseRegistrationInputIndexes(
+            m_bundleAnchorInputIndexes->text().trimmed().toStdString(),
+            anchors);
+         const bool validPairs = parseRegistrationInputPairs(
+            m_bundleInputPairs->text().trimmed().toStdString(), pairs);
+         if(!validAnchors || !validPairs)
+         {
+            QMessageBox::warning(
+               this, "Registration Setup",
+               "Correct the bundle anchor or explicit pair indexes before "
+               "excluding images.");
+            return;
+         }
+
+         std::vector<int> remappedIndexes(m_setupInputs.size(), -1);
+         std::size_t nextIndex = 0;
+         for(std::size_t index = 0; index < m_setupInputs.size(); ++index)
+         {
+            if(!m_preflightIsolated[index])
+               remappedIndexes[index] = static_cast<int>(nextIndex++);
+         }
+
+         std::vector<ossim_uint32> remappedAnchors;
+         for(ossim_uint32 anchor : anchors)
+         {
+            if(anchor < remappedIndexes.size() &&
+               remappedIndexes[anchor] >= 0)
+            {
+               remappedAnchors.push_back(
+                  static_cast<ossim_uint32>(remappedIndexes[anchor]));
+            }
+         }
+
+         std::vector<ossim_autoreg::BundleImagePair> remappedPairs;
+         for(const ossim_autoreg::BundleImagePair& pair : pairs)
+         {
+            if(pair.firstImageIndex() >= remappedIndexes.size() ||
+               pair.secondImageIndex() >= remappedIndexes.size())
+            {
+               continue;
+            }
+            const int first = remappedIndexes[pair.firstImageIndex()];
+            const int second = remappedIndexes[pair.secondImageIndex()];
+            if(first >= 0 && second >= 0)
+            {
+               remappedPairs.push_back(
+                  ossim_autoreg::BundleImagePair(first, second));
+            }
+         }
+
+         {
+            const QSignalBlocker anchorBlocker(m_bundleAnchorInputIndexes);
+            const QSignalBlocker pairBlocker(m_bundleInputPairs);
+            m_bundleAnchorInputIndexes->setText(
+               formatRegistrationInputIndexes(remappedAnchors));
+            m_bundleInputPairs->setText(
+               formatRegistrationInputPairs(remappedPairs));
+         }
+
+         std::vector<RegistrationSetupInput> retainedInputs;
+         retainedInputs.reserve(
+            m_setupInputs.size() - removed.size());
+         for(std::size_t index = 0; index < m_setupInputs.size(); ++index)
+         {
+            if(!m_preflightIsolated[index])
+               retainedInputs.push_back(m_setupInputs[index]);
+         }
+         m_setupInputs.swap(retainedInputs);
+         refreshPreflightInputs();
+         updatePreflight();
+         if(!m_setupInputs.empty())
+         {
+            const int selectedRow = std::min(
+               static_cast<int>(removed.front()),
+               static_cast<int>(m_setupInputs.size()) - 1);
+            m_preflightTable->selectRow(selectedRow);
+         }
+         resizeForContent();
+      }
+
       void moveSelectedInput(int offset)
       {
          const int row = m_preflightTable ?
@@ -800,9 +963,7 @@ namespace ossimGui
             }
          }
          std::swap(m_setupInputs[first], m_setupInputs[second]);
-         std::swap(m_preflightLabels[first], m_preflightLabels[second]);
-         std::swap(m_preflightInputs[first], m_preflightInputs[second]);
-         std::swap(m_preflightOverlaps[first], m_preflightOverlaps[second]);
+         refreshPreflightInputs();
          updatePreflight();
          m_preflightTable->selectRow(target);
       }
@@ -1139,6 +1300,8 @@ namespace ossimGui
       {
          if(!m_preflightTable)
             return;
+         m_preflightTable->setRowCount(
+            static_cast<int>(m_preflightInputs.size()));
 
          const RegistrationSetupApproach approach =
             static_cast<RegistrationSetupApproach>(
@@ -1157,6 +1320,7 @@ namespace ossimGui
          int fixedOrAnchorCount = 0;
          int availableGeometryCount = 0;
          int validAnchorCount = 0;
+         const std::vector<std::size_t> isolated = isolatedInputIndexes();
 
          for(std::size_t index = 0;
              index < m_preflightInputs.size();
@@ -1281,9 +1445,20 @@ namespace ossimGui
             m_preflightTable->setItem(
                static_cast<int>(index), 4,
                new QTableWidgetItem(geometry));
+            QTableWidgetItem* overlapItem =
+               new QTableWidgetItem(m_preflightOverlaps[index]);
+            if(m_preflightIsolated[index])
+            {
+               overlapItem->setForeground(QBrush(QColor(180, 0, 0)));
+               QFont warningFont = overlapItem->font();
+               warningFont.setBold(true);
+               overlapItem->setFont(warningFont);
+               overlapItem->setToolTip(
+                  "This image has determinable geometry but does not overlap "
+                  "any other selected image.");
+            }
             m_preflightTable->setItem(
-               static_cast<int>(index), 5,
-               new QTableWidgetItem(m_preflightOverlaps[index]));
+               static_cast<int>(index), 5, overlapItem);
          }
 
          QString summary = QString("%1 fixed/anchor, %2 floating")
@@ -1299,6 +1474,22 @@ namespace ossimGui
          }
          else if(!floatingCount)
             summary += "; no movable floating input is available";
+         if(!isolated.empty())
+         {
+            summary += QString(
+               "; <b>Warning: %1 non-overlapping image(s)</b>")
+               .arg(static_cast<int>(isolated.size()));
+            QStringList isolatedLabels;
+            for(std::size_t index : isolated)
+               isolatedLabels.push_back(m_preflightLabels[index]);
+            m_preflightSummary->setToolTip(
+               QString("Non-overlapping registration inputs:\n%1")
+                  .arg(isolatedLabels.join("\n")));
+         }
+         else
+         {
+            m_preflightSummary->setToolTip(QString());
+         }
 
          m_executionEligible =
             availableGeometryCount >= 2 && floatingCount > 0;
@@ -1342,6 +1533,15 @@ namespace ossimGui
             m_runButton->setEnabled(m_executionEligible);
             m_runButton->setToolTip(m_executionEligibilityMessage);
          }
+         if(m_excludeNonOverlappingButton)
+         {
+            m_excludeNonOverlappingButton->setEnabled(!isolated.empty());
+            m_excludeNonOverlappingButton->setText(
+               isolated.empty() ?
+                  "Exclude Non-overlapping" :
+                  QString("Exclude Non-overlapping (%1)")
+                     .arg(static_cast<int>(isolated.size())));
+         }
          m_preflightSummary->setText(summary);
       }
 
@@ -1353,11 +1553,13 @@ namespace ossimGui
       std::vector<RegistrationSetupInput> m_setupInputs;
       QTableWidget* m_preflightTable;
       QLabel* m_preflightSummary;
+      QPushButton* m_excludeNonOverlappingButton;
       QPushButton* m_runButton;
       std::vector<QString> m_preflightLabels;
       std::vector<ossim_autoreg::RegistrationSetupInputInfo>
          m_preflightInputs;
       std::vector<QString> m_preflightOverlaps;
+      std::vector<bool> m_preflightIsolated;
       QComboBox* m_approach;
       QComboBox* m_matchMethod;
       QComboBox* m_resampler;
