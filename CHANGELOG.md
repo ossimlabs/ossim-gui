@@ -124,6 +124,8 @@ All notable changes to `ossim-gui` are documented here.
 > visible Lock-header checkbox for locking or unlocking all parameters at once.
 > Registration preflight now calls out images with no overlap and can exclude
 > them from a run without removing them from the Data Manager.
+> It now also warns when workflow pairing cannot reach a control or anchor,
+> detects disconnected all-floating graphs, and supports multi-row exclusion.
 
 ### Fixed
 - Open GeoCell context menus through Qt's context-menu event so the mouse
@@ -139,6 +141,12 @@ All notable changes to `ossim-gui` are documented here.
   (`37b931e`).
 
 ### Added
+- Add workflow-aware registration pairing preflight (`dc477ed`).
+  - Warn when fixed floating inputs have no fixed/control overlap.
+  - Trace anchored overlap paths and detect disconnected all-floating graphs
+    under the selected bundle pair policy.
+  - Allow Command/Control and Shift multi-row exclusion while remapping anchors
+    and explicit pairs.
 - Make non-overlapping registration inputs actionable in the selected-image
   preflight (`6ffa75f`).
   - Mark an input as `No overlap` only when geometry overlap is available for
