@@ -122,6 +122,8 @@ All notable changes to `ossim-gui` are documented here.
 > inspection workbench with scalable markers, edge selection, synchronized
 > swipe views, and predictable window reuse. Geometry adjustments also gain a
 > visible Lock-header checkbox for locking or unlocking all parameters at once.
+> Registration preflight now calls out images with no overlap and can exclude
+> them from a run without removing them from the Data Manager.
 
 ### Fixed
 - Open GeoCell context menus through Qt's context-menu event so the mouse
@@ -137,6 +139,14 @@ All notable changes to `ossim-gui` are documented here.
   (`37b931e`).
 
 ### Added
+- Make non-overlapping registration inputs actionable in the selected-image
+  preflight (`6ffa75f`).
+  - Mark an input as `No overlap` only when geometry overlap is available for
+    every selected peer and every overlap ratio is zero.
+  - Summarize isolated inputs and provide a confirmed one-click exclusion that
+    leaves the original images in the Data Manager.
+  - Recalculate launch eligibility and remap bundle anchors and explicit pairs
+    after exclusions.
 - Add reusable fixed and bundle tie-point inspection to completed registration
   results (`9106fa3`, `9c0655e`).
   - Render fixed/moving observations, applied corrections, removed ties, and
