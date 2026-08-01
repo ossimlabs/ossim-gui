@@ -73,6 +73,7 @@
 #include <ossimGui/RegistrationOverlay.h>
 #include <ossimGui/RegPoint.h>
 #include <algorithm>
+#include <cmath>
 #include <set>
 #include <sstream>
 #include <string>
@@ -93,6 +94,72 @@
 namespace
 {
    const char* FIXED_AUTO_LABEL = "Fixed Auto";
+
+   bool standardMosaicType(const QString& combinerType)
+   {
+      return combinerType == "ossimImageMosaic" ||
+             combinerType == "ossimBlendMosaic" ||
+             combinerType == "ossimFeatherMosaic";
+   }
+
+   bool nativeGroundResolution(ossimGui::DataManager::Node* node,
+                               double& metersPerPixel)
+   {
+      metersPerPixel = 0.0;
+      if(!node || !node->getObject())
+         return false;
+
+      ossimTypeNameVisitor visitor(
+         "ossimImageHandler", true,
+         ossimVisitor::VISIT_INPUTS | ossimVisitor::VISIT_CHILDREN);
+      node->getObject()->accept(visitor);
+      ossimImageHandler* handler = visitor.getObjectAs<ossimImageHandler>(0);
+      if(!handler)
+         return false;
+
+      ossimRefPtr<ossimImageGeometry> geometry = handler->getImageGeometry();
+      if(!geometry.valid())
+         return false;
+
+      const ossimDpt gsd = geometry->getMetersPerPixel();
+      if(gsd.hasNans() || !std::isfinite(gsd.x) || !std::isfinite(gsd.y) ||
+         gsd.x <= 0.0 || gsd.y <= 0.0)
+         return false;
+
+      // Geometric mean gives one deterministic scalar for anisotropic pixels.
+      metersPerPixel = std::sqrt(gsd.x * gsd.y);
+      return std::isfinite(metersPerPixel) && metersPerPixel > 0.0;
+   }
+
+   bool sortMosaicInputsByResolution(
+      ossimGui::DataManager::NodeListType& nodes)
+   {
+      struct ResolutionInput
+      {
+         ossimRefPtr<ossimGui::DataManager::Node> node;
+         double metersPerPixel;
+      };
+
+      std::vector<ResolutionInput> resolutionInputs;
+      resolutionInputs.reserve(nodes.size());
+      for(auto node = nodes.begin(); node != nodes.end(); ++node)
+      {
+         double metersPerPixel = 0.0;
+         if(!nativeGroundResolution(node->get(), metersPerPixel))
+            return false;
+         resolutionInputs.push_back({*node, metersPerPixel});
+      }
+
+      std::stable_sort(
+         resolutionInputs.begin(), resolutionInputs.end(),
+         [](const ResolutionInput& lhs, const ResolutionInput& rhs) {
+            return lhs.metersPerPixel < rhs.metersPerPixel;
+         });
+      nodes.clear();
+      for(const ResolutionInput& input : resolutionInputs)
+         nodes.push_back(input.node);
+      return true;
+   }
 
 #ifdef OSSIM_AUTOREGISTRATION_ENABLED
    std::string registrationResultStatus(
@@ -3547,6 +3614,11 @@ void ossimGui::DataManagerWidget::combineImagesWithType(const QString& combinerT
       }
       ++iter;
    }
+   // Standard mosaics are ordered once, when created: finer imagery is the
+   // foreground and coarser imagery is the bottom layer. If any native ground
+   // resolution is unavailable, retain the user's selection order.
+   if(standardMosaicType(combinerType))
+      sortMosaicInputsByResolution(nodeList);
    if(!nodeList.empty())
    {
       ossimRefPtr<DataManager::Node> newNode = dataManager()->createDefaultCombinerChain(combinerType.toStdString(), nodeList);
@@ -4081,6 +4153,37 @@ ossimGui::DataManagerWidget::selectedRegistrationInputItems() const
    return result;
 }
 
+QList<ossimGui::DataManagerItem*>
+ossimGui::DataManagerWidget::registrationInputsForCombiner(
+   DataManagerImageChainItem* combinerItem) const
+{
+   QList<DataManagerItem*> result;
+   if(!combinerItem || !combinerItem->isCombiner())
+      return result;
+
+   DataManager::NodeListType inputNodes;
+   combinerItem->getInputs(inputNodes);
+   std::lock_guard<std::mutex> lock(m_activeItemsMutex);
+   for(const auto& inputNode : inputNodes)
+   {
+      DataManagerItem* matchingItem = 0;
+      for(DataManagerItem* activeItem : m_activeItems)
+      {
+         if(activeItem && activeItem->objectAsNode() == inputNode.get() &&
+            (activeItem->itemAs<DataManagerRawImageSourceItem>() ||
+             activeItem->itemAs<DataManagerImageChainItem>()))
+         {
+            matchingItem = activeItem;
+            break;
+         }
+      }
+      if(!matchingItem)
+         return QList<DataManagerItem*>();
+      result.push_back(matchingItem);
+   }
+   return result;
+}
+
 void ossimGui::DataManagerWidget::connectSelectedRegistration(
    DataManagerRegistrationItem* item,
    bool executeAfterCreate,
@@ -4116,14 +4219,42 @@ void ossimGui::DataManagerWidget::createRegistrationFromSelectionDialog()
    createRegistrationSetup(true);
 }
 
+void ossimGui::DataManagerWidget::createRegistrationFromCombinerDialog()
+{
+   const QList<DataManagerImageChainItem*> selectedChains =
+      grabSelectedChildItemsOfType<DataManagerImageChainItem>();
+   if(selectedChains.size() != 1 || !selectedChains.front()->isCombiner())
+   {
+      QMessageBox::warning(this,
+                           "Registration",
+                           "Select one image combiner before creating a "
+                           "registration path.");
+      return;
+   }
+
+   const QList<DataManagerItem*> inputs =
+      registrationInputsForCombiner(selectedChains.front());
+   if(inputs.size() < 2)
+   {
+      QMessageBox::warning(
+         this,
+         "Registration",
+         "The selected combiner must have at least two available image "
+         "inputs.");
+      return;
+   }
+   createRegistrationSetup(true, QString(), inputs);
+}
+
 void ossimGui::DataManagerWidget::createRegistrationSetup(
    bool connectSelectedImages,
-   const QString& presetType)
+   const QString& presetType,
+   QList<DataManagerItem*> inputs)
 {
 #ifdef OSSIM_AUTOREGISTRATION_ENABLED
-   const QList<DataManagerItem*> selectedInputs =
-      connectSelectedImages ? selectedRegistrationInputItems() :
-                              QList<DataManagerItem*>();
+   const QList<DataManagerItem*> selectedInputs = connectSelectedImages ?
+      (inputs.empty() ? selectedRegistrationInputItems() : inputs) :
+      QList<DataManagerItem*>();
    if(connectSelectedImages && selectedInputs.size() < 2)
    {
       QMessageBox::warning(this,
@@ -5284,6 +5415,14 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
    ossim_uint32 nInputConnections     = 0;
    ossim_uint32 nDisplayItems         = 0;
    bool hasItems = false;
+   DataManagerImageChainItem* selectedCombiner = 0;
+   if(selection.size() == 1)
+   {
+      selectedCombiner =
+         dynamic_cast<DataManagerImageChainItem*>(selection.front());
+      if(selectedCombiner && !selectedCombiner->isCombiner())
+         selectedCombiner = 0;
+   }
    QMenu* menu = 0;
    menu = new QMenu(this);
    ossimObject* activeObject = editableObject(activeItem);
@@ -5563,19 +5702,36 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
      if(nImageChainSelections>0||nRawSourceSelections>0)
      {
         QMenu* registrationMenu = new QMenu("Registration");
-        QAction* registerSelectedAction =
-           registrationMenu->addAction("Register Selected Images...");
-        QMenu* quickRegistrationMenu =
-           registrationMenu->addMenu("Quick Registration");
-        populateQuickRegistrationMenu(quickRegistrationMenu, true);
+        QAction* registerSelectedAction = 0;
+        if(selectedCombiner)
+        {
+           registerSelectedAction =
+              registrationMenu->addAction("Register Combiner Inputs...");
+           registerSelectedAction->setToolTip(
+              "Register the combiner's direct image inputs; its existing "
+              "mosaic view refreshes as accepted registration stages are "
+              "applied.");
+           connect(registerSelectedAction,
+                   SIGNAL(triggered(bool)),
+                   this,
+                   SLOT(createRegistrationFromCombinerDialog()));
+        }
+        else
+        {
+           registerSelectedAction =
+              registrationMenu->addAction("Register Selected Images...");
+           QMenu* quickRegistrationMenu =
+              registrationMenu->addMenu("Quick Registration");
+           populateQuickRegistrationMenu(quickRegistrationMenu, true);
+           connect(registerSelectedAction,
+                   SIGNAL(triggered(bool)),
+                   this,
+                   SLOT(createRegistrationFromSelectionDialog()));
+        }
 #ifndef OSSIM_AUTOREGISTRATION_ENABLED
         registerSelectedAction->setEnabled(false);
 #endif
         menu->addMenu(registrationMenu);
-        connect(registerSelectedAction,
-                SIGNAL(triggered(bool)),
-                this,
-                SLOT(createRegistrationFromSelectionDialog()));
 
         if(nRawSourceSelections>0)
         {
