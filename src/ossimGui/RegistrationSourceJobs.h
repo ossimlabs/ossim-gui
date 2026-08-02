@@ -100,6 +100,9 @@ namespace ossimGui
       ossimFilename defaultGeometryOutput(
          const ossimBundleAdjustmentRegistrationSource::InputWrapper& input)
          const;
+      bool applySnapshotOnGuiThread(
+         const ossimBundleAdjustmentRegistrationSource::AdjustmentSnapshot&
+            snapshot);
       bool saveGeometriesOnGuiThread(
          const std::vector<ossimFilename>& outputGeometryFiles);
       void run() override;
