@@ -4514,7 +4514,8 @@ void ossimGui::DataManagerWidget::createRegistrationSetup(
 
 void ossimGui::DataManagerWidget::populateQuickRegistrationMenu(
    QMenu* menu,
-   bool connectSelectedImages)
+   bool connectSelectedImages,
+   QList<DataManagerItem*> inputs)
 {
    if(!menu)
       return;
@@ -4535,9 +4536,9 @@ void ossimGui::DataManagerWidget::populateQuickRegistrationMenu(
       const QString presetType =
          QString::fromStdString(descriptor.typeName());
       connect(action, &QAction::triggered,
-              [this, connectSelectedImages, presetType]() {
+              [this, connectSelectedImages, presetType, inputs]() {
                  createRegistrationSetup(
-                    connectSelectedImages, presetType);
+                    connectSelectedImages, presetType, inputs);
               });
    }
    if(descriptors.empty())
@@ -5705,6 +5706,8 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
         QAction* registerSelectedAction = 0;
         if(selectedCombiner)
         {
+           const QList<DataManagerItem*> combinerInputs =
+              registrationInputsForCombiner(selectedCombiner);
            registerSelectedAction =
               registrationMenu->addAction("Register Combiner Inputs...");
            registerSelectedAction->setToolTip(
@@ -5715,6 +5718,12 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
                    SIGNAL(triggered(bool)),
                    this,
                    SLOT(createRegistrationFromCombinerDialog()));
+           QMenu* quickRegistrationMenu =
+              registrationMenu->addMenu("Quick Registration");
+           populateQuickRegistrationMenu(
+              quickRegistrationMenu, true, combinerInputs);
+           if(combinerInputs.size() < 2)
+              quickRegistrationMenu->setEnabled(false);
         }
         else
         {

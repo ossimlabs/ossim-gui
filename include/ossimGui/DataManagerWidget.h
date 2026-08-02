@@ -839,7 +839,8 @@ namespace ossimGui{
          QList<DataManagerItem*> inputs = QList<DataManagerItem*>());
       void populateQuickRegistrationMenu(
          QMenu* menu,
-         bool connectSelectedImages);
+         bool connectSelectedImages,
+         QList<DataManagerItem*> inputs = QList<DataManagerItem*>());
       virtual void incrementScrollBars(const QPoint& pos);
       
       /***************************** QT events **************************/
