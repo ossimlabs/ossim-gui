@@ -33,7 +33,9 @@ All notable changes to `ossim-gui` are documented here.
 > jobs now label live preview, accepted, restored, and coarse geometry updates
 > so GeoCell progress reads like the registration is actually moving, and the
 > latest RMSE-bearing geometry update stays visible while generic pass messages
-> continue. GeoCell can now opt into tie-point timing diagnostics only when
+> continue. Bundle jobs now apply accepted and restored geometry stages on the
+> GUI thread so an existing mosaic redraws while the bundle converges. GeoCell
+> can now opt into tie-point timing diagnostics only when
 > profiling is needed.
 > GeoCell setup can now tune the OpenCV RANSAC prefilter and threshold through
 > the same shared registration options used by CLI/source runs.
@@ -146,6 +148,9 @@ All notable changes to `ossim-gui` are documented here.
   (`37b931e`).
 
 ### Added
+- Update existing mosaic/combiner displays after each coherent accepted or
+  restored bundle geometry stage, while keeping rejected optimizer trials
+  invisible and applying live OSSIM geometry only on the GUI thread.
 - Give selected combiners the same factory-driven Quick Registration choices
   as multi-chain selections (`cb6c1fd`).
   - Pass the combiner's direct image inputs through the shared registered-preset

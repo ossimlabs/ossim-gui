@@ -4,7 +4,10 @@
 
 #include "RegistrationSourceJobSupport.h"
 
+#include <ossim/base/ossimEvent.h>
+#include <ossim/base/ossimRefreshEvent.h>
 #include <ossim/imaging/ossimImageHandler.h>
+#include <ossim/imaging/ossimImageSource.h>
 #include <ossimGui/DataManagerWidget.h>
 #include <ossim_autoreg/RegistrationTextReport.h>
 
@@ -41,6 +44,10 @@ namespace
             std::function<void(
                const ossimBundleAdjustmentRegistrationSource::
                   ProgressInfo&)>());
+         m_source->setApplyResultCallback(
+            std::function<bool(
+               const ossimBundleAdjustmentRegistrationSource::
+                  AdjustmentSnapshot&)>());
          m_source = 0;
       }
 
@@ -170,6 +177,63 @@ namespace ossimGui
       return result;
    }
 
+   bool BundleRegistrationSourceJob::applySnapshotOnGuiThread(
+      const ossimBundleAdjustmentRegistrationSource::AdjustmentSnapshot&
+         snapshot)
+   {
+      if(!m_registrationSource.valid() || !m_dataManagerWidget ||
+         widgetShutdownRequested())
+      {
+         return false;
+      }
+
+      bool applied = false;
+      const auto apply = [this, &snapshot, &applied]() {
+         if(!m_registrationSource.valid() || widgetShutdownRequested())
+         {
+            applied = false;
+            return;
+         }
+
+         applied =
+            m_registrationSource->applyAdjustmentSnapshotToInputs(snapshot);
+         if(!applied)
+            return;
+
+         const std::vector<ossim_uint32>& inputIndexes =
+            m_registrationSource->bundleInputIndexes();
+         for(ossim_uint32 inputIndex : inputIndexes)
+         {
+            const ossimBundleAdjustmentRegistrationSource::InputWrapper*
+               input = m_registrationSource->inputWrapper(inputIndex);
+            ossimImageSource* source = input ? input->source() : 0;
+            if(!source)
+               continue;
+
+            ossimRefPtr<ossimRefreshEvent> refreshEvent =
+               new ossimRefreshEvent(ossimRefreshEvent::REFRESH_GEOMETRY);
+            ossimEventVisitor visitor(refreshEvent.get(),
+                                      ossimVisitor::VISIT_ALL);
+            source->accept(visitor);
+         }
+      };
+
+      if(QThread::currentThread() == m_dataManagerWidget->thread())
+      {
+         apply();
+      }
+      else
+      {
+         const bool invoked =
+            QMetaObject::invokeMethod(m_dataManagerWidget,
+                                      apply,
+                                      Qt::BlockingQueuedConnection);
+         if(!invoked)
+            applied = false;
+      }
+      return applied;
+   }
+
    bool BundleRegistrationSourceJob::saveGeometriesOnGuiThread(
       const std::vector<ossimFilename>& outputGeometryFiles)
    {
@@ -221,6 +285,12 @@ namespace ossimGui
                {
                   updateProgressName(progress);
                }
+            });
+         m_registrationSource->setApplyResultCallback(
+            [this](
+               const ossimBundleAdjustmentRegistrationSource::
+                  AdjustmentSnapshot& snapshot) {
+               return applySnapshotOnGuiThread(snapshot);
             });
          BundleRegistrationCallbackScope callbackScope(
             m_registrationSource.get());
