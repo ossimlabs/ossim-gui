@@ -131,8 +131,15 @@ All notable changes to `ossim-gui` are documented here.
 > the existing mosaic view reflects accepted geometry updates. Combiner
 > registration now offers the same factory-backed quick choices as selecting
 > the input chains directly, so the workflow does not change with viewpoint.
+> Reordering an existing combiner input now preserves its live connections,
+> including view propagation and zoom, and dropping above the first row moves
+> the selected layer to input zero without a duplicate-layer warning.
 
 ### Fixed
+- Reorder a single existing combiner input through OSSIM's in-place connection
+  movement APIs instead of disconnecting and rebuilding the full input list,
+  preserving downstream view propagation and allowing a direct move to the
+  first input.
 - Open GeoCell context menus through Qt's context-menu event so the mouse
   release that requested the menu cannot immediately activate the action under
   the pointer (`8d29413`).
