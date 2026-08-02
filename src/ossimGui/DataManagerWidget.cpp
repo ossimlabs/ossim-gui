@@ -774,12 +774,28 @@ void ossimGui::DataManagerInputConnectionFolder::connect(QList<DataManagerItem*>
       // if we are dropping on the folder then just append the new items
       if(!targetItem||!targetItem->object())
       {
-        bool objectsFound = false;
+         bool existingInputHandled = false;
+         if(nodeItems.size() == 1 && (*iter)->parent() == this &&
+            (*iter)->objectAsNode())
+         {
+            ossimRefPtr<ossimConnectableObject> existingInput =
+               (*iter)->objectAsNode()->getObjectAs<ossimConnectableObject>();
+            if(existingInput.valid())
+            {
+               // The Inputs folder is the drop target above its first child.
+               // Reorder an existing child to input zero instead of trying to
+               // append the same object and reporting a duplicate.
+               connectable->moveInputToTop(existingInput->getId());
+               existingInputHandled = true;
+            }
+         }
+
+         bool objectsFound = false;
          TestCycleVisitor visitorA; // be used to test if this object appears in any inputs
          TestCycleVisitor visitorB(ossimVisitor::VISIT_NONE); // will be used to test immediate connections
-       // find first available slot
+         // find first available slot
          ossimRefPtr<ossimConnectableObject> thisNode = objectAsNode()?objectAsNode()->getObjectAs<ossimConnectableObject>():0;
-         while(iter != nodeItems.end())
+         while(!existingInputHandled && iter != nodeItems.end())
          {
             ossimRefPtr<DataManager::Node> n = (*iter)->objectAsNode();
             if(n.valid())
@@ -831,6 +847,7 @@ void ossimGui::DataManagerInputConnectionFolder::connect(QList<DataManagerItem*>
          if(childIdx >= 0)
          {
             ossimConnectableObject::ConnectableObjectList inputList = connectable->getInputList();
+            bool inputOrderUpdatedInPlace = false;
             if(connectable->getInputListIsFixedFlag()&&targetItem->objectAsNode()&&(*iter)->objectAsNode())
             {
                ossimRefPtr<ossimConnectableObject> itemToInsert = (*iter)->objectAsNode()->getObjectAs<ossimConnectableObject>();
@@ -945,13 +962,50 @@ void ossimGui::DataManagerInputConnectionFolder::connect(QList<DataManagerItem*>
                            if((inputListIter!=inputList.end())&&
                               (targetListIter!=inputList.end()))
                            {
-                              // are from same parent and moving layers
-                              //
-                              inputList.erase(inputListIter);
-                              targetListIter = std::find(inputList.begin(), inputList.end(), target.get());
-                              if(targetListIter != inputList.end())
+                              if(nodeItems.size() == 1)
                               {
-                                 inputList.insert(targetListIter, itemToInsert.get());
+                                 const ossim_int32 sourceIndex =
+                                    static_cast<ossim_int32>(std::distance(
+                                       inputList.begin(), inputListIter));
+                                 const ossim_int32 targetIndex =
+                                    static_cast<ossim_int32>(std::distance(
+                                       inputList.begin(), targetListIter));
+                                 const ossim_int32 desiredIndex =
+                                    sourceIndex < targetIndex ?
+                                       targetIndex - 1 : targetIndex;
+                                 ossim_int32 currentIndex = sourceIndex;
+                                 if(desiredIndex == 0 && currentIndex > 0 &&
+                                    connectable->moveInputToTop(
+                                       itemToInsert->getId()))
+                                 {
+                                    currentIndex = 0;
+                                 }
+                                 while(currentIndex > desiredIndex &&
+                                       connectable->moveInputUp(
+                                          itemToInsert->getId()))
+                                 {
+                                    --currentIndex;
+                                 }
+                                 while(currentIndex < desiredIndex &&
+                                       connectable->moveInputDown(
+                                          itemToInsert->getId()))
+                                 {
+                                    ++currentIndex;
+                                 }
+                                 inputOrderUpdatedInPlace =
+                                    currentIndex == desiredIndex;
+                              }
+                              if(!inputOrderUpdatedInPlace)
+                              {
+                                 // Preserve the existing reconnect fallback
+                                 // for multi-item drops and unsupported lists.
+                                 inputList.erase(inputListIter);
+                                 targetListIter = std::find(inputList.begin(), inputList.end(), target.get());
+                                 if(targetListIter != inputList.end())
+                                 {
+                                    inputList.insert(targetListIter,
+                                                     itemToInsert.get());
+                                 }
                               }
                            }
                         }
@@ -965,7 +1019,8 @@ void ossimGui::DataManagerInputConnectionFolder::connect(QList<DataManagerItem*>
                }
             }
 
-            connectable->connectInputList(inputList);
+            if(!inputOrderUpdatedInPlace)
+               connectable->connectInputList(inputList);
          }
       }
       populateChildren();
