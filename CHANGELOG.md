@@ -126,6 +126,11 @@ All notable changes to `ossim-gui` are documented here.
 > them from a run without removing them from the Data Manager.
 > It now also warns when workflow pairing cannot reach a control or anchor,
 > detects disconnected all-floating graphs, and supports multi-row exclusion.
+> New standard mosaics now put fine-resolution imagery above coarser
+> backgrounds, and selected combiners can register their direct inputs while
+> the existing mosaic view reflects accepted geometry updates. Combiner
+> registration now offers the same factory-backed quick choices as selecting
+> the input chains directly, so the workflow does not change with viewpoint.
 
 ### Fixed
 - Open GeoCell context menus through Qt's context-menu event so the mouse
@@ -141,6 +146,23 @@ All notable changes to `ossim-gui` are documented here.
   (`37b931e`).
 
 ### Added
+- Give selected combiners the same factory-driven Quick Registration choices
+  as multi-chain selections (`cb6c1fd`).
+  - Pass the combiner's direct image inputs through the shared registered-preset
+    menu and existing launch dialog.
+  - Preserve explicit Run intent, input roles, pairing, and parallel settings
+    instead of introducing a separate combiner-only execution path.
+- Add a combiner-centered registration workflow and resolution-aware mosaic
+  creation defaults (`c056d00`).
+  - Register a selected combiner's direct image inputs through the existing
+    guided, factory-backed registration setup.
+  - Keep the existing mosaic display connected so accepted fixed-registration
+    geometry updates refresh the composed view.
+  - Order new A-over-B, Blend, and Feather mosaics from fine foreground imagery
+    to coarse background imagery while preserving selection order when native
+    ground resolution is unavailable.
+  - Leave existing combiners, factory combiners, and semantic-role combiners
+    unchanged.
 - Add workflow-aware registration pairing preflight (`dc477ed`).
   - Warn when fixed floating inputs have no fixed/control overlap.
   - Trace anchored overlap paths and detect disconnected all-floating graphs

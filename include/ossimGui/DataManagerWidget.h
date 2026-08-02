@@ -733,6 +733,7 @@ namespace ossimGui{
 
       virtual void createRegistrationFromDialog();
       virtual void createRegistrationFromSelectionDialog();
+      virtual void createRegistrationFromCombinerDialog();
       virtual void setSelectedBundleAllFloating(bool enabled);
       virtual void registerSelected();
       
@@ -826,16 +827,20 @@ namespace ossimGui{
       void combineImagesWithType(const QString& classType);
       void createWriterFromType(const QString& classType);
       QList<DataManagerItem*> selectedRegistrationInputItems() const;
+      QList<DataManagerItem*> registrationInputsForCombiner(
+         DataManagerImageChainItem* combinerItem) const;
       void connectSelectedRegistration(
          DataManagerRegistrationItem* item,
          bool executeAfterCreate = true,
          QList<DataManagerItem*> inputs = QList<DataManagerItem*>());
       void createRegistrationSetup(
          bool connectSelectedImages,
-         const QString& presetType = QString());
+         const QString& presetType = QString(),
+         QList<DataManagerItem*> inputs = QList<DataManagerItem*>());
       void populateQuickRegistrationMenu(
          QMenu* menu,
-         bool connectSelectedImages);
+         bool connectSelectedImages,
+         QList<DataManagerItem*> inputs = QList<DataManagerItem*>());
       virtual void incrementScrollBars(const QPoint& pos);
       
       /***************************** QT events **************************/
