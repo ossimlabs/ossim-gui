@@ -397,6 +397,7 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createDefaultCom
       "type:ossimImageChain\n"
       "object0.type:ossimBandSelector\n"
       "object5.type:ossimHistogramRemapper\n"
+      "object5.enabled:false\n"
       "object40.type:ossimBrightnessContrastSource\n"
       "object50.type:ossimHsiRemapper\n";
       
@@ -452,6 +453,7 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createDefaultCom
 ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createDefault2dImageDisplay(ossimRefPtr<Node> input, bool notifyFlag)
 {
    ImageMdiSubWindow* display = new ImageMdiSubWindow();
+   bool inputHasCombiner = false;
    ossimRefPtr<ossimGui::DataManager::Node> result = addSource(display->connectableObject(), notifyFlag);
    if(m_mdiArea)
    {
@@ -462,6 +464,13 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createDefault2dI
    if(display->connectableObject()&&input.valid()&&input->getObjectAsConnectable())
    {
       display->connectableObject()->connectMyInputTo(0, input->getObjectAsConnectable());
+      ossimTypeNameVisitor combinerVisitor("ossimImageCombiner");
+      input->getObject()->accept(combinerVisitor);
+      inputHasCombiner = !combinerVisitor.getObjects().empty();
+      if(inputHasCombiner && display->scrollWidget())
+      {
+         display->scrollWidget()->synchronizeLayerViews();
+      }
    }
 
    // Set title
@@ -502,8 +511,16 @@ ossimRefPtr<ossimGui::DataManager::Node> ossimGui::DataManager::createDefault2dI
                   }
                }
 
-               // Set up histogram remapper if bit depth is greater than 8.
-               if ( input->getOutputScalarType() != OSSIM_UINT8 )
+               // Base this decision on what the display is actually receiving,
+               // not a raw handler found deeper in the graph.  Never configure
+               // a composite from one underlying handler's histogram; the
+               // combiner setup owns its input-enhancement policy and the
+               // post-combiner remapper stays disabled.
+               ossimImageSource* displayInput = dynamic_cast<ossimImageSource*>(
+                  display->connectableObject()->getInput(0));
+               if ( displayInput &&
+                    !inputHasCombiner &&
+                    (displayInput->getOutputScalarType() != OSSIM_UINT8) )
                {
                   ossimTypeNameVisitor hrVisitor("ossimHistogramRemapper");
                   connectable->accept(hrVisitor);
