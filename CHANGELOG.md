@@ -136,8 +136,14 @@ All notable changes to `ossim-gui` are documented here.
 > Reordering an existing combiner input now preserves its live connections,
 > including view propagation and zoom, and dropping above the first row moves
 > the selected layer to input zero without a duplicate-layer warning.
+> Mosaic displays now keep their input radiometry and views synchronized,
+> while simple image chains retain their normal automatic stretch.
 
 ### Fixed
+- Keep composite histogram enhancement from being configured from one nested
+  input handler, synchronize renderer views when opening mosaic displays, and
+  safely render blank cache tiles when an image source returns no buffer
+  (`80701b0`).
 - Reorder a single existing combiner input through OSSIM's in-place connection
   movement APIs instead of disconnecting and rebuilding the full input list,
   preserving downstream view propagation and allowing a direct move to the
