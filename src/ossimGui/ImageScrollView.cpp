@@ -38,15 +38,14 @@ void ImageViewJob::run()
       {
          // shift to zero based rectangle and then set back for opying purposes.
          ossimRefPtr<ossimImageData> data =m_inputSource->getTile(rect);
-         data->setImageRectangle(rect);
-         ossimGui::Image img(data.get());
-         if(data.valid())
+         if(data.valid() && data->getBuf())
          {
+            data->setImageRectangle(rect);
             m_tileCache->addTile(ossimGui::Image(data.get(), true));
          }
          else
          {
-            img = QImage(rect.width(), rect.height(),  QImage::Format_RGB32);
+            QImage img(rect.width(), rect.height(), QImage::Format_RGB32);
             img.fill(0);
             img.setOffset(QPoint(rect.ul().x, rect.ul().y));
 
