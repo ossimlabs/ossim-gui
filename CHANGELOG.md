@@ -138,6 +138,9 @@ All notable changes to `ossim-gui` are documented here.
 > the selected layer to input zero without a duplicate-layer warning.
 > Mosaic displays now keep their input radiometry and views synchronized,
 > while simple image chains retain their normal automatic stretch.
+> Image windows now put applicable viewing, adjustment, editing, export, and
+> registration actions under the pointer, and Position Information stays above
+> GeoCell while it is in use.
 
 ### Fixed
 - Keep composite histogram enhancement from being configured from one nested
@@ -161,6 +164,15 @@ All notable changes to `ossim-gui` are documented here.
   (`37b931e`).
 
 ### Added
+- Add context-sensitive actions directly to GeoCell image windows (`9229b7f`).
+  - Offer only the view and adjustment tools supported by the displayed graph,
+    alongside factory-tailored editors and the generic Properties fallback.
+  - Let managed combiner views register their direct inputs through the same
+    guided setup and factory-backed Quick Registration choices as the Data
+    Manager.
+  - Keep Position Information above the GeoCell main window as an owned tool.
+  - Manually verify single-image and mosaic context actions, combiner
+    registration choices, and Position Information window behavior.
 - Update existing mosaic/combiner displays after each coherent accepted or
   restored bundle geometry stage, while keeping rejected optimizer trials
   invisible and applying live OSSIM geometry only on the GUI thread.
