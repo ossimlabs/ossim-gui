@@ -2,6 +2,7 @@
 #include <ossimGui/AdjustableParameterEditor.h>
 #include <ossimGui/ChipperDialog.h>
 #include <ossimGui/CopyChainVisitor.h>
+#include <ossimGui/DataManagerWidget.h>
 #include <ossimGui/Event.h>
 #include <ossimGui/ExportImageDialog.h>
 #include <ossimGui/ImageScrollView.h>
@@ -10,6 +11,7 @@
 #include <ossimGui/ObjectManipulatorFactory.h>
 #include <ossimGui/PolygonRemapperDialog.h>
 #include <ossimGui/PositionInformationDialog.h>
+#include <ossimGui/PropertyEditorDialog.h>
 #include <ossimGui/SetViewVisitor.h>
 #include <ossim/base/ossimAdjustableParameterInterface.h>
 #include <ossim/base/ossimGeoidManager.h>
@@ -62,6 +64,18 @@ namespace
          editor->setAttribute(Qt::WA_DeleteOnClose);
          editor->show();
       }
+   }
+
+   void showGenericProperties(ossimObject* object, QWidget* parent)
+   {
+      if(!object)
+         return;
+      ossimGui::PropertyEditorDialog* dialog =
+         new ossimGui::PropertyEditorDialog(parent);
+      dialog->setAttribute(Qt::WA_DeleteOnClose);
+      dialog->resize(640, 480);
+      dialog->setObject(object);
+      dialog->show();
    }
 }
 
@@ -314,7 +328,8 @@ void ossimGui::ImageActions::showPolygonRemapper()
 
 void ossimGui::ImageActions::showPositionInformation()
 {
-   PositionInformationDialog* editor = new PositionInformationDialog( m_widget );
+   PositionInformationDialog* editor =
+      new PositionInformationDialog(topLevelOwner(m_widget), Qt::Tool);
    editor->setWidget( m_widget );
    connect( m_widget, SIGNAL( track(const ossimDpt& ) ), editor, SLOT(track(const ossimDpt&)));
    editor->show();
@@ -866,6 +881,96 @@ void ossimGui::ImageActions::addActions(QMainWindow* mainWindow)
             this, SLOT(track(const ossimDpt&)));
 }
 
+void ossimGui::ImageActions::populateContextMenu(QMenu* menu)
+{
+   if(!menu || !m_widget || !m_widget->connectableObject())
+      return;
+
+   m_visitor.reset();
+   m_widget->connectableObject()->accept(m_visitor);
+
+   if(!m_visitor.m_viewInterfaces.empty())
+   {
+      QMenu* viewMenu = menu->addMenu("View");
+      viewMenu->addAction("Fit to Window", this, SLOT(fitToWindow()));
+      viewMenu->addAction("Full Resolution", this, SLOT(fullRes()));
+      viewMenu->addSeparator();
+      viewMenu->addAction("Zoom In", this, SLOT(zoomIn()));
+      viewMenu->addAction("Zoom Out", this, SLOT(zoomOut()));
+   }
+
+   const bool hasAdjustments =
+      !m_visitor.m_imageAdjustments.empty() ||
+      !m_visitor.m_bandSelectors.empty() ||
+      !m_visitor.m_histogramRemappers.empty() ||
+      !m_visitor.m_brightnessContrastSources.empty() ||
+      !m_visitor.m_hsiRemappers.empty();
+   if(hasAdjustments)
+   {
+      QMenu* adjustMenu = menu->addMenu("Adjust");
+      if(!m_visitor.m_imageAdjustments.empty())
+         adjustMenu->addAction(
+            "Geometry Adjustment...", this, SLOT(editGeometryAdjustments()));
+      if(!m_visitor.m_bandSelectors.empty())
+         adjustMenu->addAction(
+            "Band Selection...", this, SLOT(editBandSelector()));
+      if(!m_visitor.m_histogramRemappers.empty())
+         adjustMenu->addAction(
+            "Histogram...", this, SLOT(editHistogramRemapper()));
+      if(!m_visitor.m_brightnessContrastSources.empty())
+         adjustMenu->addAction(
+            "Brightness / Contrast...", this, SLOT(editBrightnessContrast()));
+      if(!m_visitor.m_hsiRemappers.empty())
+         adjustMenu->addAction(
+            "Hue / Saturation / Intensity...",
+            this, SLOT(editHsiAdjustments()));
+   }
+
+   ossimObject* target = m_widget->connectableObject()->getInput(0);
+   const std::vector<ObjectEditorDescriptor> tailoredEditors =
+      ObjectEditorFactory::instance()->editorsFor(target);
+   if(!tailoredEditors.empty())
+   {
+      QMenu* editWithMenu = menu->addMenu("Edit With...");
+      for(const ObjectEditorDescriptor& descriptor : tailoredEditors)
+      {
+         QAction* action = editWithMenu->addAction(
+            QString::fromStdString(descriptor.displayName()));
+         action->setToolTip(QString::fromStdString(descriptor.description()));
+         connect(action, &QAction::triggered,
+                 [this, target, descriptor]() {
+                    QWidget* editor = descriptor.create(target, m_widget);
+                    if(editor)
+                    {
+                       editor->setAttribute(Qt::WA_DeleteOnClose);
+                       editor->show();
+                    }
+                 });
+      }
+   }
+   if(dynamic_cast<ossimPropertyInterface*>(target))
+   {
+      QAction* propertiesAction = menu->addAction("Properties...");
+      connect(propertiesAction, &QAction::triggered,
+              [this, target]() {
+                 showGenericProperties(target, m_widget);
+              });
+   }
+
+   if(!menu->actions().empty())
+      menu->addSeparator();
+   menu->addAction(
+      "Position Information...", this, SLOT(showPositionInformation()));
+   menu->addAction(
+      "Polygon Remapper...", this, SLOT(showPolygonRemapper()));
+
+   QMenu* exportMenu = menu->addMenu("Export");
+   exportMenu->addAction("Export Image...", this, SLOT(exportImage()));
+   exportMenu->addAction("Save As...", this, SLOT(saveAs()));
+   exportMenu->addAction(
+      "Export Keyword List...", this, SLOT(exportKeywordlist()));
+}
+
 void ossimGui::ImageActions::removeActions(QMainWindow* mainWindow)
 {
    disconnect(m_widget, 0, this, 0);
@@ -1022,9 +1127,12 @@ ossimGui::ImageMdiSubWindow::ImageMdiSubWindow( QWidget * parent, Qt::WindowFlag
    setGeometry(0,0,512,512);
    setMinimumSize(QSize(64,64));
    m_imageScrollView = new ImageScrollView();
+   m_imageScrollView->setContextMenuPolicy(Qt::CustomContextMenu);
    m_imageScrollView->setConnectableObject(static_cast<ConnectableImageObject*>(m_connectableObject.get()));
    setWidget(m_imageScrollView);
    m_actions->setWidget(m_imageScrollView);
+   connect(m_imageScrollView, &QWidget::customContextMenuRequested,
+           this, &ImageMdiSubWindow::showContextMenu);
    connect(this, SIGNAL(windowStateChanged ( Qt::WindowStates , Qt::WindowStates  )),this, SLOT(stateChanged(Qt::WindowStates , Qt::WindowStates)));
    m_containerListener = new ContainerListener(this);
 //   connect(m_imageScrollWidget, SIGNAL( mouseMove(QMouseEvent*,   const ossimDrect& , const ossimDpt& )), 
@@ -1184,6 +1292,27 @@ void ossimGui::ImageMdiSubWindow::syncView(View& viewInfo)
          ++currentWindow;
       }
    }
+}
+
+void ossimGui::ImageMdiSubWindow::showContextMenu(const QPoint& pos)
+{
+   if(!m_imageScrollView || !m_actions)
+      return;
+
+   QMenu menu(m_imageScrollView);
+   QMainWindow* owner = mainWindow();
+   DataManagerWidget* dataManagerWidget =
+      owner ? owner->findChild<DataManagerWidget*>() : 0;
+   ossimConnectableObject* displayedObject =
+      m_imageScrollView->connectableObject() ?
+         m_imageScrollView->connectableObject()->getInput(0) : 0;
+   if(dataManagerWidget)
+      dataManagerWidget->populateImageWindowContextMenu(
+         &menu, displayedObject);
+   m_actions->populateContextMenu(&menu);
+
+   if(!menu.actions().empty())
+      menu.exec(m_imageScrollView->viewport()->mapToGlobal(pos));
 }
 
 void ossimGui::ImageMdiSubWindow::setJobQueue(std::shared_ptr<ossimJobQueue> q)
