@@ -644,6 +644,8 @@ namespace ossimGui{
       const DataManager* dataManager()const{return m_dataManager.get();}
       
       QMenu* createMenu(QList<DataManagerItem*>& selection, DataManagerItem* activeItem=0);
+      void populateImageWindowContextMenu(
+         QMenu* menu, ossimConnectableObject* displayedObject);
       QMainWindow* mainWindow();
       void setJobQueue(std::shared_ptr<ossimJobQueue> que){m_jobQueue = que; m_rootJobsFolder->setQueue(que);}
       std::shared_ptr<ossimJobQueue> jobQueue(){return m_jobQueue;}

@@ -11,6 +11,7 @@ class QMenu;
 class QToolBar;
 class QMenuBar;
 class QMainWindow;
+class QPoint;
 class ossimConnectableObject;
 namespace ossimGui {
    //class ImageScrollWidget;
@@ -44,6 +45,7 @@ namespace ossimGui {
       ImageActions();
       void addActions(QMainWindow* mainWindow);
       void removeActions(QMainWindow* mainWindow);
+      void populateContextMenu(QMenu* menu);
       void setWidget(ossimGui::ImageScrollView* widget){m_widget = widget;}
       void setupAndExecuteSyncing();
       Visitor& visitor(){return m_visitor;}
@@ -103,6 +105,7 @@ namespace ossimGui {
    public slots:
       void stateChanged(Qt::WindowStates oldState, Qt::WindowStates newState);
       void syncView(View& view);
+      void showContextMenu(const QPoint& pos);
       
    protected:
       friend class ConnectionListener;

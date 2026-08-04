@@ -5464,6 +5464,55 @@ QModelIndex ossimGui::DataManagerWidget::indexFromDataManagerItem(DataManagerIte
    return indexFromItem(static_cast<QTreeWidgetItem*>(item), col);
 }
 
+void ossimGui::DataManagerWidget::populateImageWindowContextMenu(
+   QMenu* menu,
+   ossimConnectableObject* displayedObject)
+{
+   if(!menu || !displayedObject)
+      return;
+
+   DataManagerImageChainItem* combinerItem = 0;
+   {
+      std::lock_guard<std::mutex> lock(m_activeItemsMutex);
+      for(DataManagerItem* item : m_activeItems)
+      {
+         DataManagerImageChainItem* chainItem =
+            dynamic_cast<DataManagerImageChainItem*>(item);
+         DataManager::Node* node = chainItem ? chainItem->objectAsNode() : 0;
+         if(node && node->getObjectAsConnectable() == displayedObject &&
+            chainItem->isCombiner())
+         {
+            combinerItem = chainItem;
+            break;
+         }
+      }
+   }
+   if(!combinerItem)
+      return;
+
+   const QList<DataManagerItem*> inputs =
+      registrationInputsForCombiner(combinerItem);
+   QMenu* registrationMenu = menu->addMenu("Registration");
+   QAction* setupAction =
+      registrationMenu->addAction("Register Inputs...");
+   setupAction->setToolTip(
+      "Register this view's direct combiner inputs and refresh the existing "
+      "mosaic as accepted geometry stages are applied.");
+   connect(setupAction, &QAction::triggered,
+           [this, inputs]() {
+              createRegistrationSetup(true, QString(), inputs);
+           });
+   QMenu* quickMenu = registrationMenu->addMenu("Quick Registration");
+   populateQuickRegistrationMenu(quickMenu, true, inputs);
+   const bool canRegister = inputs.size() >= 2;
+   setupAction->setEnabled(canRegister);
+   quickMenu->setEnabled(canRegister && quickMenu->isEnabled());
+#ifndef OSSIM_AUTOREGISTRATION_ENABLED
+   registrationMenu->setEnabled(false);
+#endif
+   menu->addSeparator();
+}
+
 QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selection, DataManagerItem* activeItem)
 {
    ossim_uint32 nImageChainSelections = 0;
