@@ -140,7 +140,10 @@ All notable changes to `ossim-gui` are documented here.
 > while simple image chains retain their normal automatic stretch.
 > Image windows now put applicable viewing, adjustment, editing, export, and
 > registration actions under the pointer, and Position Information stays above
-> GeoCell while it is in use.
+> GeoCell while it is in use. GeoCell now also has an exploratory image
+> coverage workspace for spatially selecting projectable image chains on a
+> shared geographic plane; the prototype is useful today, but its interaction
+> design may be revisited as registration and mosaic workflows evolve.
 
 ### Fixed
 - Keep composite histogram enhancement from being configured from one nested
@@ -164,6 +167,22 @@ All notable changes to `ossim-gui` are documented here.
   (`37b931e`).
 
 ### Added
+- Add an exploratory image coverage workspace synchronized with the Data
+  Manager (`6c255c7`).
+  - Display eligible image-chain footprints on one equidistant-cylindrical
+    geographic plane with a dateline seam chosen from the largest empty
+    longitude gap.
+  - Provide canvas selection, stacked-footprint cycling, drag selection,
+    overlap and containment expansion, modifier zoom, stable sizing, and a
+    compact optional layer palette.
+  - Exclude image-plane affine chains from geographic overlap operations and
+    explain unavailable footprints in the palette.
+  - Expose the prototype through the View menu and image-chain context menus
+    while retaining the generic Data Manager selection workflow.
+  - Keep this as a revisitable UX direction rather than treating the current
+    footprint interaction as the final registration or mosaic browser.
+
+  ![Image Coverage Workspace](docs/screenshots/image-coverage-workspace.png)
 - Add context-sensitive actions directly to GeoCell image windows (`9229b7f`).
   - Offer only the view and adjustment tools supported by the displayed graph,
     alongside factory-tailored editors and the generic Properties fallback.
