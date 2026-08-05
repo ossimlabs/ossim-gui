@@ -736,6 +736,8 @@ namespace ossimGui{
       virtual void createRegistrationFromDialog();
       virtual void createRegistrationFromSelectionDialog();
       virtual void createRegistrationFromCombinerDialog();
+      virtual void openImageCoverageWorkspace();
+      virtual void syncImageCoverageWorkspaceSelection();
       virtual void setSelectedBundleAllFloating(bool enabled);
       virtual void registerSelected();
       
@@ -843,6 +845,8 @@ namespace ossimGui{
          QMenu* menu,
          bool connectSelectedImages,
          QList<DataManagerItem*> inputs = QList<DataManagerItem*>());
+      void applyImageCoverageWorkspaceSelection(
+         const std::vector<std::size_t>& indexes);
       virtual void incrementScrollBars(const QPoint& pos);
       
       /***************************** QT events **************************/
@@ -883,6 +887,8 @@ namespace ossimGui{
       
       std::set<DataManagerItem*> m_activeItems;
       mutable std::mutex m_activeItemsMutex;
+      QPointer<QWidget> m_imageCoverageWorkspace;
+      DataManager::NodeListType m_imageCoverageWorkspaceNodes;
       
       // Registration-related members
       MultiImageDialog* m_miDialog;
