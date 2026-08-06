@@ -404,7 +404,7 @@ public:
       QToolButton* layersButton = new QToolButton(m_owner);
       layersButton->setText("Layers");
       layersButton->setCheckable(true);
-      layersButton->setChecked(true);
+      layersButton->setChecked(false);
       layersButton->setToolTip(
          "Show the compact layer palette for stacked-footprint selection.");
       controls->addWidget(layersButton);
@@ -423,6 +423,7 @@ public:
       paletteLayout->addWidget(paletteTitle);
       paletteLayout->addWidget(m_list, 1);
       m_palette->setFixedWidth(230);
+      m_palette->setVisible(false);
       splitter->addWidget(m_palette);
       splitter->setStretchFactor(0, 6);
       splitter->setStretchFactor(1, 1);
