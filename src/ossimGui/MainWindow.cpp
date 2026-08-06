@@ -283,13 +283,16 @@ QMenuBar* ossimGui::MainWindow::createAndSetMenuBar()
    m_menubar = new QMenuBar(0);
    m_menubar->setObjectName(QString::fromUtf8("mainmenubar"));
    QMenu* menuFile   = new QMenu("File", m_menubar);
+   QMenu* menuView   = new QMenu("View", m_menubar);
    QMenu* menuWindow = new QMenu("Window", m_menubar);
    QMenu* menuHelp = new QMenu("Help", m_menubar);
    menuWindow->setObjectName("windowMenu");
    menuFile->setObjectName("fileMenu");
+   menuView->setObjectName("viewMenu");
    menuHelp->setObjectName("helpMenu");
    QAction* aboutAction = menuHelp->addAction("About");
    m_menubar->addAction(menuFile->menuAction());
+   m_menubar->addAction(menuView->menuAction());
    m_menubar->addAction(menuWindow->menuAction());
    m_menubar->addAction(menuHelp->menuAction());
    
@@ -320,6 +323,13 @@ QMenuBar* ossimGui::MainWindow::createAndSetMenuBar()
    QAction *exitAction = new QAction("Exit", menuFile);
    menuFile->addAction(exitAction);
    connect(exitAction, SIGNAL(triggered(bool)), this, SLOT(close()));
+
+   QAction* imageCoverageAction =
+      menuView->addAction("Image Coverage Workspace...");
+   connect(imageCoverageAction,
+           SIGNAL(triggered(bool)),
+           m_dataManagerWidget,
+           SLOT(openImageCoverageWorkspace()));
 
 
    //SETUP WINDOW MENU

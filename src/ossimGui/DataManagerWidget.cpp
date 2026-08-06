@@ -13,9 +13,11 @@
 #include <ossim/imaging/ossimImageFileWriter.h>
 #include <ossim/imaging/ossimImageHandler.h>
 #include <ossim/imaging/ossimImageHandlerRegistry.h>
+#include <ossim/imaging/ossimImageRenderer.h>
 #include <ossim/imaging/ossimImageWriterFactoryRegistry.h>
 #include <ossim/imaging/ossimMemoryImageSource.h>
 #include <ossim/projection/ossimEquDistCylProjection.h>
+#include <ossim/projection/ossimImageViewAffineTransform.h>
 #include <ossim/projection/ossimUtmProjection.h>
 #include <ossim/imaging/ossimImageGeometry.h>
 #include <ossim/imaging/ossimImageSourceFactoryRegistry.h>
@@ -28,6 +30,7 @@
 #include <QHeaderView>
 #include <QInputDialog>
 #include <QScrollBar>
+#include <QSignalBlocker>
 #include <QMenu>
 #include <QAction>
 #include <QDialog>
@@ -59,6 +62,7 @@
 #include <ossimGui/ConnectableDisplayObject.h>
 #include <ossimGui/MdiSubWindowBase.h>
 #include <ossimGui/ImageMdiSubWindow.h>
+#include "ImageCoverageWorkspace.h"
 #include <ossimGui/GatherImageViewProjTransVisitor.h>
 #include <ossimGui/IvtGeomTransform.h>
 #include <ossimGui/ImageScrollView.h>
@@ -2451,6 +2455,8 @@ ossimGui::DataManagerWidget::DataManagerWidget(QWidget* parent)
      m_dragStartPosition(),
      m_activeItems(),
      m_activeItemsMutex(),
+     m_imageCoverageWorkspace(),
+     m_imageCoverageWorkspaceNodes(),
      m_miDialog(0),
      m_amDialog(0),
      m_tGen(0),
@@ -2488,6 +2494,10 @@ ossimGui::DataManagerWidget::DataManagerWidget(QWidget* parent)
    connect(this, SIGNAL(itemChanged(QTreeWidgetItem*, int)), this, SLOT(itemChanged(QTreeWidgetItem*, int)));
    connect(this, SIGNAL(itemCollapsed(QTreeWidgetItem*)), this, SLOT(itemCollapsed(QTreeWidgetItem*)));
    connect(this, SIGNAL(itemExpanded(QTreeWidgetItem*)), this, SLOT(itemExpanded(QTreeWidgetItem*)));
+   connect(this,
+           &QTreeWidget::itemSelectionChanged,
+           this,
+           &DataManagerWidget::syncImageCoverageWorkspaceSelection);
 
 }
 
@@ -2512,6 +2522,9 @@ void ossimGui::DataManagerWidget::prepareForShutdown()
    {
       m_dataManager->setCallback(std::shared_ptr<DataManager::Callback>());
    }
+   if(m_imageCoverageWorkspace)
+      m_imageCoverageWorkspace->close();
+   m_imageCoverageWorkspaceNodes.clear();
    if(m_rootJobsFolder)
    {
       m_rootJobsFolder->prepareForShutdown();
@@ -4239,6 +4252,294 @@ ossimGui::DataManagerWidget::registrationInputsForCombiner(
    return result;
 }
 
+void ossimGui::DataManagerWidget::openImageCoverageWorkspace()
+{
+   if(m_imageCoverageWorkspace)
+   {
+      syncImageCoverageWorkspaceSelection();
+      m_imageCoverageWorkspace->show();
+      m_imageCoverageWorkspace->raise();
+      m_imageCoverageWorkspace->activateWindow();
+      return;
+   }
+
+   std::vector<ImageCoverageInput> coverageInputs;
+   std::vector<std::vector<ossimGpt>> groundFootprints;
+   m_imageCoverageWorkspaceNodes.clear();
+
+   for(int childIndex = 0;
+       childIndex < m_imageChains->childCount(); ++childIndex)
+   {
+      DataManagerImageChainItem* chainItem =
+         dynamic_cast<DataManagerImageChainItem*>(
+            m_imageChains->child(childIndex));
+      if(!chainItem || chainItem->isCombiner() || !chainItem->objectAsNode())
+         continue;
+
+      ossimConnectableObject* source =
+         chainItem->objectAsNode()->getObjectAs<ossimConnectableObject>();
+      if(!source)
+         continue;
+      ossimTypeNameVisitor handlerVisitor("ossimImageHandler");
+      source->accept(handlerVisitor);
+
+      ImageCoverageInput coverageInput;
+      coverageInput.label = chainItem->text(0);
+      coverageInput.originalIndex = coverageInputs.size();
+      coverageInput.selected = chainItem->isSelected();
+      coverageInput.color = QColor::fromHsv(
+         static_cast<int>((coverageInputs.size() * 137) % 360), 175, 215);
+      std::vector<ossimGpt> groundFootprint;
+
+      bool usesImagePlaneAffineView = false;
+      ossimTypeNameVisitor rendererVisitor("ossimImageRenderer");
+      source->accept(rendererVisitor);
+      for(ossimRefPtr<ossimObject>& rendererObject :
+          rendererVisitor.getObjects())
+      {
+         ossimImageRenderer* renderer =
+            dynamic_cast<ossimImageRenderer*>(rendererObject.get());
+         if(renderer && dynamic_cast<ossimImageViewAffineTransform*>(
+               renderer->getImageViewTransform()))
+         {
+            usesImagePlaneAffineView = true;
+            break;
+         }
+      }
+      if(usesImagePlaneAffineView)
+      {
+         coverageInput.footprintUnavailableReason =
+            "Image-plane affine chain cannot be placed on the shared "
+            "geographic coverage plane.";
+      }
+
+      if(!usesImagePlaneAffineView &&
+         !handlerVisitor.getObjects().empty())
+      {
+         ossimImageHandler* handler = dynamic_cast<ossimImageHandler*>(
+            handlerVisitor.getObjects().front().get());
+         if(handler)
+         {
+            coverageInput.details = QString("%1\nEntry %2")
+               .arg(QString::fromStdString(handler->getFilename().string()))
+               .arg(handler->getCurrentEntry());
+            ossimRefPtr<ossimImageGeometry> geometry =
+               handler->getImageGeometry();
+            const ossimDrect bounds = handler->getBoundingRect();
+            if(geometry.valid() && !bounds.hasNans())
+            {
+               const ossimDpt imageCorners[4] = {
+                  bounds.ul(), bounds.ur(), bounds.lr(), bounds.ll()
+               };
+               bool footprintValid = true;
+               for(const ossimDpt& imageCorner : imageCorners)
+               {
+                  ossimGpt groundCorner;
+                  if(!geometry->localToWorld(imageCorner, groundCorner) ||
+                     groundCorner.hasNans())
+                  {
+                     footprintValid = false;
+                     break;
+                  }
+                  groundFootprint.push_back(groundCorner);
+               }
+               if(!footprintValid)
+                  groundFootprint.clear();
+            }
+         }
+      }
+      if(coverageInput.details.isEmpty())
+         coverageInput.details = coverageInput.label;
+
+      coverageInputs.push_back(coverageInput);
+      groundFootprints.push_back(groundFootprint);
+      m_imageCoverageWorkspaceNodes.push_back(chainItem->objectAsNode());
+   }
+
+   std::vector<double> normalizedLongitudes;
+   double latitudeSum = 0.0;
+   std::size_t groundPointCount = 0;
+   for(const std::vector<ossimGpt>& groundFootprint : groundFootprints)
+   {
+      for(const ossimGpt& groundPoint : groundFootprint)
+      {
+         double longitude = std::fmod(groundPoint.lond(), 360.0);
+         if(longitude < 0.0)
+            longitude += 360.0;
+         normalizedLongitudes.push_back(longitude);
+         latitudeSum += groundPoint.latd();
+         ++groundPointCount;
+      }
+   }
+   if(!normalizedLongitudes.empty())
+   {
+      std::sort(normalizedLongitudes.begin(), normalizedLongitudes.end());
+      double largestGap = -1.0;
+      double largestGapStart = normalizedLongitudes.front();
+      for(std::size_t index = 0;
+          index < normalizedLongitudes.size(); ++index)
+      {
+         const double current = normalizedLongitudes[index];
+         const double next = index + 1 < normalizedLongitudes.size()
+            ? normalizedLongitudes[index + 1]
+            : normalizedLongitudes.front() + 360.0;
+         const double gap = next - current;
+         if(gap > largestGap)
+         {
+            largestGap = gap;
+            largestGapStart = current;
+         }
+      }
+
+      double seamLongitude = largestGapStart + largestGap * 0.5;
+      double centralMeridian = seamLongitude + 180.0;
+      while(centralMeridian > 180.0)
+         centralMeridian -= 360.0;
+      while(centralMeridian <= -180.0)
+         centralMeridian += 360.0;
+      const double standardParallel = groundPointCount > 0
+         ? latitudeSum / static_cast<double>(groundPointCount) : 0.0;
+      ossimEquDistCylProjection coverageProjection(
+         ossimEllipsoid(),
+         ossimGpt(standardParallel, centralMeridian));
+
+      for(std::size_t inputIndex = 0;
+          inputIndex < coverageInputs.size() &&
+          inputIndex < groundFootprints.size(); ++inputIndex)
+      {
+         QPolygonF projectedFootprint;
+         for(const ossimGpt& groundPoint : groundFootprints[inputIndex])
+         {
+            ossimGpt projectedGroundPoint = groundPoint;
+            if(coverageProjection.getDatum() &&
+               projectedGroundPoint.datum() &&
+               coverageProjection.getDatum()->code() !=
+                  projectedGroundPoint.datum()->code())
+            {
+               projectedGroundPoint.changeDatum(
+                  coverageProjection.getDatum());
+            }
+            double longitude = projectedGroundPoint.lond();
+            while(longitude - centralMeridian > 180.0)
+               longitude -= 360.0;
+            while(longitude - centralMeridian < -180.0)
+               longitude += 360.0;
+            projectedGroundPoint.lond(longitude);
+            const ossimDpt mapPoint =
+               coverageProjection.forward(projectedGroundPoint);
+            if(mapPoint.hasNans())
+            {
+               projectedFootprint.clear();
+               break;
+            }
+            projectedFootprint << QPointF(mapPoint.x, -mapPoint.y);
+         }
+         coverageInputs[inputIndex].footprint = projectedFootprint;
+      }
+   }
+
+   for(ImageCoverageInput& coverageInput : coverageInputs)
+   {
+      if(coverageInput.footprint.isEmpty() &&
+         coverageInput.footprintUnavailableReason.isEmpty())
+      {
+         coverageInput.footprintUnavailableReason =
+            "No valid ground footprint is available for the shared "
+            "geographic coverage plane.";
+      }
+   }
+
+   if(coverageInputs.empty())
+   {
+      QMessageBox::information(
+         this,
+         "Image Coverage Workspace",
+         "Open or create at least one non-combiner image chain before "
+         "opening the coverage workspace.");
+      return;
+   }
+
+   ImageCoverageWorkspace* workspace = new ImageCoverageWorkspace(
+      mainWindow(), coverageInputs,
+      [this](const std::vector<std::size_t>& indexes) {
+         applyImageCoverageWorkspaceSelection(indexes);
+      });
+   m_imageCoverageWorkspace = workspace;
+   connect(
+      workspace, &QObject::destroyed,
+      [this]() {
+         m_imageCoverageWorkspace.clear();
+         m_imageCoverageWorkspaceNodes.clear();
+      });
+   workspace->show();
+}
+
+void ossimGui::DataManagerWidget::applyImageCoverageWorkspaceSelection(
+   const std::vector<std::size_t>& indexes)
+{
+   QSignalBlocker blocker(this);
+   clearSelection();
+   DataManagerImageChainItem* firstSelected = 0;
+   for(std::size_t index : indexes)
+   {
+      if(index >= m_imageCoverageWorkspaceNodes.size())
+         continue;
+      DataManager::Node* selectedNode =
+         m_imageCoverageWorkspaceNodes[index].get();
+      for(int childIndex = 0;
+          childIndex < m_imageChains->childCount(); ++childIndex)
+      {
+         DataManagerImageChainItem* chainItem =
+            dynamic_cast<DataManagerImageChainItem*>(
+               m_imageChains->child(childIndex));
+         if(chainItem && chainItem->objectAsNode() == selectedNode)
+         {
+            chainItem->setSelected(true);
+            if(!firstSelected)
+               firstSelected = chainItem;
+            break;
+         }
+      }
+   }
+   if(firstSelected)
+   {
+      m_imageChains->setExpanded(true);
+      setCurrentItem(
+         firstSelected, 0, QItemSelectionModel::NoUpdate);
+      scrollToItem(firstSelected, QAbstractItemView::PositionAtCenter);
+   }
+}
+
+void ossimGui::DataManagerWidget::syncImageCoverageWorkspaceSelection()
+{
+   ImageCoverageWorkspace* workspace =
+      dynamic_cast<ImageCoverageWorkspace*>(
+         m_imageCoverageWorkspace.data());
+   if(!workspace)
+      return;
+
+   std::vector<std::size_t> selectedIndexes;
+   for(std::size_t index = 0;
+       index < m_imageCoverageWorkspaceNodes.size(); ++index)
+   {
+      DataManager::Node* node = m_imageCoverageWorkspaceNodes[index].get();
+      for(int childIndex = 0;
+          childIndex < m_imageChains->childCount(); ++childIndex)
+      {
+         DataManagerImageChainItem* chainItem =
+            dynamic_cast<DataManagerImageChainItem*>(
+               m_imageChains->child(childIndex));
+         if(chainItem && chainItem->objectAsNode() == node &&
+            chainItem->isSelected())
+         {
+            selectedIndexes.push_back(index);
+            break;
+         }
+      }
+   }
+   workspace->setSelectedIndexes(selectedIndexes);
+}
+
 void ossimGui::DataManagerWidget::connectSelectedRegistration(
    DataManagerRegistrationItem* item,
    bool executeAfterCreate,
@@ -5585,6 +5886,15 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
                  reportRegistrationItem->showRegistrationReport();
               });
    }
+   else if(dynamic_cast<DataManagerImageChainFolder*>(activeItem))
+   {
+      QAction* coverageAction =
+         menu->addAction("Image Coverage Workspace...");
+      connect(coverageAction,
+              SIGNAL(triggered(bool)),
+              this,
+              SLOT(openImageCoverageWorkspace()));
+   }
    else if(dynamic_cast<DataManagerRawImageSourceFolder*>(activeItem))
    {
       QMenu* openMenu =new QMenu("Open Image");
@@ -5801,6 +6111,15 @@ QMenu* ossimGui::DataManagerWidget::createMenu(QList<DataManagerItem*>& selectio
    }
    if(hasItems)
    {
+      if(nImageChainSelections > 0)
+      {
+         QAction* coverageAction =
+            menu->addAction("Image Coverage Workspace...");
+         connect(coverageAction,
+                 SIGNAL(triggered(bool)),
+                 this,
+                 SLOT(openImageCoverageWorkspace()));
+      }
       QAction* showAction = menu->addAction("Show");
       connect(showAction, SIGNAL(triggered(bool)), this, SLOT(showSelected()));
       

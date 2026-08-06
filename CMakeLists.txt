@@ -95,12 +95,14 @@ FILE(GLOB OSSIMGUI_INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/include/ossimGui/*.h")
 FILE(GLOB OSSIMGUI_SRCS "${CMAKE_CURRENT_SOURCE_DIR}/src/ossimGui/*.cpp" )
 FILE(GLOB OSSIMGUI_UIS  "${CMAKE_CURRENT_SOURCE_DIR}/src/ossimGui/ui/*.ui")
 LIST(REMOVE_ITEM OSSIMGUI_SRCS
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/ossimGui/ImageCoverageWorkspace.cpp"
    "${CMAKE_CURRENT_SOURCE_DIR}/src/ossimGui/RegistrationSetupDialog.cpp"
    "${CMAKE_CURRENT_SOURCE_DIR}/src/ossimGui/RegistrationSourceJobSupport.cpp"
    "${CMAKE_CURRENT_SOURCE_DIR}/src/ossimGui/FixedRegistrationSourceJob.cpp"
    "${CMAKE_CURRENT_SOURCE_DIR}/src/ossimGui/BundleRegistrationSourceJob.cpp"
    "${CMAKE_CURRENT_SOURCE_DIR}/src/ossimGui/RegistrationTiePointWorkbench.cpp")
 LIST(APPEND OSSIMGUI_SRCS
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/ossimGui/ImageCoverageWorkspace.cpp"
    "${CMAKE_CURRENT_SOURCE_DIR}/src/ossimGui/RegistrationSetupDialog.cpp"
    "${CMAKE_CURRENT_SOURCE_DIR}/src/ossimGui/RegistrationSourceJobSupport.cpp"
    "${CMAKE_CURRENT_SOURCE_DIR}/src/ossimGui/FixedRegistrationSourceJob.cpp"
