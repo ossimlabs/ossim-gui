@@ -125,7 +125,7 @@ void ossimGui::ImageActions::Visitor::visit(ossimConnectableObject* obj)
          if(is)
          {
             ossimRefPtr<ossimImageGeometry> geom = is->getImageGeometry();
-            if(geom.valid()&&dynamic_cast<ossimAdjustableParameterInterface*>(geom->getProjection()))
+            if(geom.valid() && geom->getAdjustableParameterInterface())
             {
                m_imageAdjustments.push_back(obj);
             }

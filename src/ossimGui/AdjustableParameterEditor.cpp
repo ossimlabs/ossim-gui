@@ -159,7 +159,7 @@ void ossimGui::AdjustableParameterEditor::setObject(ossimObject* obj)
             ossimRefPtr<ossimImageGeometry> geom = isource->getImageGeometry();
             if(geom.valid())
             {
-               m_interface = dynamic_cast<ossimAdjustableParameterInterface*>(geom->getProjection());
+               m_interface = geom->getAdjustableParameterInterface();
             }
          }
       }

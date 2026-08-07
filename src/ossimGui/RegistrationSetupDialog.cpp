@@ -196,6 +196,7 @@ namespace ossimGui
         m_excludeNonOverlappingButton(0),
         m_runButton(0),
         m_approach(0),
+        m_adjustmentPolicy(0),
         m_matchMethod(0),
         m_resampler(0),
         m_supportPassResampler(0),
@@ -233,6 +234,27 @@ namespace ossimGui
          m_approach->addItem(
             "Fixed Manual",
             REGISTRATION_SETUP_FIXED_MANUAL);
+
+         m_adjustmentPolicy = new QComboBox(this);
+         m_adjustmentPolicy->addItem(
+            "Clean model, preserve history",
+            static_cast<int>(RegistrationAdjustmentPolicy::
+               CleanModelAppendResult));
+         m_adjustmentPolicy->addItem(
+            "Current adjustment, chain result",
+            static_cast<int>(RegistrationAdjustmentPolicy::
+               CurrentAdjustmentAppendResult));
+         m_adjustmentPolicy->addItem(
+            "Clean model, replace history",
+            static_cast<int>(RegistrationAdjustmentPolicy::
+               CleanModelReplaceHistory));
+         m_adjustmentPolicy->setToolTip(
+            "Choose whether registration starts from clean model defaults "
+            "or chains from the active adjustment, and whether existing "
+            "adjustment history is retained.");
+         m_adjustmentPolicy->setCurrentIndex(m_adjustmentPolicy->findData(
+            static_cast<int>(RegistrationAdjustmentPolicy::
+               CleanModelAppendResult)));
 
          m_matchMethod = new QComboBox(this);
          addMatchMethod("Adaptive Auto (Recommended)", "");
@@ -398,6 +420,7 @@ namespace ossimGui
          m_adaptiveFullPostBankRefinement->setChecked(true);
 
          configureRegistrationField(m_approach, 220);
+         configureRegistrationField(m_adjustmentPolicy, 220);
          configureRegistrationField(m_matchMethod, 220);
          configureRegistrationField(m_resampler);
          configureRegistrationField(m_supportPassResampler);
@@ -441,6 +464,7 @@ namespace ossimGui
          QFormLayout* basicLeftForm = new QFormLayout();
          configureRegistrationForm(basicLeftForm);
          basicLeftForm->addRow("Approach", m_approach);
+         basicLeftForm->addRow("Starting geometry", m_adjustmentPolicy);
          basicLeftForm->addRow("Matcher", m_matchMethod);
          basicLeftForm->addRow("Resampler", m_resampler);
          basicLeftForm->addRow(
@@ -627,6 +651,10 @@ namespace ossimGui
       RegistrationSetupOptions options() const
       {
          RegistrationSetupOptions result = m_baseOptions;
+         result.adjustmentPolicy =
+            static_cast<RegistrationAdjustmentPolicy>(
+               m_adjustmentPolicy->itemData(
+                  m_adjustmentPolicy->currentIndex()).toInt());
          result.approach =
             static_cast<RegistrationSetupApproach>(
                m_approach->itemData(m_approach->currentIndex()).toInt());
@@ -1065,6 +1093,10 @@ namespace ossimGui
 
       void setOptions(const RegistrationSetupOptions& values)
       {
+         const int adjustmentPolicyIndex = m_adjustmentPolicy->findData(
+            static_cast<int>(values.adjustmentPolicy));
+         if(adjustmentPolicyIndex >= 0)
+            m_adjustmentPolicy->setCurrentIndex(adjustmentPolicyIndex);
          const int approachIndex =
             m_approach->findData(values.approach);
          if(approachIndex >= 0)
@@ -1848,6 +1880,7 @@ namespace ossimGui
       std::vector<QString> m_preflightOverlaps;
       std::vector<bool> m_preflightIsolated;
       QComboBox* m_approach;
+      QComboBox* m_adjustmentPolicy;
       QComboBox* m_matchMethod;
       QComboBox* m_resampler;
       QComboBox* m_supportPassResampler;
