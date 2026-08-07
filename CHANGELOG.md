@@ -4,6 +4,17 @@ All notable changes to `ossim-gui` are documented here.
 
 ## [Unreleased]
 
+- Make the shared Image menu and image-window context-menu Geometry Adjustment
+  action discover adjustable state through the image geometry interface, so
+  geometry implementations can expose their Adjustables editor consistently.
+
+- Add a Starting Geometry selector to registration setup with the shared
+  clean-replace, clean-append, and current-chain adjustment policies supplied
+  by `ossim-autoreg`. Fixed/floating and bundle launches now choose the same
+  adjustment lifecycle as the CLI without adding algorithm knowledge to
+  GeoCell, defaulting to an independent clean-model result while retaining
+  prior adjustment history.
+
 > **TL;DR:** The Registration folder can now create and run Bundle/Floating
 > registration jobs, default them to all-floating mode, and toggle whether
 > input 0 is used as a convergence anchor. The optional registration UI now

@@ -18,6 +18,8 @@ namespace ossimGui
       ossim_autoreg::RegistrationSetupBundlePairPolicy;
    using RegistrationSetupOptions =
       ossim_autoreg::RegistrationSetupOptions;
+   using RegistrationAdjustmentPolicy =
+      ossim_autoreg::RegistrationAdjustmentPolicy;
 
    constexpr RegistrationSetupApproach REGISTRATION_SETUP_FIXED_AUTO =
       ossim_autoreg::REGISTRATION_SETUP_FIXED_AUTO;
