@@ -1,11 +1,13 @@
 #include <ossimGui/AdjustableParameterEditor.h>
 #include <ossim/imaging/ossimImageSource.h>
 #include <ossim/base/ossimRefreshEvent.h>
+#include <ossim/base/ossimListenerManager.h>
 #include <ossim/base/ossimVisitor.h>
 #include <ossim/imaging/ossimImageGeometry.h>
 #include <ossim/imaging/ossimImageHandler.h>
 #include <QTableWidgetItem>
 #include <QFileDialog>
+#include <QMetaObject>
 #include <QMouseEvent>
 #include <QResizeEvent>
 static const int NAME_INDEX       = 0;
@@ -112,10 +114,16 @@ void ossimGui::AdjustableParameterLockHeader::mousePressEvent(
 ossimGui::AdjustableParameterEditor::AdjustableParameterEditor(QWidget* parent, Qt::WindowFlags f)
 :QDialog(parent, f),
 m_interface(0),
-m_lockHeader(0)
+m_lockHeader(0),
+m_listener(new Listener(this))
 {
    setupUi(this);
    setAttribute(Qt::WA_DeleteOnClose);
+   m_adjustmentSelectionBox->setSizeAdjustPolicy(
+      QComboBox::AdjustToMinimumContentsLengthWithIcon);
+   m_adjustmentSelectionBox->setMinimumContentsLength(32);
+   m_adjustmentSelectionBox->setSizePolicy(
+      QSizePolicy::Expanding, QSizePolicy::Fixed);
    m_lockHeader =
       new AdjustableParameterLockHeader(
          LOCK_INDEX, m_adjustableParameterTable);
@@ -145,15 +153,50 @@ m_lockHeader(0)
    connect(this, SIGNAL(sourceChanged(const QString&)), this, SLOT(setSource(const QString&)));
 }
 
+ossimGui::AdjustableParameterEditor::~AdjustableParameterEditor()
+{
+   removeObjectListener();
+   delete m_listener;
+   m_listener = 0;
+   m_interface = 0;
+   m_object = 0;
+}
+
+void ossimGui::AdjustableParameterEditor::Listener::refreshEvent(
+   ossimRefreshEvent& event)
+{
+   if(m_editor &&
+      (event.getRefreshType() & ossimRefreshEvent::REFRESH_GEOMETRY))
+   {
+      QMetaObject::invokeMethod(
+         m_editor, "refreshFromObject", Qt::QueuedConnection);
+   }
+}
+
 void ossimGui::AdjustableParameterEditor::setObject(ossimObject* obj)
 {
+   removeObjectListener();
    m_object = obj;
+   resolveAdjustableInterface();
+   addObjectListener();
+
+   ensureEditableAdjustment(m_interface);
+   setImageSource();
+
+   transferToDialog();
+}
+
+void ossimGui::AdjustableParameterEditor::resolveAdjustableInterface()
+{
+   m_interface = 0;
    if(m_object.valid())
    {
-      m_interface = dynamic_cast<ossimAdjustableParameterInterface*>(obj);
+      m_interface =
+         dynamic_cast<ossimAdjustableParameterInterface*>(m_object.get());
       if(!m_interface)
       {
-         ossimImageSource* isource = dynamic_cast<ossimImageSource*>(obj);
+         ossimImageSource* isource =
+            dynamic_cast<ossimImageSource*>(m_object.get());
          if(isource)
          {
             ossimRefPtr<ossimImageGeometry> geom = isource->getImageGeometry();
@@ -164,10 +207,32 @@ void ossimGui::AdjustableParameterEditor::setObject(ossimObject* obj)
          }
       }
    }
+}
 
+void ossimGui::AdjustableParameterEditor::addObjectListener()
+{
+   ossimListenerManager* manager =
+      dynamic_cast<ossimListenerManager*>(m_object.get());
+   if(manager && m_listener)
+   {
+      manager->addListener(m_listener);
+   }
+}
+
+void ossimGui::AdjustableParameterEditor::removeObjectListener()
+{
+   ossimListenerManager* manager =
+      dynamic_cast<ossimListenerManager*>(m_object.get());
+   if(manager && m_listener)
+   {
+      manager->removeListener(m_listener);
+   }
+}
+
+void ossimGui::AdjustableParameterEditor::refreshFromObject()
+{
+   resolveAdjustableInterface();
    ensureEditableAdjustment(m_interface);
-   setImageSource();
-
    transferToDialog();
 }
 
@@ -229,14 +294,29 @@ void ossimGui::AdjustableParameterEditor::transferToList()
    if(m_interface)
    {
       ossim_uint32 n = m_interface->getNumberOfAdjustments();
-      ossim_int32 idx = 0;
-      
-      for(idx = 0; idx < (int)n; ++idx)
+      for(ossim_uint32 idx = 0; idx < n; ++idx)
       {
-         m_adjustmentSelectionBox->addItem(ossimString::toString(idx).c_str());
+         QString description =
+            m_interface->getAdjustmentDescription(idx).c_str();
+         if(description.trimmed().isEmpty())
+         {
+            description = tr("(unnamed)");
+         }
+
+         const QString label = tr("[%1] %2").arg(idx).arg(description);
+         m_adjustmentSelectionBox->addItem(label, idx);
+         m_adjustmentSelectionBox->setItemData(
+            m_adjustmentSelectionBox->count() - 1,
+            label,
+            Qt::ToolTipRole);
       }
       ossim_uint32 adjIdx = m_interface->getCurrentAdjustmentIdx();
-      m_adjustmentSelectionBox->setCurrentIndex(adjIdx);
+      const int selectedRow = m_adjustmentSelectionBox->findData(adjIdx);
+      m_adjustmentSelectionBox->setCurrentIndex(selectedRow);
+      m_adjustmentSelectionBox->setToolTip(
+         selectedRow >= 0
+            ? m_adjustmentSelectionBox->itemText(selectedRow)
+            : QString());
       m_adjustmentDescriptionInput->setText(m_interface->getAdjustmentDescription().c_str());
    }
    m_adjustmentSelectionBox->blockSignals(false);
@@ -480,11 +560,16 @@ void ossimGui::AdjustableParameterEditor::selectionListChanged()
 {
    if(m_interface)
    {
-      m_interface->setDirtyFlag(true);
-      ossim_uint32 idx = m_adjustmentSelectionBox->currentText().toUInt();
-      m_interface->setCurrentAdjustment(idx, true);
-      transferToDialog();
-      fireRefreshEvent();
+      bool validIndex = false;
+      const ossim_uint32 idx =
+         m_adjustmentSelectionBox->currentData().toUInt(&validIndex);
+      if(validIndex && idx < m_interface->getNumberOfAdjustments())
+      {
+         m_interface->setDirtyFlag(true);
+         m_interface->setCurrentAdjustment(idx, true);
+         transferToDialog();
+         fireRefreshEvent();
+      }
    }
 }
 
@@ -612,5 +697,23 @@ void ossimGui::AdjustableParameterEditor::adjustmentDescriptionChanged(const QSt
    {
       m_interface->setDirtyFlag(true);
       m_interface->setAdjustmentDescription(value.toStdString());
+
+      const int selectedRow = m_adjustmentSelectionBox->currentIndex();
+      if(selectedRow >= 0)
+      {
+         QString description = value;
+         if(description.trimmed().isEmpty())
+         {
+            description = tr("(unnamed)");
+         }
+         const ossim_uint32 adjustmentIndex =
+            m_adjustmentSelectionBox->itemData(selectedRow).toUInt();
+         const QString label =
+            tr("[%1] %2").arg(adjustmentIndex).arg(description);
+         m_adjustmentSelectionBox->setItemText(selectedRow, label);
+         m_adjustmentSelectionBox->setItemData(
+            selectedRow, label, Qt::ToolTipRole);
+         m_adjustmentSelectionBox->setToolTip(label);
+      }
    }   
 }

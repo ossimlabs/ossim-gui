@@ -4,6 +4,18 @@ All notable changes to `ossim-gui` are documented here.
 
 ## [Unreleased]
 
+- Show each adjustable geometry entry as `[index] description` in the Geometry
+  Adjustment selector, retain the actual index as item data instead of parsing
+  its visible label, and expose the full label as a tooltip when long
+  registration identities are clipped. Description edits now update the
+  selector immediately. An editor left open during registration now listens
+  for geometry refreshes, re-resolves replaced handler geometry safely, and
+  shows newly appended adjustments without requiring the dialog to reopen.
+
+- Name fallback fixed-registration source nodes `Fixed Registration` before
+  execution instead of implying that the source has already registered its
+  inputs.
+
 - Make the shared Image menu and image-window context-menu Geometry Adjustment
   action discover adjustable state through the image geometry interface, so
   geometry implementations can expose their Adjustables editor consistently.
@@ -22,10 +34,11 @@ All notable changes to `ossim-gui` are documented here.
 > can be created, populated by drag-and-drop, validated against the tie-point
 > generator factory, and reported with clearer job feedback.
 > Registration creation now has a setup dialog with matcher-aware defaults, and
-> fixed registration nodes use the same `Registered: <matcher>` label as the
-> geometry adjustments they write. The direct Fixed registration menu and setup
-> dialog now expose the same adaptive fixed-auto default, so users can choose
-> the intended no-knob path without remembering which matcher currently wins.
+> fixed registration nodes identify the matcher used for each result, matching
+> the geometry adjustments they write. The direct Fixed registration menu and
+> setup dialog now expose the same adaptive fixed-auto default, so users can
+> choose the intended no-knob path without remembering which matcher currently
+> wins.
 > The adjustable-parameter editor can now explicitly rebuild adjustment 0 from
 > the model defaults, which makes revised sensor-model sigmas easier to reload.
 > Fixed registration jobs now surface low-control texture warnings from
