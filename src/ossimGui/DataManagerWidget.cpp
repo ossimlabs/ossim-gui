@@ -282,9 +282,9 @@ namespace
 
 
 
-   QString registeredNodeName(const std::string& matchMethod)
+   QString fixedRegistrationNodeName(const std::string& matchMethod)
    {
-      return QString("Registered: %1")
+      return QString("Fixed Registration: %1")
          .arg(QString::fromStdString(
             matchMethod.empty() ? std::string("Adaptive Auto") :
                                   matchMethod));
@@ -4802,7 +4802,7 @@ void ossimGui::DataManagerWidget::createRegistrationSetup(
       nodeName = !presetDisplayName.isEmpty() ? presetDisplayName :
          (setupOptions.matchMethod.empty() ?
             QString(FIXED_AUTO_LABEL) :
-            registeredNodeName(setupOptions.matchMethod));
+            fixedRegistrationNodeName(setupOptions.matchMethod));
       toolTip =
          QString("%1\nMatcher: %2\nResampler: %3\nSupport pass resampler: %4\nView GSD: %5\nMin score margin: %6\nParallel floating inputs: %7\nAdaptive bank threads: %8\nDense seed budget: %9\nAuto dense seed budget: %10\nTie timing diagnostics: %11")
             .arg(registration->autoRegistrationSettingsSummary().c_str())

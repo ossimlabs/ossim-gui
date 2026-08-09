@@ -8,6 +8,7 @@
 #include <QSlider>
 #include <ossimGui/Export.h>
 #include <ossim/base/ossimConnectableObject.h>
+#include <ossim/base/ossimConnectableObjectListener.h>
 #include <ossim/base/ossimAdjustableParameterInterface.h>
 #include <ossim/base/ossimFilename.h>
 class QMouseEvent;
@@ -93,6 +94,7 @@ namespace ossimGui
       Q_OBJECT
    public:
       AdjustableParameterEditor(QWidget* parent=nullptr, Qt::WindowFlags f = Qt::WindowFlags() );
+      ~AdjustableParameterEditor() override;
       
       void setObject(ossimObject* obj);
       void setImageSource();
@@ -112,9 +114,27 @@ namespace ossimGui
       void setAllParametersLocked(bool locked);
       void adjustmentDescriptionChanged(const QString&);
       void setSource(const QString&);
+      void refreshFromObject();
       
    protected:
+      class Listener : public ossimConnectableObjectListener
+      {
+      public:
+         explicit Listener(AdjustableParameterEditor* editor)
+         :m_editor(editor)
+         {
+         }
+
+         void refreshEvent(ossimRefreshEvent& event) override;
+
+      private:
+         AdjustableParameterEditor* m_editor;
+      };
+
       ossimFilename findDefaultFilename();
+      void addObjectListener();
+      void removeObjectListener();
+      void resolveAdjustableInterface();
       void transferToDialog();
       void transferToTable();
       void transferToList();
@@ -125,6 +145,7 @@ namespace ossimGui
       ossimAdjustableParameterInterface*  m_interface;
       ossimFilename                       m_filename;
       AdjustableParameterLockHeader*      m_lockHeader;
+      Listener*                           m_listener;
    };
 }
 
